@@ -1,0 +1,881 @@
+﻿const STORAGE_KEY = 'smartExamSchedule.v2';
+        const ministryLogo = 'https://upload.wikimedia.org/wikipedia/ar/8/82/Logo_of_Ministry_of_Education_%28Saudi_Arabia%29.svg';
+        const daysSequence = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+
+        const defaultState = {
+            currentStage: 'elementary',
+            classNames: ['الصف 1', 'الصف 2', 'الصف 3', 'الصف 4', 'الصف 5', 'الصف 6'],
+            materials: {
+                elementary: ['رياضيات', 'لغتي', 'علوم', 'إسلامية', 'إنجليزي', 'رقمية', 'مهارات حياتية', 'اجتماعيات', 'فنية'],
+                intermediate: ['رياضيات', 'لغتي', 'علوم', 'إسلامية', 'إنجليزي', 'رقمية', 'اجتماعيات'],
+                secondary: ['رياضيات', 'فيزياء', 'كيمياء', 'أحياء', 'إنجليزي', 'كفايات', 'رقمية']
+            },
+            materialColors: {
+                elementary: {},
+                intermediate: {},
+                secondary: {}
+            },
+            classColors: ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdf4'],
+            rowColors: [],
+            tableRows: [],
+            instructions: [
+                'الحضور قبل موعد الاختبار بـ 15 دقيقة.',
+                'تبدأ الاختبارات تمام الساعة 7:30 صباحا.',
+                'يمنع إحضار الجوال أو الساعات الذكية بكافة أنواعها.'
+            ],
+            fields: {
+                h_r1: 'المملكة العربية السعودية',
+                h_r2: 'وزارة التعليم',
+                h_r3: 'الإدارة العامة للتعليم بمنطقة نجران',
+                h_l1: 'اختبارات الفترة الثانية',
+                h_l2: 'الفصل الدراسي الثاني',
+                h_l3: 'العام الدراسي 1447 هـ',
+                school_name_input: 'مدرسة محمد بن القاسم',
+                main_title_input: 'جدول اختبارات المرحلة الابتدائية',
+                principal_input: 'أ. محمد بن أحمد العتيبي',
+                logo_url_input: ministryLogo,
+                logo_data_url: '',
+                days_count: '5',
+                start_day: '23',
+                start_month: '11',
+                header_right_align: 'right',
+                header_left_align: 'left',
+                header_right_size: '11',
+                header_left_size: '11',
+                main_title_size: '24',
+                principal_size: '14',
+                print_orientation: 'landscape',
+                use_class_colors: 'true',
+                use_row_colors: 'false',
+                use_material_colors: 'true'
+            }
+        };
+
+        let state = deepClone(defaultState);
+        let saveTimer = null;
+
+        function deepClone(value) {
+            return JSON.parse(JSON.stringify(value));
+        }
+
+        function byId(id) {
+            return document.getElementById(id);
+        }
+
+        function setText(id, value) {
+            byId(id).textContent = value || '';
+        }
+
+        function showToast(message) {
+            const toast = byId('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            window.clearTimeout(showToast.timer);
+            showToast.timer = window.setTimeout(() => toast.classList.remove('show'), 1800);
+        }
+
+        function clampNumber(value, min, max, fallback) {
+            const n = parseInt(value, 10);
+            if (Number.isNaN(n)) return fallback;
+            return Math.min(Math.max(n, min), max);
+        }
+
+        function normalizeSubjectList(value, keepEmpty = false) {
+            if (Array.isArray(value)) return keepEmpty ? value : value.filter(Boolean);
+            return value ? [value] : [];
+        }
+
+        function formatSubjectList(value) {
+            const subjects = normalizeSubjectList(value);
+            return subjects.length ? subjects.join(' + ') : '-';
+        }
+
+        function isEnabled(field) {
+            return state.fields[field] === 'true';
+        }
+
+        function defaultColor(index) {
+            const colors = ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdfa', '#fefce8', '#f1f5f9'];
+            return colors[index % colors.length];
+        }
+
+        function attachInputs() {
+            Object.keys(defaultState.fields).forEach(id => {
+                const el = byId(id);
+                if (!el) return;
+                if (el.type === 'checkbox') {
+                    el.addEventListener('change', () => {
+                        state.fields[id] = el.checked ? 'true' : 'false';
+                        updateAll();
+                        queueSave();
+                    });
+                    return;
+                }
+                el.addEventListener('input', () => {
+                    state.fields[id] = el.value;
+                    if (id === 'logo_url_input') state.fields.logo_data_url = '';
+                    if (['days_count', 'start_day', 'start_month'].includes(id)) {
+                        normalizeDateInputs();
+                        initTable();
+                    }
+                    updateAll();
+                    queueSave();
+                });
+                el.addEventListener('change', () => {
+                    state.fields[id] = el.value;
+                    if (id === 'logo_url_input') state.fields.logo_data_url = '';
+                    if (['days_count', 'start_day', 'start_month'].includes(id)) {
+                        normalizeDateInputs();
+                        initTable();
+                    }
+                    updateAll();
+                    queueSave();
+                });
+            });
+
+            byId('logo_file_input').addEventListener('change', event => {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    showToast('اختر ملف صورة فقط');
+                    event.target.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    state.fields.logo_data_url = reader.result;
+                    updateAll();
+                    queueSave();
+                    showToast('تم إرفاق الشعار');
+                };
+                reader.readAsDataURL(file);
+            });
+
+            byId('backup_file_input').addEventListener('change', importBackup);
+
+            byId('stageSelect').addEventListener('change', changeStage);
+            byId('new_material').addEventListener('keydown', event => {
+                if (event.key === 'Enter') addMaterial();
+            });
+        }
+
+        function normalizeDateInputs() {
+            state.fields.days_count = String(clampNumber(byId('days_count').value, 1, 12, 5));
+            state.fields.start_day = String(clampNumber(byId('start_day').value, 1, 30, 1));
+            state.fields.start_month = String(clampNumber(byId('start_month').value, 1, 12, 1));
+            byId('days_count').value = state.fields.days_count;
+            byId('start_day').value = state.fields.start_day;
+            byId('start_month').value = state.fields.start_month;
+        }
+
+        function loadState() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                if (!saved) return;
+                state = mergeLoadedState(saved);
+            } catch {
+                state = deepClone(defaultState);
+            }
+        }
+
+        function applyStateToInputs() {
+            Object.entries(state.fields).forEach(([id, value]) => {
+                if (!byId(id)) return;
+                if (byId(id).type === 'checkbox') {
+                    byId(id).checked = value === 'true';
+                } else {
+                    byId(id).value = value;
+                }
+            });
+            byId('stageSelect').value = state.currentStage;
+        }
+
+        function saveState(manual = false) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            if (manual) showToast('تم حفظ البيانات بنجاح');
+        }
+
+        function mergeLoadedState(loaded) {
+            return {
+                ...deepClone(defaultState),
+                ...loaded,
+                fields: { ...defaultState.fields, ...(loaded.fields || {}) },
+                materials: { ...defaultState.materials, ...(loaded.materials || {}) },
+                materialColors: { ...defaultState.materialColors, ...(loaded.materialColors || {}) },
+                classColors: Array.isArray(loaded.classColors) ? loaded.classColors : deepClone(defaultState.classColors),
+                rowColors: Array.isArray(loaded.rowColors) ? loaded.rowColors : [],
+                instructions: Array.isArray(loaded.instructions) ? loaded.instructions : deepClone(defaultState.instructions),
+                tableRows: Array.isArray(loaded.tableRows) ? loaded.tableRows : []
+            };
+        }
+
+        function refreshAppFromState() {
+            applyStateToInputs();
+            normalizeDateInputs();
+            if (!state.tableRows.length) initTable();
+            renderClassEditor();
+            renderMaterialsBank();
+            renderInstructionsEditor();
+            renderInstructionsDisplay();
+            renderRowColorsEditor();
+            updateAll();
+            saveState(false);
+        }
+
+        function exportBackup() {
+            saveState(false);
+            const payload = {
+                app: 'smart-exam-schedule',
+                version: 3,
+                exportedAt: new Date().toISOString(),
+                state
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const school = (state.fields.school_name_input || 'exam-schedule').replace(/[^\u0600-\u06FF\w-]+/g, '-');
+            link.href = url;
+            link.download = `${school}-backup.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            showToast('تم تصدير نسخة البيانات');
+        }
+
+        function importBackup(event) {
+            const file = event.target.files && event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+                    const loadedState = parsed.state || parsed;
+                    if (!loadedState || typeof loadedState !== 'object') throw new Error('Invalid backup');
+                    state = mergeLoadedState(loadedState);
+                    refreshAppFromState();
+                    showToast('تم استيراد النسخة بنجاح');
+                } catch {
+                    showToast('ملف النسخة غير صالح');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function queueSave() {
+            window.clearTimeout(saveTimer);
+            saveTimer = window.setTimeout(() => saveState(false), 250);
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+            if (tab === 'settings') {
+                byId('settings-tab').classList.add('active');
+                byId('btn-settings').classList.add('active');
+            } else {
+                byId('final-tab').classList.add('active');
+                byId('btn-final').classList.add('active');
+                updateAll();
+            }
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function updateHeaderBlock(id, lines, align, fontSize) {
+            const block = byId(id);
+            block.innerHTML = '';
+            block.style.textAlign = align || 'inherit';
+            block.style.fontSize = `${clampNumber(fontSize, 8, 22, 11)}px`;
+            lines.forEach(line => {
+                const p = document.createElement('p');
+                p.textContent = line || '';
+                block.appendChild(p);
+            });
+        }
+
+        function updateAll() {
+            updateHeaderBlock(
+                'header_right',
+                [state.fields.h_r1, state.fields.h_r2, state.fields.h_r3, state.fields.school_name_input],
+                state.fields.header_right_align,
+                state.fields.header_right_size
+            );
+            updateHeaderBlock(
+                'header_left',
+                [state.fields.h_l1, state.fields.h_l2, state.fields.h_l3],
+                state.fields.header_left_align,
+                state.fields.header_left_size
+            );
+            setText('school_title_display', '');
+            byId('school_title_display').style.display = 'none';
+            setText('main_title_display', state.fields.main_title_input);
+            setText('principal_display', state.fields.principal_input);
+            byId('main_title_display').style.fontSize = `${clampNumber(state.fields.main_title_size, 16, 40, 24)}px`;
+            byId('principal_display').style.fontSize = `${clampNumber(state.fields.principal_size, 10, 28, 14)}px`;
+
+            const logo = byId('logoImg');
+            logo.src = state.fields.logo_data_url || state.fields.logo_url_input || ministryLogo;
+            logo.onerror = () => { logo.src = ministryLogo; };
+
+            renderTable();
+            renderInstructionsDisplay();
+            renderRowColorsEditor();
+            updatePrintStyle();
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function initTable(keepSubjects = false) {
+            const count = clampNumber(state.fields.days_count, 1, 12, 5);
+            const startDay = clampNumber(state.fields.start_day, 1, 30, 1);
+            const startMonth = clampNumber(state.fields.start_month, 1, 12, 1);
+            const oldRows = keepSubjects ? state.tableRows : [];
+
+            state.tableRows = [];
+            state.rowColors = Array.from({ length: count }, (_, idx) => state.rowColors[idx] || '#ffffff');
+            let currentD = startDay;
+            let currentM = startMonth;
+            let dayIdx = 0;
+
+            for (let i = 0; i < count; i++) {
+                const dayName = daysSequence[dayIdx % 5];
+                const oldSubjects = oldRows[i]?.subjects || [];
+                state.tableRows.push({
+                    day: dayName,
+                    date: `${currentD} / ${currentM} / 1447`,
+                    subjects: Array.from({ length: state.classNames.length }, (_, idx) => normalizeSubjectList(oldSubjects[idx], true))
+                });
+
+                currentD += dayName === 'الخميس' ? 3 : 1;
+                if (currentD > 30) {
+                    currentD -= 30;
+                    currentM += 1;
+                    if (currentM > 12) currentM = 1;
+                }
+                dayIdx++;
+            }
+            renderTable();
+            queueSave();
+        }
+
+        function changeStage() {
+            state.currentStage = byId('stageSelect').value;
+            if (state.currentStage === 'elementary') {
+                state.classNames = ['الصف 1', 'الصف 2', 'الصف 3', 'الصف 4', 'الصف 5', 'الصف 6'];
+                state.classColors = ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdfa'];
+            } else if (state.currentStage === 'intermediate') {
+                state.classNames = ['الأول متوسط', 'الثاني متوسط', 'الثالث متوسط'];
+                state.classColors = ['#ecfdf5', '#eff6ff', '#fff7ed'];
+            } else {
+                state.classNames = ['الأول ثانوي', 'الثاني ثانوي', 'الثالث ثانوي'];
+                state.classColors = ['#ecfdf5', '#eff6ff', '#fff7ed'];
+            }
+
+            const titles = {
+                elementary: 'جدول اختبارات المرحلة الابتدائية',
+                intermediate: 'جدول اختبارات المرحلة المتوسطة',
+                secondary: 'جدول اختبارات المرحلة الثانوية'
+            };
+
+            state.fields.main_title_input = titles[state.currentStage];
+            byId('main_title_input').value = state.fields.main_title_input;
+            renderClassEditor();
+            initTable();
+            renderMaterialsBank();
+            updateAll();
+        }
+
+        function renderClassEditor() {
+            const container = byId('class_names_editor');
+            container.innerHTML = '';
+            state.classNames.forEach((name, i) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex items-center gap-1';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = name;
+                input.className = 'field min-w-0 flex-1 font-bold bg-white text-center';
+                input.addEventListener('input', () => {
+                    state.classNames[i] = input.value;
+                    initTable(true);
+                    updateAll();
+                    queueSave();
+                });
+
+                const color = document.createElement('input');
+                color.type = 'color';
+                color.value = state.classColors[i] || defaultColor(i);
+                color.className = 'w-9 h-[34px] rounded border border-slate-200 bg-white p-1 flex-shrink-0';
+                color.title = 'لون عمود الفصل';
+                color.addEventListener('input', () => {
+                    state.classColors[i] = color.value;
+                    renderTable();
+                    queueSave();
+                });
+
+                wrap.appendChild(input);
+                wrap.appendChild(color);
+                container.appendChild(wrap);
+            });
+        }
+
+        function renderMaterialsBank() {
+            const container = byId('materials_tags');
+            container.innerHTML = '';
+            state.materials[state.currentStage].forEach((material, i) => {
+                const tag = document.createElement('span');
+                tag.className = 'bg-emerald-50 border border-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 shadow-sm';
+
+                const color = document.createElement('input');
+                color.type = 'color';
+                color.value = state.materialColors[state.currentStage]?.[material] || defaultColor(i);
+                color.className = 'w-6 h-6 rounded-full border border-emerald-100 bg-white p-0.5';
+                color.title = 'لون المادة';
+                color.addEventListener('input', () => {
+                    if (!state.materialColors[state.currentStage]) state.materialColors[state.currentStage] = {};
+                    state.materialColors[state.currentStage][material] = color.value;
+                    renderTable();
+                    queueSave();
+                });
+
+                const text = document.createElement('span');
+                text.textContent = material;
+
+                const btn = document.createElement('button');
+                btn.className = 'icon-btn text-red-600 hover:bg-red-50';
+                btn.type = 'button';
+                btn.title = 'حذف المادة';
+                btn.innerHTML = '<i data-lucide="x" class="w-4 h-4"></i>';
+                btn.addEventListener('click', () => deleteMaterial(i));
+
+                tag.appendChild(color);
+                tag.appendChild(text);
+                tag.appendChild(btn);
+                container.appendChild(tag);
+            });
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function renderInstructionsEditor() {
+            const container = byId('instructions_editor');
+            if (!container) return;
+            container.innerHTML = '';
+
+            state.instructions.forEach((instruction, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = instruction;
+                input.className = 'field flex-1 font-bold';
+                input.placeholder = 'اكتب ملاحظة أو تعليمات...';
+                input.addEventListener('input', () => {
+                    state.instructions[index] = input.value;
+                    renderInstructionsDisplay();
+                    queueSave();
+                });
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'icon-btn text-red-600 hover:bg-red-50 border border-red-100 flex-shrink-0';
+                btn.title = 'حذف الملاحظة';
+                btn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
+                btn.addEventListener('click', () => deleteInstruction(index));
+
+                row.appendChild(input);
+                row.appendChild(btn);
+                container.appendChild(row);
+            });
+
+            if (!state.instructions.length) {
+                const empty = document.createElement('p');
+                empty.className = 'text-[11px] text-slate-400 font-bold';
+                empty.textContent = 'لا توجد ملاحظات حاليا. اضغط إضافة لإنشاء ملاحظة جديدة.';
+                container.appendChild(empty);
+            }
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function renderInstructionsDisplay() {
+            const list = byId('instructions_display');
+            if (!list) return;
+            list.innerHTML = '';
+
+            state.instructions
+                .map(item => item.trim())
+                .filter(Boolean)
+                .forEach(instruction => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-center gap-2';
+
+                    const dot = document.createElement('span');
+                    dot.className = 'w-1.5 h-1.5 bg-emerald-600 rounded-full flex-shrink-0';
+
+                    const text = document.createElement('span');
+                    text.textContent = instruction;
+
+                    li.appendChild(dot);
+                    li.appendChild(text);
+                    list.appendChild(li);
+                });
+        }
+
+        function renderRowColorsEditor() {
+            const container = byId('row_colors_editor');
+            if (!container) return;
+            container.innerHTML = '';
+
+            state.tableRows.forEach((row, index) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex items-center gap-2 compact-box';
+
+                const color = document.createElement('input');
+                color.type = 'color';
+                color.value = state.rowColors[index] || '#ffffff';
+                color.className = 'w-8 h-7 rounded border border-slate-200 bg-white p-1 flex-shrink-0';
+                color.addEventListener('input', () => {
+                    state.rowColors[index] = color.value;
+                    renderTable();
+                    queueSave();
+                });
+
+                const label = document.createElement('span');
+                label.className = 'text-[11px] font-black text-slate-700 truncate';
+                label.textContent = `${row.day} - ${row.date}`;
+
+                wrap.appendChild(color);
+                wrap.appendChild(label);
+                container.appendChild(wrap);
+            });
+        }
+
+        function addInstruction() {
+            state.instructions.push('ملاحظة جديدة');
+            renderInstructionsEditor();
+            renderInstructionsDisplay();
+            queueSave();
+        }
+
+        function deleteInstruction(index) {
+            if (!confirm('هل تريد حذف هذه الملاحظة؟')) return;
+            state.instructions.splice(index, 1);
+            renderInstructionsEditor();
+            renderInstructionsDisplay();
+            queueSave();
+            showToast('تم حذف الملاحظة');
+        }
+
+        function addMaterial() {
+            const input = byId('new_material');
+            const val = input.value.trim();
+            if (!val) return;
+            if (state.materials[state.currentStage].includes(val)) {
+                showToast('هذه المادة موجودة بالفعل');
+                return;
+            }
+            state.materials[state.currentStage].push(val);
+            input.value = '';
+            renderMaterialsBank();
+            renderTable();
+            queueSave();
+            showToast('تمت إضافة المادة');
+        }
+
+        function deleteMaterial(i) {
+            if (!confirm('هل تريد حذف هذه المادة من بنك المواد؟')) return;
+            const deleted = state.materials[state.currentStage][i];
+            state.materials[state.currentStage].splice(i, 1);
+            state.tableRows.forEach(row => {
+                row.subjects = row.subjects.map(subjects => normalizeSubjectList(subjects).filter(subject => subject !== deleted));
+            });
+            renderMaterialsBank();
+            renderTable();
+            queueSave();
+            showToast('تم حذف المادة');
+        }
+
+        function renderTable() {
+            const head = byId('table_head');
+            const body = byId('table_body');
+            head.innerHTML = '';
+            body.innerHTML = '';
+
+            const headerRow = document.createElement('tr');
+            ['اليوم', 'التاريخ', ...state.classNames].forEach((label, index) => {
+                const th = document.createElement('th');
+                th.className = 'p-3 border-2 border-slate-900';
+                th.textContent = label;
+                if (index >= 2 && isEnabled('use_class_colors')) {
+                    th.style.backgroundColor = state.classColors[index - 2] || defaultColor(index - 2);
+                    th.style.color = '#0f172a';
+                }
+                headerRow.appendChild(th);
+            });
+            head.appendChild(headerRow);
+
+            state.tableRows.forEach((row, rIdx) => {
+                const tr = document.createElement('tr');
+                tr.className = rIdx % 2 === 0 ? 'bg-white' : 'bg-emerald-50/20';
+
+                const dayCell = document.createElement('td');
+                dayCell.className = 'p-2 border-2 border-slate-900 font-black text-sm';
+                dayCell.textContent = row.day;
+                if (isEnabled('use_row_colors') && state.rowColors[rIdx]) dayCell.style.backgroundColor = state.rowColors[rIdx];
+                tr.appendChild(dayCell);
+
+                const dateCell = document.createElement('td');
+                dateCell.className = 'p-2 border-2 border-slate-900 text-xs font-bold';
+                dateCell.textContent = row.date;
+                if (isEnabled('use_row_colors') && state.rowColors[rIdx]) dateCell.style.backgroundColor = state.rowColors[rIdx];
+                tr.appendChild(dateCell);
+
+                row.subjects.forEach((sub, sIdx) => {
+                    const td = document.createElement('td');
+                    td.className = 'p-1 border-2 border-slate-900';
+                    const subjects = normalizeSubjectList(sub, true);
+                    state.tableRows[rIdx].subjects[sIdx] = subjects;
+                    if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
+                        td.style.backgroundColor = state.rowColors[rIdx];
+                    }
+                    if (isEnabled('use_class_colors') && state.classColors[sIdx]) {
+                        td.style.backgroundColor = state.classColors[sIdx];
+                    }
+
+                    const stack = document.createElement('div');
+                    stack.className = 'subject-stack cell-tools';
+
+                    subjects.forEach((subject, subjectIdx) => {
+                        stack.appendChild(createSubjectSelect(rIdx, sIdx, subjectIdx, subject));
+                    });
+
+                    const addBtn = document.createElement('button');
+                    addBtn.type = 'button';
+                    addBtn.className = 'add-subject-btn';
+                    addBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i><span>إضافة مادة</span>';
+                    addBtn.addEventListener('click', () => addSubjectSlot(rIdx, sIdx));
+                    stack.appendChild(addBtn);
+
+                    const printSpan = document.createElement('span');
+                    printSpan.className = 'print-subject';
+                    const printSubjects = normalizeSubjectList(subjects);
+                    if (!printSubjects.length) {
+                        const emptyLine = document.createElement('span');
+                        emptyLine.className = 'print-subject-line';
+                        emptyLine.textContent = '-';
+                        printSpan.appendChild(emptyLine);
+                    } else {
+                        printSubjects.forEach(subject => {
+                            const line = document.createElement('span');
+                            line.className = 'print-subject-line';
+                            line.textContent = subject;
+                            if (isEnabled('use_material_colors')) {
+                                const color = state.materialColors[state.currentStage]?.[subject];
+                                if (color) line.style.backgroundColor = color;
+                            }
+                            printSpan.appendChild(line);
+                        });
+                    }
+
+                    td.appendChild(stack);
+                    td.appendChild(printSpan);
+                    tr.appendChild(td);
+                });
+
+                body.appendChild(tr);
+            });
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
+            const row = document.createElement('div');
+            row.className = 'subject-row';
+
+            const select = document.createElement('select');
+            select.className = 'subject-select min-w-0 flex-1 bg-white/70 border border-emerald-100 rounded font-black cursor-pointer outline-none';
+            if (currentValue && isEnabled('use_material_colors')) {
+                const materialColor = state.materialColors[state.currentStage]?.[currentValue];
+                if (materialColor) select.style.backgroundColor = materialColor;
+            }
+            select.addEventListener('change', () => {
+                const subjects = normalizeSubjectList(state.tableRows[rowIndex].subjects[classIndex], true);
+                if (select.value) {
+                    subjects[subjectIndex] = select.value;
+                } else {
+                    subjects.splice(subjectIndex, 1);
+                }
+                state.tableRows[rowIndex].subjects[classIndex] = subjects.filter(Boolean);
+                renderTable();
+                queueSave();
+            });
+
+            const empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = '-';
+            select.appendChild(empty);
+
+            state.materials[state.currentStage].forEach(material => {
+                const option = document.createElement('option');
+                option.value = material;
+                option.textContent = material;
+                option.selected = material === currentValue;
+                select.appendChild(option);
+            });
+
+            const holiday = document.createElement('option');
+            holiday.value = 'إجازة';
+            holiday.textContent = 'إجازة';
+            holiday.selected = currentValue === 'إجازة';
+            select.appendChild(holiday);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'icon-btn text-red-600 hover:bg-red-50 border border-red-100 cell-tools flex-shrink-0';
+            deleteBtn.title = 'حذف هذه المادة من اليوم';
+            deleteBtn.innerHTML = '<i data-lucide="x" class="w-3.5 h-3.5"></i>';
+            deleteBtn.addEventListener('click', () => deleteSubjectSlot(rowIndex, classIndex, subjectIndex));
+
+            row.appendChild(select);
+            row.appendChild(deleteBtn);
+            return row;
+        }
+
+        function addSubjectSlot(rowIndex, classIndex) {
+            const subjects = normalizeSubjectList(state.tableRows[rowIndex].subjects[classIndex], true);
+            subjects.push('');
+            state.tableRows[rowIndex].subjects[classIndex] = subjects;
+            renderTable();
+            queueSave();
+        }
+
+        function deleteSubjectSlot(rowIndex, classIndex, subjectIndex) {
+            const subjects = normalizeSubjectList(state.tableRows[rowIndex].subjects[classIndex], true);
+            subjects.splice(subjectIndex, 1);
+            state.tableRows[rowIndex].subjects[classIndex] = subjects;
+            renderTable();
+            queueSave();
+        }
+
+        function resetScheduleOnly() {
+            if (!confirm('هل تريد تفريغ مواد الجدول مع بقاء التواريخ والإعدادات؟')) return;
+            state.tableRows.forEach(row => {
+                row.subjects = Array.from({ length: state.classNames.length }, () => []);
+            });
+            renderTable();
+            queueSave();
+            showToast('تم تفريغ الجدول');
+        }
+
+        function restoreDefaults() {
+            if (!confirm('سيتم حذف كل التعديلات المحفوظة واستعادة الإعدادات الافتراضية. هل أنت متأكد؟')) return;
+            localStorage.removeItem(STORAGE_KEY);
+            state = deepClone(defaultState);
+            applyStateToInputs();
+            initTable();
+            renderClassEditor();
+            renderMaterialsBank();
+            renderInstructionsEditor();
+            renderInstructionsDisplay();
+            renderRowColorsEditor();
+            updateAll();
+            saveState(false);
+            showToast('تمت استعادة الإعدادات الافتراضية');
+        }
+
+        function updatePrintStyle() {
+            const oldStyle = byId('dynamic_print_style');
+            if (oldStyle) oldStyle.remove();
+
+            const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
+            const cols = state.classNames.length + 2;
+            const maxSubjects = Math.max(
+                1,
+                ...state.tableRows.flatMap(row => row.subjects.map(subjects => normalizeSubjectList(subjects).length || 1))
+            );
+            const baseFont = orientation === 'landscape' ? 9.2 : 8.3;
+            const fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
+            const padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
+            const headerFont = Math.max(7, fontSize + 0.8);
+            const titleFont = Math.max(11, fontSize + 4.5);
+            const footerMargin = orientation === 'landscape' ? 12 : 16;
+
+            document.documentElement.style.setProperty('--print-font-size', `${fontSize.toFixed(1)}pt`);
+            document.documentElement.style.setProperty('--print-cell-padding', `${padding.toFixed(1)}px`);
+            document.documentElement.style.setProperty('--print-header-font-size', `${headerFont.toFixed(1)}pt`);
+            document.documentElement.style.setProperty('--print-title-font-size', `${titleFont.toFixed(1)}pt`);
+            document.documentElement.style.setProperty('--print-footer-margin', `${footerMargin}px`);
+
+            const style = document.createElement('style');
+            style.id = 'dynamic_print_style';
+            const pageSize = orientation === 'landscape' ? '297mm 210mm' : '210mm 297mm';
+            const previewWidth = orientation === 'landscape' ? '297mm' : '210mm';
+            const previewMinHeight = orientation === 'landscape' ? '210mm' : '297mm';
+            style.textContent = `
+                @page { size: ${pageSize}; margin: ${orientation === 'landscape' ? '6mm' : '7mm'}; }
+                #printArea {
+                    width: ${previewWidth};
+                    max-width: 100%;
+                    min-height: ${previewMinHeight};
+                }
+                @media print {
+                    html, body, #printArea, .print-container {
+                        writing-mode: horizontal-tb !important;
+                        transform: none !important;
+                        rotate: 0deg !important;
+                    }
+                    .print-container {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        min-height: auto !important;
+                    }
+                    .schedule-table th:first-child, .schedule-table td:first-child { width: ${orientation === 'landscape' ? '58px' : '44px'} !important; }
+                    .schedule-table th:nth-child(2), .schedule-table td:nth-child(2) { width: ${orientation === 'landscape' ? '82px' : '66px'} !important; }
+                    .schedule-table { min-width: 0 !important; }
+                    @supports (size: 297mm 210mm) {
+                        html, body { width: auto !important; height: auto !important; }
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function printSchedule() {
+            updateAll();
+            updatePrintStyle();
+            saveState(false);
+            window.print();
+        }
+
+        function shareWhatsApp() {
+            const school = state.fields.school_name_input;
+            const title = state.fields.main_title_input;
+            let msg = `*${title}*\n*${school}*\n\n`;
+
+            state.tableRows.forEach(row => {
+                msg += `📅 *${row.day} (${row.date}):*\n`;
+                row.subjects.forEach((subject, i) => {
+                    const subjectsText = normalizeSubjectList(subject).join(' + ');
+                    if (subjectsText) msg += `- ${state.classNames[i]}: ${subjectsText}\n`;
+                });
+                msg += '\n';
+            });
+
+            msg += '_إعداد: ناصر آل مستنير_';
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function boot() {
+            loadState();
+            attachInputs();
+            refreshAppFromState();
+            window.addEventListener('beforeprint', () => {
+                updateAll();
+                updatePrintStyle();
+            });
+        }
+
+        boot();
