@@ -1033,11 +1033,12 @@ if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
 
             // في الجوال نستخدم html2pdf لتصدير PDF
             if (isMobile() && typeof html2pdf !== 'undefined') {
+                _enterPrintMode();
                 const el = byId('printArea');
                 const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
                 const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
                 const opt = {
-                    margin: [5, 5, 5, 5],
+                    margin: [6, 6, 6, 6],
                     filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
@@ -1046,7 +1047,9 @@ if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
                         logging: false,
                         allowTaint: true,
                         scrollX: 0,
-                        scrollY: 0
+                        scrollY: 0,
+                        width: el.scrollWidth,
+                        windowWidth: el.scrollWidth
                     },
                     jsPDF: {
                         unit: 'mm',
@@ -1055,18 +1058,59 @@ if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
                     }
                 };
                 showToast('جاري تجهيز ملف PDF...');
-                // إخفاء عناصر no-print مؤقتاً
-                const noPrintEls = document.querySelectorAll('.no-print');
-                noPrintEls.forEach(el => el.style.display = 'none');
-                html2pdf().set(opt).from(el).save().then(() => {
-                    noPrintEls.forEach(el => el.style.display = '');
-                    showToast('تم تصدير ملف PDF بنجاح');
-                }).catch(() => {
-                    noPrintEls.forEach(el => el.style.display = '');
-                    window.print();
-                });
+                // انتظار قصير لإعادة رسم الصفحة قبل التقاط الصورة
+                setTimeout(() => {
+                    html2pdf().set(opt).from(el).save().then(() => {
+                        _exitPrintMode();
+                        showToast('تم تصدير ملف PDF بنجاح ✅');
+                    }).catch(() => {
+                        _exitPrintMode();
+                        window.print();
+                    });
+                }, 150);
             } else {
                 window.print();
+            }
+        }
+
+        // تفعيل وضع الطباعة يدوياً (لأن html2pdf لا يطبق @media print)
+        function _enterPrintMode() {
+            // إخفاء عناصر التعديل وعناصر no-print
+            document.querySelectorAll('.no-print, .cell-tools, .subject-select, .add-subject-btn').forEach(el => {
+                el.dataset._origDisplay = el.style.display;
+                el.style.display = 'none';
+            });
+            // إظهار عناصر الطباعة النهائية
+            document.querySelectorAll('.print-subject').forEach(el => {
+                el.dataset._origDisplay = el.style.display;
+                el.style.display = 'block';
+            });
+            // إضافة تلوين رؤوس الجدول
+            const thead = byId('table_head');
+            if (thead) {
+                thead.dataset._origBg = thead.style.backgroundColor;
+                thead.dataset._origColor = thead.style.color;
+                thead.style.backgroundColor = '#064e3b';
+                thead.style.color = 'white';
+            }
+        }
+
+        // الخروج من وضع الطباعة واستعادة الحالة الأصلية
+        function _exitPrintMode() {
+            document.querySelectorAll('.no-print, .cell-tools, .subject-select, .add-subject-btn').forEach(el => {
+                el.style.display = el.dataset._origDisplay || '';
+                delete el.dataset._origDisplay;
+            });
+            document.querySelectorAll('.print-subject').forEach(el => {
+                el.style.display = el.dataset._origDisplay || '';
+                delete el.dataset._origDisplay;
+            });
+            const thead = byId('table_head');
+            if (thead) {
+                thead.style.backgroundColor = thead.dataset._origBg || '';
+                thead.style.color = thead.dataset._origColor || '';
+                delete thead.dataset._origBg;
+                delete thead.dataset._origColor;
             }
         }
 
