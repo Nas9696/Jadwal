@@ -1,6 +1,44 @@
 ﻿const STORAGE_KEY = 'smartExamSchedule.v2';
         const ministryLogo = 'https://upload.wikimedia.org/wikipedia/ar/8/82/Logo_of_Ministry_of_Education_%28Saudi_Arabia%29.svg';
         const daysSequence = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+        const materialVisuals = {
+            'رياضيات': { emoji: '➗', icon: 'calculator', color: '#2563eb' },
+            'لغتي': { emoji: '📖', icon: 'book-open-text', color: '#dc2626' },
+            'علوم': { emoji: '🔬', icon: 'microscope', color: '#059669' },
+            'إسلامية': { emoji: '🕌', icon: 'landmark', color: '#047857' },
+            'إنجليزي': { emoji: '🔤', icon: 'languages', color: '#7c3aed' },
+            'رقمية': { emoji: '💻', icon: 'monitor', color: '#0891b2' },
+            'مهارات حياتية': { emoji: '🌱', icon: 'heart-handshake', color: '#65a30d', short: 'م. حياتية' },
+            'اجتماعيات': { emoji: '🌍', icon: 'globe-2', color: '#ca8a04' },
+            'فنية': { emoji: '🎨', icon: 'palette', color: '#db2777' },
+            'فيزياء': { emoji: '⚛️', icon: 'atom', color: '#4f46e5' },
+            'كيمياء': { emoji: '🧪', icon: 'flask-conical', color: '#0d9488' },
+            'أحياء': { emoji: '🧬', icon: 'dna', color: '#16a34a' },
+            'كفايات': { emoji: '✍️', icon: 'pen-line', color: '#9333ea' },
+            'إجازة': { emoji: '☕', icon: 'coffee', color: '#64748b' }
+        };
+        const classTemplates = {
+            elementary: {
+                elementary6: ['الصف 1', 'الصف 2', 'الصف 3', 'الصف 4', 'الصف 5', 'الصف 6']
+            },
+            intermediate: {
+                intermediate3: ['الأول متوسط', 'الثاني متوسط', 'الثالث متوسط']
+            },
+            secondary: {
+                secondaryLevels: ['الأول ثانوي', 'الثاني ثانوي', 'الثالث ثانوي'],
+                secondaryTracks: ['أول ثانوي عام', 'ثاني ثانوي عام', 'ثالث ثانوي عام', 'ثاني ثانوي علمي', 'ثالث ثانوي علمي', 'ثاني ثانوي أدبي', 'ثالث ثانوي أدبي'],
+                secondaryScienceArts: ['الأول ثانوي', 'الثاني ثانوي علمي', 'الثالث ثانوي علمي', 'الثاني ثانوي أدبي', 'الثالث ثانوي أدبي'],
+                secondaryPathways: ['المسار العام', 'مسار علوم الحاسب والهندسة', 'مسار الصحة والحياة', 'مسار إدارة الأعمال', 'المسار الشرعي']
+            }
+        };
+        const classTemplateLabels = {
+            elementary6: 'ابتدائي - 6 صفوف',
+            intermediate3: 'متوسط - 3 صفوف',
+            secondaryLevels: 'ثانوي - مستويات عامة',
+            secondaryTracks: 'ثانوي - عام / علمي / أدبي',
+            secondaryScienceArts: 'ثانوي - علمي وأدبي',
+            secondaryPathways: 'ثانوي - مسارات'
+        };
 
         const defaultState = {
             currentStage: 'elementary',
@@ -44,6 +82,7 @@
                 header_left_size: '11',
                 main_title_size: '24',
                 principal_size: '14',
+                class_template: 'elementary6',
                 print_orientation: 'landscape',
                 use_class_colors: 'true',
                 use_row_colors: 'false',
@@ -97,6 +136,24 @@
         function defaultColor(index) {
             const colors = ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdfa', '#fefce8', '#f1f5f9'];
             return colors[index % colors.length];
+        }
+
+        function getMaterialVisual(subject) {
+            return materialVisuals[subject] || { emoji: '📌', icon: 'sparkles', color: '#475569' };
+        }
+
+        function createMaterialIcon(subject, extraClass = '') {
+            const visual = getMaterialVisual(subject);
+            const icon = document.createElement('span');
+            icon.className = `material-icon ${extraClass}`.trim();
+            icon.style.color = visual.color;
+            icon.innerHTML = `<i data-lucide="${visual.icon}" class="w-4 h-4"></i>`;
+            return icon;
+        }
+
+        function padArabic(text, width) {
+            const value = String(text || '');
+            return value + ' '.repeat(Math.max(1, width - value.length));
         }
 
         function attachInputs() {
@@ -154,8 +211,12 @@
             byId('backup_file_input').addEventListener('change', importBackup);
 
             byId('stageSelect').addEventListener('change', changeStage);
+            byId('class_template_select').addEventListener('change', applyClassTemplate);
             byId('new_material').addEventListener('keydown', event => {
                 if (event.key === 'Enter') addMaterial();
+            });
+            byId('new_class_name').addEventListener('keydown', event => {
+                if (event.key === 'Enter') addClassColumn();
             });
         }
 
@@ -180,7 +241,7 @@
 
         function applyStateToInputs() {
             Object.entries(state.fields).forEach(([id, value]) => {
-                if (!byId(id)) return;
+            if (!byId(id)) return;
                 if (byId(id).type === 'checkbox') {
                     byId(id).checked = value === 'true';
                 } else {
@@ -188,6 +249,7 @@
                 }
             });
             byId('stageSelect').value = state.currentStage;
+            renderClassTemplateOptions();
         }
 
         function saveState(manual = false) {
@@ -344,7 +406,7 @@
                 const oldSubjects = oldRows[i]?.subjects || [];
                 state.tableRows.push({
                     day: dayName,
-                    date: `${currentD} / ${currentM} / 1447`,
+                    date: `${String(currentD).padStart(2, '0')} / ${String(currentM).padStart(2, '0')} / 1447`,
                     subjects: Array.from({ length: state.classNames.length }, (_, idx) => normalizeSubjectList(oldSubjects[idx], true))
                 });
 
@@ -362,17 +424,6 @@
 
         function changeStage() {
             state.currentStage = byId('stageSelect').value;
-            if (state.currentStage === 'elementary') {
-                state.classNames = ['الصف 1', 'الصف 2', 'الصف 3', 'الصف 4', 'الصف 5', 'الصف 6'];
-                state.classColors = ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdfa'];
-            } else if (state.currentStage === 'intermediate') {
-                state.classNames = ['الأول متوسط', 'الثاني متوسط', 'الثالث متوسط'];
-                state.classColors = ['#ecfdf5', '#eff6ff', '#fff7ed'];
-            } else {
-                state.classNames = ['الأول ثانوي', 'الثاني ثانوي', 'الثالث ثانوي'];
-                state.classColors = ['#ecfdf5', '#eff6ff', '#fff7ed'];
-            }
-
             const titles = {
                 elementary: 'جدول اختبارات المرحلة الابتدائية',
                 intermediate: 'جدول اختبارات المرحلة المتوسطة',
@@ -381,10 +432,53 @@
 
             state.fields.main_title_input = titles[state.currentStage];
             byId('main_title_input').value = state.fields.main_title_input;
-            renderClassEditor();
-            initTable();
+            renderClassTemplateOptions(true);
+            applyClassTemplate();
             renderMaterialsBank();
             updateAll();
+        }
+
+        function renderClassTemplateOptions(resetToDefault = false) {
+            const select = byId('class_template_select');
+            if (!select) return;
+            const templates = classTemplates[state.currentStage] || {};
+            select.innerHTML = '';
+
+            Object.keys(templates).forEach(key => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = classTemplateLabels[key] || key;
+                select.appendChild(option);
+            });
+
+            const customOption = document.createElement('option');
+            customOption.value = 'custom';
+            customOption.textContent = 'مخصص - حسب الفصول المدخلة';
+            select.appendChild(customOption);
+
+            const firstKey = Object.keys(templates)[0] || '';
+            if (resetToDefault || (!templates[state.fields.class_template] && state.fields.class_template !== 'custom')) {
+                state.fields.class_template = firstKey;
+            }
+            select.value = state.fields.class_template;
+        }
+
+        function applyClassTemplate() {
+            const templateKey = byId('class_template_select').value;
+            if (templateKey === 'custom') {
+                state.fields.class_template = 'custom';
+                queueSave();
+                return;
+            }
+            const template = classTemplates[state.currentStage]?.[templateKey];
+            if (!template) return;
+            state.fields.class_template = templateKey;
+            state.classNames = [...template];
+            state.classColors = state.classNames.map((_, index) => state.classColors[index] || defaultColor(index));
+            renderClassEditor();
+            initTable();
+            updateAll();
+            queueSave();
         }
 
         function renderClassEditor() {
@@ -416,10 +510,52 @@
                     queueSave();
                 });
 
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'icon-btn text-red-600 hover:bg-red-50 border border-red-100 flex-shrink-0';
+                deleteBtn.title = 'حذف الفصل';
+                deleteBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
+                deleteBtn.addEventListener('click', () => deleteClassColumn(i));
+
                 wrap.appendChild(input);
                 wrap.appendChild(color);
+                wrap.appendChild(deleteBtn);
                 container.appendChild(wrap);
             });
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function addClassColumn() {
+            const input = byId('new_class_name');
+            const name = input.value.trim();
+            if (!name) return;
+            state.classNames.push(name);
+            state.classColors.push(defaultColor(state.classColors.length));
+            state.tableRows.forEach(row => row.subjects.push([]));
+            input.value = '';
+            state.fields.class_template = 'custom';
+            renderClassEditor();
+            renderTable();
+            updatePrintStyle();
+            queueSave();
+            showToast('تمت إضافة الفصل');
+        }
+
+        function deleteClassColumn(index) {
+            if (state.classNames.length <= 1) {
+                showToast('يجب أن يبقى فصل واحد على الأقل');
+                return;
+            }
+            if (!confirm('هل تريد حذف هذا الفصل من الجدول؟')) return;
+            state.classNames.splice(index, 1);
+            state.classColors.splice(index, 1);
+            state.tableRows.forEach(row => row.subjects.splice(index, 1));
+            state.fields.class_template = 'custom';
+            renderClassEditor();
+            renderTable();
+            updatePrintStyle();
+            queueSave();
+            showToast('تم حذف الفصل');
         }
 
         function renderMaterialsBank() {
@@ -610,9 +746,17 @@
                 const th = document.createElement('th');
                 th.className = 'p-3 border-2 border-slate-900';
                 th.textContent = label;
+                // تقليل حجم الخط للعناوين الطويلة
+                if (label.length > 15) {
+                    th.style.fontSize = '12px';
+                } else if (label.length > 12) {
+                    th.style.fontSize = '13px';
+                }
                 if (index >= 2 && isEnabled('use_class_colors')) {
                     th.style.backgroundColor = state.classColors[index - 2] || defaultColor(index - 2);
                     th.style.color = '#0f172a';
+                    th.style.webkitPrintColorAdjust = 'exact';
+                    th.style.printColorAdjust = 'exact';
                 }
                 headerRow.appendChild(th);
             });
@@ -625,13 +769,21 @@
                 const dayCell = document.createElement('td');
                 dayCell.className = 'p-2 border-2 border-slate-900 font-black text-sm';
                 dayCell.textContent = row.day;
-                if (isEnabled('use_row_colors') && state.rowColors[rIdx]) dayCell.style.backgroundColor = state.rowColors[rIdx];
+                if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
+                    dayCell.style.backgroundColor = state.rowColors[rIdx];
+                    dayCell.style.webkitPrintColorAdjust = 'exact';
+                    dayCell.style.printColorAdjust = 'exact';
+                }
                 tr.appendChild(dayCell);
 
                 const dateCell = document.createElement('td');
                 dateCell.className = 'p-2 border-2 border-slate-900 text-xs font-bold';
                 dateCell.textContent = row.date;
-                if (isEnabled('use_row_colors') && state.rowColors[rIdx]) dateCell.style.backgroundColor = state.rowColors[rIdx];
+if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
+                        dateCell.style.backgroundColor = state.rowColors[rIdx];
+                        dateCell.style.webkitPrintColorAdjust = 'exact';
+                        dateCell.style.printColorAdjust = 'exact';
+                    }
                 tr.appendChild(dateCell);
 
                 row.subjects.forEach((sub, sIdx) => {
@@ -641,9 +793,13 @@
                     state.tableRows[rIdx].subjects[sIdx] = subjects;
                     if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
                         td.style.backgroundColor = state.rowColors[rIdx];
+                        td.style.webkitPrintColorAdjust = 'exact';
+                        td.style.printColorAdjust = 'exact';
                     }
                     if (isEnabled('use_class_colors') && state.classColors[sIdx]) {
                         td.style.backgroundColor = state.classColors[sIdx];
+                        td.style.webkitPrintColorAdjust = 'exact';
+                        td.style.printColorAdjust = 'exact';
                     }
 
                     const stack = document.createElement('div');
@@ -672,10 +828,19 @@
                         printSubjects.forEach(subject => {
                             const line = document.createElement('span');
                             line.className = 'print-subject-line';
-                            line.textContent = subject;
+                            const icon = createMaterialIcon(subject, 'print-material-icon');
+                            const text = document.createElement('span');
+                            const visual = getMaterialVisual(subject);
+                            text.textContent = visual.short || subject;
+                            line.appendChild(icon);
+                            line.appendChild(text);
                             if (isEnabled('use_material_colors')) {
                                 const color = state.materialColors[state.currentStage]?.[subject];
-                                if (color) line.style.backgroundColor = color;
+                                if (color) {
+                                    line.style.backgroundColor = color;
+                                    line.style.webkitPrintColorAdjust = 'exact';
+                                    line.style.printColorAdjust = 'exact';
+                                }
                             }
                             printSpan.appendChild(line);
                         });
@@ -694,6 +859,12 @@
         function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
             const row = document.createElement('div');
             row.className = 'subject-row';
+
+            const iconSlot = document.createElement('span');
+            iconSlot.className = 'subject-icon-slot';
+            if (currentValue) {
+                iconSlot.appendChild(createMaterialIcon(currentValue));
+            }
 
             const select = document.createElement('select');
             select.className = 'subject-select min-w-0 flex-1 bg-white/70 border border-emerald-100 rounded font-black cursor-pointer outline-none';
@@ -739,6 +910,7 @@
             deleteBtn.innerHTML = '<i data-lucide="x" class="w-3.5 h-3.5"></i>';
             deleteBtn.addEventListener('click', () => deleteSubjectSlot(rowIndex, classIndex, subjectIndex));
 
+            row.appendChild(iconSlot);
             row.appendChild(select);
             row.appendChild(deleteBtn);
             return row;
@@ -853,18 +1025,25 @@
         function shareWhatsApp() {
             const school = state.fields.school_name_input;
             const title = state.fields.main_title_input;
-            let msg = `*${title}*\n*${school}*\n\n`;
+            const classWidth = Math.max(10, ...state.classNames.map(name => name.length));
+            let msg = `📝 *${title}*\n🏫 *${school}*\n\n`;
 
             state.tableRows.forEach(row => {
-                msg += `📅 *${row.day} (${row.date}):*\n`;
+                msg += `━━━━━━━━━━━━━━\n`;
+                msg += `📅 *اليوم:* ${row.day}\n`;
+                msg += `🗓️ *التاريخ:* ${row.date}\n\n`;
                 row.subjects.forEach((subject, i) => {
-                    const subjectsText = normalizeSubjectList(subject).join(' + ');
-                    if (subjectsText) msg += `- ${state.classNames[i]}: ${subjectsText}\n`;
+                    const subjects = normalizeSubjectList(subject);
+                    if (!subjects.length) return;
+                    const className = padArabic(state.classNames[i], classWidth);
+                    const subjectsText = subjects.map(item => `${getMaterialVisual(item).emoji} ${item}`).join('  |  ');
+                    msg += `🏷️ ${className} : ${subjectsText}\n`;
                 });
                 msg += '\n';
             });
 
-            msg += '_إعداد: ناصر آل مستنير_';
+            msg += '━━━━━━━━━━━━━━\n';
+            msg += '✨ _إعداد: ناصر آل مستنير_';
             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
@@ -879,3 +1058,4 @@
         }
 
         boot();
+

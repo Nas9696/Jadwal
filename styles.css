@@ -199,7 +199,7 @@
 
         .schedule-table th:nth-child(2),
         .schedule-table td:nth-child(2) {
-            width: 96px;
+            width: 130px;
         }
 
         .header-line {
@@ -210,7 +210,8 @@
         .subject-select {
             min-height: 28px;
             text-align-last: center;
-            font-size: 10px;
+            font-size: 9px;
+            padding: 2px 4px;
         }
 
         .subject-stack {
@@ -222,6 +223,31 @@
             display: flex;
             align-items: center;
             gap: 4px;
+        }
+
+        .subject-icon-slot {
+            width: 22px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .material-icon {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .print-material-icon {
+            width: 16px;
+            height: 16px;
+            margin-inline-end: 5px;
+            vertical-align: middle;
         }
 
         .add-subject-btn {
@@ -244,6 +270,7 @@
         .print-subject-line {
             display: block;
             padding: 3px 2px;
+            text-align: center;
         }
 
         .print-subject-line + .print-subject-line {
@@ -334,6 +361,8 @@
                 line-height: 1.35 !important;
                 padding: var(--print-cell-padding, 4px) !important;
                 overflow-wrap: anywhere;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
             thead {
                 background-color: #064e3b !important;
@@ -351,6 +380,13 @@
             .print-subject-line {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }
+            .print-material-icon {
+                display: inline-flex !important;
             }
             .header-line { font-size: var(--print-header-font-size, 9pt) !important; }
             #main_title_display {

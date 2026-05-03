@@ -179,12 +179,28 @@
                             <select id="stageSelect" class="field font-bold bg-slate-50">
                                 <option value="elementary">الابتدائية (6 صفوف)</option>
                                 <option value="intermediate">المتوسطة (3 صفوف)</option>
-                                <option value="secondary">الثانوية (3 صفوف)</option>
+                                <option value="secondary">الثانوية (مسارات وتصنيفات)</option>
                             </select>
                         </div>
 
                         <div class="pt-3 border-t border-slate-200">
-                            <label class="compact-label mb-2 block">تعديل أسماء الفصول (الأعمدة)</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                                <div class="space-y-1">
+                                    <label class="compact-label">قالب الفصول</label>
+                                    <select id="class_template_select" class="field font-bold bg-slate-50"></select>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="compact-label">إضافة فصل/تصنيف</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="new_class_name" class="field flex-1" placeholder="مثال: ثالث ثانوي علمي">
+                                        <button onclick="addClassColumn()" type="button" class="action-btn bg-emerald-700 text-white">
+                                            <i data-lucide="plus" class="w-4 h-4"></i>
+                                            إضافة
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="compact-label mb-2 block">تعديل أسماء الفصول/التصنيفات (الأعمدة)</label>
                             <div id="class_names_editor" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
                         </div>
 
