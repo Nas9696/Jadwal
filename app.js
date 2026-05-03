@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = 'smartExamSchedule.v2';
+const STORAGE_KEY = 'smartExamSchedule.v2';
         const ministryLogo = 'https://upload.wikimedia.org/wikipedia/ar/8/82/Logo_of_Ministry_of_Education_%28Saudi_Arabia%29.svg';
         const daysSequence = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
         const materialVisuals = {
@@ -1020,6 +1020,67 @@ if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
             updatePrintStyle();
             saveState(false);
             window.print();
+        }
+
+        function isMobile() {
+            return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        }
+
+        function printOrExportPDF() {
+            updateAll();
+            updatePrintStyle();
+            saveState(false);
+
+            // في الجوال نستخدم html2pdf لتصدير PDF
+            if (isMobile() && typeof html2pdf !== 'undefined') {
+                const el = byId('printArea');
+                const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
+                const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
+                const opt = {
+                    margin: [5, 5, 5, 5],
+                    filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        allowTaint: true,
+                        scrollX: 0,
+                        scrollY: 0
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: orientation
+                    }
+                };
+                showToast('جاري تجهيز ملف PDF...');
+                // إخفاء عناصر no-print مؤقتاً
+                const noPrintEls = document.querySelectorAll('.no-print');
+                noPrintEls.forEach(el => el.style.display = 'none');
+                html2pdf().set(opt).from(el).save().then(() => {
+                    noPrintEls.forEach(el => el.style.display = '');
+                    showToast('تم تصدير ملف PDF بنجاح');
+                }).catch(() => {
+                    noPrintEls.forEach(el => el.style.display = '');
+                    window.print();
+                });
+            } else {
+                window.print();
+            }
+        }
+
+        function stepNumber(id, delta) {
+            const input = byId(id);
+            if (!input) return;
+            const min = parseInt(input.min, 10);
+            const max = parseInt(input.max, 10);
+            let val = parseInt(input.value, 10);
+            if (isNaN(val)) val = parseInt(input.min, 10) || 0;
+            val = Math.min(Math.max(val + delta, isNaN(min) ? -Infinity : min), isNaN(max) ? Infinity : max);
+            input.value = val;
+            // تشغيل حدث التغيير
+            input.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
         function shareWhatsApp() {

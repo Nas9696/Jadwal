@@ -1,11 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>نظام جداول الاختبارات الذكي - الأستاذ ناصر مسعود</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -106,7 +107,11 @@
                                 </div>
                                 <div class="space-y-1">
                                     <label class="compact-label">حجم الخط</label>
-                                    <input type="number" id="header_right_size" min="8" max="22" class="field font-bold text-center">
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" onclick="stepNumber('header_right_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="header_right_size" min="8" max="22" class="field font-bold text-center">
+                                        <button type="button" onclick="stepNumber('header_right_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -125,7 +130,11 @@
                                 </div>
                                 <div class="space-y-1">
                                     <label class="compact-label">حجم الخط</label>
-                                    <input type="number" id="header_left_size" min="8" max="22" class="field font-bold text-center">
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" onclick="stepNumber('header_left_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="header_left_size" min="8" max="22" class="field font-bold text-center">
+                                        <button type="button" onclick="stepNumber('header_left_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -141,7 +150,11 @@
                             </div>
                             <div class="space-y-1">
                                 <label class="compact-label text-emerald-700">حجم خط عنوان الجدول الرئيسي</label>
-                                <input type="number" id="main_title_size" min="16" max="40" class="field font-bold text-center">
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepNumber('main_title_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                    <input type="number" id="main_title_size" min="16" max="40" class="field font-bold text-center">
+                                    <button type="button" onclick="stepNumber('main_title_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                </div>
                             </div>
                             <div class="space-y-1">
                                 <label class="compact-label text-emerald-700">شعار المدرسة أو الوزارة (رابط صورة)</label>
@@ -163,13 +176,25 @@
                         <div class="grid grid-cols-2 gap-2">
                             <div class="space-y-1">
                                 <label class="compact-label">عدد أيام الاختبار</label>
-                                <input type="number" id="days_count" min="1" max="12" class="field font-bold text-center">
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepNumber('days_count',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                    <input type="number" id="days_count" min="1" max="12" class="field font-bold text-center">
+                                    <button type="button" onclick="stepNumber('days_count',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                </div>
                             </div>
                             <div class="space-y-1">
                                 <label class="compact-label text-emerald-700">بداية الاختبار (هجري)</label>
                                 <div class="flex gap-2">
-                                    <input type="number" id="start_day" min="1" max="30" class="field w-1/2 text-center font-bold" title="اليوم">
-                                    <input type="number" id="start_month" min="1" max="12" class="field w-1/2 text-center font-bold" title="الشهر">
+                                    <div class="flex items-center gap-1 flex-1">
+                                        <button type="button" onclick="stepNumber('start_day',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="start_day" min="1" max="30" class="field w-full text-center font-bold" title="اليوم">
+                                        <button type="button" onclick="stepNumber('start_day',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    </div>
+                                    <div class="flex items-center gap-1 flex-1">
+                                        <button type="button" onclick="stepNumber('start_month',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="start_month" min="1" max="12" class="field w-full text-center font-bold" title="الشهر">
+                                        <button type="button" onclick="stepNumber('start_month',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -211,14 +236,18 @@
                             </div>
                             <div class="space-y-1">
                                 <label class="compact-label text-blue-700">حجم خط اسم المدير</label>
-                                <input type="number" id="principal_size" min="10" max="28" class="field font-black text-blue-900 text-center">
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="stepNumber('principal_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                    <input type="number" id="principal_size" min="10" max="28" class="field font-black text-blue-900 text-center">
+                                    <button type="button" onclick="stepNumber('principal_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                </div>
                             </div>
                             <div class="grid grid-cols-3 gap-2">
                                 <button onclick="switchTab('final')" class="action-btn bg-emerald-600 text-white">
                                     <i data-lucide="eye" class="w-4 h-4"></i>
                                     معاينة
                                 </button>
-                                <button onclick="printSchedule()" class="action-btn bg-slate-800 text-white">
+                                <button onclick="printOrExportPDF()" class="action-btn bg-slate-800 text-white">
                                     <i data-lucide="printer" class="w-4 h-4"></i>
                                     طباعة
                                 </button>
@@ -339,9 +368,9 @@
                     <i data-lucide="send" class="w-4 h-4"></i>
                     مشاركة واتساب
                 </button>
-                <button onclick="printSchedule()" class="action-btn bg-emerald-700 text-white px-10 py-3">
-                    <i data-lucide="printer" class="w-4 h-4"></i>
-                    طباعة الجدول النهائي PDF
+                <button onclick="printOrExportPDF()" class="action-btn bg-emerald-700 text-white px-10 py-3">
+                    <i data-lucide="file-down" class="w-4 h-4"></i>
+                    طباعة / تصدير PDF
                 </button>
             </div>
         </div>

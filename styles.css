@@ -1,4 +1,4 @@
-﻿:root {
+:root {
             --brand: #047857;
             --brand-dark: #064e3b;
             --ink: #0f172a;
@@ -182,24 +182,34 @@
         }
 
         .schedule-table {
-            table-layout: fixed;
+            table-layout: auto;
             width: 100%;
         }
 
         .schedule-table th,
         .schedule-table td {
-            overflow-wrap: anywhere;
+            white-space: normal;
+            overflow: visible;
             word-break: break-word;
         }
 
         .schedule-table th:first-child,
         .schedule-table td:first-child {
             width: 70px;
+            min-width: 60px;
+            white-space: nowrap;
         }
 
         .schedule-table th:nth-child(2),
         .schedule-table td:nth-child(2) {
-            width: 130px;
+            width: 110px;
+            min-width: 90px;
+            white-space: nowrap;
+        }
+
+        .schedule-table th:nth-child(n+3),
+        .schedule-table td:nth-child(n+3) {
+            min-width: 90px;
         }
 
         .header-line {
@@ -271,6 +281,9 @@
             display: block;
             padding: 3px 2px;
             text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .print-subject-line + .print-subject-line {
@@ -315,17 +328,57 @@
             }
 
             .print-container {
-                padding: 18px;
+                padding: 10px;
                 min-height: auto;
             }
 
             .table-scroll {
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
+                margin: 0 -10px;
+                padding: 0 4px;
             }
 
             .schedule-table {
-                min-width: 820px;
+                min-width: 700px;
+                table-layout: fixed;
+            }
+
+            .schedule-table th,
+            .schedule-table td {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .schedule-table th:first-child,
+            .schedule-table td:first-child {
+                width: 60px;
+                min-width: 60px;
+            }
+
+            .schedule-table th:nth-child(2),
+            .schedule-table td:nth-child(2) {
+                width: 90px;
+                min-width: 90px;
+            }
+
+            .schedule-table th:nth-child(n+3),
+            .schedule-table td:nth-child(n+3) {
+                width: 90px;
+                min-width: 90px;
+            }
+
+            /* إخفاء السهم الافتراضية لحقل الرقم في متصفحات الجوال */
+            input[type="number"]::-webkit-inner-spin-button,
+            input[type="number"]::-webkit-outer-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+
+            input[type="number"] {
+                -moz-appearance: textfield;
+                appearance: textfield;
             }
         }
 
@@ -347,12 +400,37 @@
             #final-tab { display: block !important; }
             .table-scroll {
                 overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
             table {
                 width: 100% !important;
                 table-layout: fixed !important;
                 border: 1.5px solid #000 !important;
                 page-break-inside: avoid;
+                border-collapse: collapse !important;
+            }
+            .schedule-table th,
+            .schedule-table td {
+                white-space: normal !important;
+                overflow: hidden !important;
+                word-break: break-word !important;
+                vertical-align: middle !important;
+            }
+            /* إلغاء min-width في الطباعة لتفادي التداخل */
+            .schedule-table th:first-child,
+            .schedule-table td:first-child {
+                width: 8% !important;
+                min-width: 0 !important;
+            }
+            .schedule-table th:nth-child(2),
+            .schedule-table td:nth-child(2) {
+                width: 14% !important;
+                min-width: 0 !important;
+            }
+            .schedule-table th:nth-child(n+3),
+            .schedule-table td:nth-child(n+3) {
+                min-width: 0 !important;
             }
             tr { page-break-inside: avoid; }
             th, td {
@@ -360,7 +438,6 @@
                 font-size: var(--print-font-size, 8.5pt) !important;
                 line-height: 1.35 !important;
                 padding: var(--print-cell-padding, 4px) !important;
-                overflow-wrap: anywhere;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
