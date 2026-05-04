@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
@@ -10,14 +11,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur shadow-sm no-print border-b border-slate-200">
         <div class="max-w-4xl mx-auto flex justify-around">
-            <button onclick="switchTab('settings')" id="btn-settings" class="tab-btn active flex-1 py-4 font-black transition flex items-center justify-center gap-2">
+            <button onclick="switchTab('settings')" id="btn-settings"
+                class="tab-btn active flex-1 py-4 font-black transition flex items-center justify-center gap-2">
                 <i data-lucide="settings" class="w-5 h-5"></i>
                 <span>إعدادات الجدول</span>
             </button>
-            <button onclick="switchTab('final')" id="btn-final" class="tab-btn flex-1 py-4 font-black transition flex items-center justify-center gap-2">
+            <button onclick="switchTab('final')" id="btn-final"
+                class="tab-btn flex-1 py-4 font-black transition flex items-center justify-center gap-2">
                 <i data-lucide="file-text" class="w-5 h-5"></i>
                 <span>الجدول النهائي</span>
             </button>
@@ -33,23 +37,32 @@
                         لوحة التحكم الديناميكية
                     </h2>
                     <div class="compact-actions">
-                        <button onclick="saveState(true)" class="action-btn bg-emerald-700 text-white" title="حفظ البيانات">
+                        <button onclick="saveState(true)" class="action-btn bg-emerald-700 text-white"
+                            title="حفظ البيانات">
                             <i data-lucide="save" class="w-4 h-4"></i>
                             حفظ
                         </button>
-                        <button onclick="resetScheduleOnly()" class="action-btn bg-white text-slate-700 border border-slate-300" title="تفريغ مواد الجدول">
+                        <button onclick="resetScheduleOnly()"
+                            class="action-btn bg-white text-slate-700 border border-slate-300"
+                            title="تفريغ مواد الجدول">
                             <i data-lucide="eraser" class="w-4 h-4"></i>
                             تفريغ الجدول
                         </button>
-                        <button onclick="restoreDefaults()" class="action-btn bg-white text-red-700 border border-red-200" title="استعادة الإعدادات الافتراضية">
+                        <button onclick="restoreDefaults()"
+                            class="action-btn bg-white text-red-700 border border-red-200"
+                            title="استعادة الإعدادات الافتراضية">
                             <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                             استعادة الافتراضي
                         </button>
-                        <button onclick="exportBackup()" class="action-btn bg-white text-blue-800 border border-blue-200" title="تصدير نسخة من البيانات">
+                        <button onclick="exportBackup()"
+                            class="action-btn bg-white text-blue-800 border border-blue-200"
+                            title="تصدير نسخة من البيانات">
                             <i data-lucide="download" class="w-4 h-4"></i>
                             تصدير نسخة
                         </button>
-                        <button onclick="byId('backup_file_input').click()" class="action-btn bg-white text-violet-800 border border-violet-200" title="استيراد نسخة محفوظة">
+                        <button onclick="byId('backup_file_input').click()"
+                            class="action-btn bg-white text-violet-800 border border-violet-200"
+                            title="استيراد نسخة محفوظة">
                             <i data-lucide="upload" class="w-4 h-4"></i>
                             استيراد نسخة
                         </button>
@@ -108,9 +121,12 @@
                                 <div class="space-y-1">
                                     <label class="compact-label">حجم الخط</label>
                                     <div class="flex items-center gap-1">
-                                        <button type="button" onclick="stepNumber('header_right_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                        <input type="number" id="header_right_size" min="8" max="22" class="field font-bold text-center">
-                                        <button type="button" onclick="stepNumber('header_right_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                        <button type="button" onclick="stepNumber('header_right_size',-1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="header_right_size" min="8" max="22"
+                                            class="field font-bold text-center">
+                                        <button type="button" onclick="stepNumber('header_right_size',1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                     </div>
                                 </div>
                             </div>
@@ -131,9 +147,12 @@
                                 <div class="space-y-1">
                                     <label class="compact-label">حجم الخط</label>
                                     <div class="flex items-center gap-1">
-                                        <button type="button" onclick="stepNumber('header_left_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                        <input type="number" id="header_left_size" min="8" max="22" class="field font-bold text-center">
-                                        <button type="button" onclick="stepNumber('header_left_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                        <button type="button" onclick="stepNumber('header_left_size',-1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="header_left_size" min="8" max="22"
+                                            class="field font-bold text-center">
+                                        <button type="button" onclick="stepNumber('header_left_size',1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                     </div>
                                 </div>
                             </div>
@@ -151,13 +170,17 @@
                             <div class="space-y-1">
                                 <label class="compact-label text-emerald-700">حجم خط عنوان الجدول الرئيسي</label>
                                 <div class="flex items-center gap-1">
-                                    <button type="button" onclick="stepNumber('main_title_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                    <input type="number" id="main_title_size" min="16" max="40" class="field font-bold text-center">
-                                    <button type="button" onclick="stepNumber('main_title_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    <button type="button" onclick="stepNumber('main_title_size',-1)"
+                                        class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                    <input type="number" id="main_title_size" min="16" max="40"
+                                        class="field font-bold text-center">
+                                    <button type="button" onclick="stepNumber('main_title_size',1)"
+                                        class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                 </div>
                             </div>
                             <div class="space-y-1">
-                                <label class="compact-label text-emerald-700">شعار المدرسة أو الوزارة (رابط صورة)</label>
+                                <label class="compact-label text-emerald-700">شعار المدرسة أو الوزارة (رابط
+                                    صورة)</label>
                                 <input type="url" id="logo_url_input" class="field ltr:text-left" dir="ltr">
                             </div>
                             <div class="space-y-1">
@@ -177,23 +200,32 @@
                             <div class="space-y-1">
                                 <label class="compact-label">عدد أيام الاختبار</label>
                                 <div class="flex items-center gap-1">
-                                    <button type="button" onclick="stepNumber('days_count',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                    <input type="number" id="days_count" min="1" max="12" class="field font-bold text-center">
-                                    <button type="button" onclick="stepNumber('days_count',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    <button type="button" onclick="stepNumber('days_count',-1)"
+                                        class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                    <input type="number" id="days_count" min="1" max="12"
+                                        class="field font-bold text-center">
+                                    <button type="button" onclick="stepNumber('days_count',1)"
+                                        class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                 </div>
                             </div>
                             <div class="space-y-1">
                                 <label class="compact-label text-emerald-700">بداية الاختبار (هجري)</label>
                                 <div class="flex gap-2">
                                     <div class="flex items-center gap-1 flex-1">
-                                        <button type="button" onclick="stepNumber('start_day',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                        <input type="number" id="start_day" min="1" max="30" class="field w-full text-center font-bold" title="اليوم">
-                                        <button type="button" onclick="stepNumber('start_day',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                        <button type="button" onclick="stepNumber('start_day',-1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="start_day" min="1" max="30"
+                                            class="field w-full text-center font-bold" title="اليوم">
+                                        <button type="button" onclick="stepNumber('start_day',1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                     </div>
                                     <div class="flex items-center gap-1 flex-1">
-                                        <button type="button" onclick="stepNumber('start_month',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                        <input type="number" id="start_month" min="1" max="12" class="field w-full text-center font-bold" title="الشهر">
-                                        <button type="button" onclick="stepNumber('start_month',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                        <button type="button" onclick="stepNumber('start_month',-1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                        <input type="number" id="start_month" min="1" max="12"
+                                            class="field w-full text-center font-bold" title="الشهر">
+                                        <button type="button" onclick="stepNumber('start_month',1)"
+                                            class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                     </div>
                                 </div>
                             </div>
@@ -217,8 +249,10 @@
                                 <div class="space-y-1">
                                     <label class="compact-label">إضافة فصل/تصنيف</label>
                                     <div class="flex gap-2">
-                                        <input type="text" id="new_class_name" class="field flex-1" placeholder="مثال: ثالث ثانوي علمي">
-                                        <button onclick="addClassColumn()" type="button" class="action-btn bg-emerald-700 text-white">
+                                        <input type="text" id="new_class_name" class="field flex-1"
+                                            placeholder="مثال: ثالث ثانوي علمي">
+                                        <button onclick="addClassColumn()" type="button"
+                                            class="action-btn bg-emerald-700 text-white">
                                             <i data-lucide="plus" class="w-4 h-4"></i>
                                             إضافة
                                         </button>
@@ -237,9 +271,12 @@
                             <div class="space-y-1">
                                 <label class="compact-label text-blue-700">حجم خط اسم المدير</label>
                                 <div class="flex items-center gap-1">
-                                    <button type="button" onclick="stepNumber('principal_size',-1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
-                                    <input type="number" id="principal_size" min="10" max="28" class="field font-black text-blue-900 text-center">
-                                    <button type="button" onclick="stepNumber('principal_size',1)" class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
+                                    <button type="button" onclick="stepNumber('principal_size',-1)"
+                                        class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">-</button>
+                                    <input type="number" id="principal_size" min="10" max="28"
+                                        class="field font-black text-blue-900 text-center">
+                                    <button type="button" onclick="stepNumber('principal_size',1)"
+                                        class="action-btn bg-slate-100 text-slate-700 border border-slate-200 px-2">+</button>
                                 </div>
                             </div>
                             <div class="grid grid-cols-3 gap-2">
@@ -261,7 +298,8 @@
                         <div class="pt-3 border-t border-slate-200 form-cluster">
                             <div class="flex items-center justify-between gap-2">
                                 <label class="compact-label text-emerald-700">الملاحظات والتعليمات السفلية</label>
-                                <button onclick="addInstruction()" type="button" class="action-btn bg-emerald-50 text-emerald-800 border border-emerald-100">
+                                <button onclick="addInstruction()" type="button"
+                                    class="action-btn bg-emerald-50 text-emerald-800 border border-emerald-100">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                     إضافة
                                 </button>
@@ -279,15 +317,18 @@
                                         <option value="portrait">عمودي</option>
                                     </select>
                                 </div>
-                                <label class="flex items-center gap-2 compact-box text-[11px] font-black text-slate-700">
+                                <label
+                                    class="flex items-center gap-2 compact-box text-[11px] font-black text-slate-700">
                                     <input type="checkbox" id="use_class_colors" class="accent-emerald-700">
                                     تلوين الأعمدة
                                 </label>
-                                <label class="flex items-center gap-2 compact-box text-[11px] font-black text-slate-700">
+                                <label
+                                    class="flex items-center gap-2 compact-box text-[11px] font-black text-slate-700">
                                     <input type="checkbox" id="use_row_colors" class="accent-emerald-700">
                                     تلوين الصفوف
                                 </label>
-                                <label class="flex items-center gap-2 compact-box text-[11px] font-black text-slate-700">
+                                <label
+                                    class="flex items-center gap-2 compact-box text-[11px] font-black text-slate-700">
                                     <input type="checkbox" id="use_material_colors" class="accent-emerald-700">
                                     تلوين المواد
                                 </label>
@@ -329,7 +370,9 @@
                 </div>
 
                 <div class="text-center mb-8">
-                    <h1 id="main_title_display" class="text-2xl font-black text-slate-800 underline underline-offset-8 decoration-emerald-600 inline-block px-4"></h1>
+                    <h1 id="main_title_display"
+                        class="text-2xl font-black text-slate-800 underline underline-offset-8 decoration-emerald-600 inline-block px-4">
+                    </h1>
                 </div>
 
                 <div class="table-scroll">
@@ -341,26 +384,34 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-10 mt-12 px-4">
                     <div class="space-y-4">
-                        <h4 class="font-black text-slate-800 border-b-2 border-emerald-500 w-fit pb-1 text-sm">تعليمات هامة:</h4>
-                        <ul id="instructions_display" class="text-[11px] space-y-1.5 font-bold text-slate-700 pr-0 list-none"></ul>
+                        <h4 class="font-black text-slate-800 border-b-2 border-emerald-500 w-fit pb-1 text-sm">تعليمات
+                            هامة:</h4>
+                        <ul id="instructions_display"
+                            class="text-[11px] space-y-1.5 font-bold text-slate-700 pr-0 list-none"></ul>
                     </div>
 
                     <div class="text-center space-y-10">
                         <div class="space-y-2">
                             <p class="font-black text-slate-900 text-sm">مدير المدرسة</p>
-                            <p id="principal_display" class="font-black text-emerald-900 text-sm border-b-2 border-dotted border-emerald-200 pb-1 w-4/5 mx-auto"></p>
+                            <p id="principal_display"
+                                class="font-black text-emerald-900 text-sm border-b-2 border-dotted border-emerald-200 pb-1 w-4/5 mx-auto">
+                            </p>
                         </div>
-                        <div class="w-24 h-16 border-2 border-dashed border-emerald-100 rounded-lg mx-auto flex items-center justify-center text-[9px] text-slate-300 italic">ختم المدرسة الرسمي</div>
+                        <div
+                            class="w-24 h-16 border-2 border-dashed border-emerald-100 rounded-lg mx-auto flex items-center justify-center text-[9px] text-slate-300 italic">
+                            ختم المدرسة الرسمي</div>
                     </div>
                 </div>
 
-                <div class="mt-12 text-center text-emerald-800 font-bold border-t border-emerald-50 pt-4 text-sm italic">
+                <div
+                    class="mt-12 text-center text-emerald-800 font-bold border-t border-emerald-50 pt-4 text-sm italic">
                     ﴿ وَقُل رَّبِّ زِدْنِي عِلْمًا ﴾
                 </div>
             </div>
 
             <div class="flex flex-wrap justify-center gap-3 mt-6 no-print">
-                <button onclick="switchTab('settings')" class="action-btn bg-white text-slate-700 border border-slate-300 px-6 py-3">
+                <button onclick="switchTab('settings')"
+                    class="action-btn bg-white text-slate-700 border border-slate-300 px-6 py-3">
                     <i data-lucide="settings" class="w-4 h-4"></i>
                     رجوع للإعدادات
                 </button>
@@ -376,7 +427,8 @@
         </div>
     </div>
 
-    <div class="fixed bottom-0 left-0 w-full bg-slate-900 text-white p-3 text-center no-print text-xs z-[60] border-t border-emerald-500">
+    <div
+        class="fixed bottom-0 left-0 w-full bg-emerald-900 text-white p-3 text-center no-print text-xs z-[60] border-t border-emerald-500">
         تطبيق الجدول الذكي إعداد وتصميم الأستاذ / ناصر مسعود آل مستنير ت . 0505723776
     </div>
 
@@ -384,5 +436,5 @@
 
     <script src="app.js"></script>
 </body>
-</html>
 
+</html>
