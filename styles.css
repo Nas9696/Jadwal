@@ -387,15 +387,6 @@
             html, body { width: 100%; min-height: 0; }
             body { background: white; padding: 0; margin: 0; }
             .main-wrapper { width: 100%; max-width: 100%; margin: 0; }
-            .print-container {
-                box-shadow: none;
-                border: none;
-                padding: 0;
-                width: 100%;
-                max-width: 100%;
-                min-height: auto;
-                border-radius: 0;
-            }
             .tab-content { display: none !important; }
             #final-tab { display: block !important; }
             .table-scroll {
@@ -405,10 +396,23 @@
             }
             table {
                 width: 100% !important;
-                table-layout: auto !important; /* السماح للأعمدة بالتوسع حسب المحتوى */
+                table-layout: fixed !important;
                 border: 1.5px solid #000 !important;
                 page-break-inside: avoid;
                 border-collapse: collapse !important;
+                margin: 0 auto !important;
+            }
+            .print-container {
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 auto !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: 0 !important;
+                border-radius: 0 !important;
+                background: white !important;
+                text-align: center;
             }
             .schedule-table th,
             .schedule-table td {

@@ -1041,7 +1041,7 @@ function printOrExportPDF() {
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
         
         const opt = {
-            margin: [5, 5, 5, 5],
+            margin: 0, // الهوامش سنتحكم بها عبر CSS لضمان الدقة
             filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1049,8 +1049,7 @@ function printOrExportPDF() {
                 useCORS: true,
                 logging: false,
                 allowTaint: true,
-                scrollX: 0,
-                scrollY: 0,
+                letterRendering: true,
                 width: targetWidth,
                 windowWidth: targetWidth
             },
@@ -1100,16 +1099,25 @@ function _enterPrintMode(isMobilePDF = false, targetWidth = 1122) {
         el.dataset._origWidth = el.style.width;
         el.dataset._origMaxWidth = el.style.maxWidth;
         el.dataset._origOverflow = el.style.overflow;
+        el.dataset._origMargin = el.style.margin;
+        el.dataset._origPadding = el.style.padding;
+        el.dataset._origMinHeight = el.style.minHeight;
         
         el.style.width = targetWidth + 'px';
         el.style.maxWidth = 'none';
         el.style.overflow = 'visible';
+        el.style.margin = '0';
+        el.style.padding = '10mm'; // هامش داخلي للطباعة
+        el.style.minHeight = '0'; // إلغاء الحد الأدنى للارتفاع لتجنب الصفحة الثانية
+        el.style.backgroundColor = 'white';
         
-        // إجبار الأب على عدم القص
+        // إجبار الأب على عدم القص وتوسيط المحتوى
         const wrapper = el.parentElement;
         if (wrapper) {
             wrapper.dataset._origOverflow = wrapper.style.overflow;
+            wrapper.dataset._origDisplay = wrapper.style.display;
             wrapper.style.overflow = 'visible';
+            wrapper.style.display = 'block';
         }
     }
 }
@@ -1136,14 +1144,23 @@ function _exitPrintMode() {
         el.style.width = el.dataset._origWidth;
         el.style.maxWidth = el.dataset._origMaxWidth;
         el.style.overflow = el.dataset._origOverflow;
+        el.style.margin = el.dataset._origMargin || '';
+        el.style.padding = el.dataset._origPadding || '';
+        el.style.minHeight = el.dataset._origMinHeight || '';
+        
         delete el.dataset._origWidth;
         delete el.dataset._origMaxWidth;
         delete el.dataset._origOverflow;
+        delete el.dataset._origMargin;
+        delete el.dataset._origPadding;
+        delete el.dataset._origMinHeight;
         
         const wrapper = el.parentElement;
         if (wrapper && wrapper.dataset._origOverflow !== undefined) {
             wrapper.style.overflow = wrapper.dataset._origOverflow;
+            wrapper.style.display = wrapper.dataset._origDisplay || '';
             delete wrapper.dataset._origOverflow;
+            delete wrapper.dataset._origDisplay;
         }
     }
 }
