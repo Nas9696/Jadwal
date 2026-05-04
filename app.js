@@ -1031,14 +1031,17 @@ function printOrExportPDF() {
     updatePrintStyle();
     saveState(false);
 
-    // في الجوال نستخدم html2pdf لتصدير PDF
     if (isMobile() && typeof html2pdf !== 'undefined') {
-        _enterPrintMode();
+        const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
+        // عرض A4 بالبكسل تقريباً (96 DPI)
+        const targetWidth = orientation === 'landscape' ? 1122 : 794;
+        
+        _enterPrintMode(true, targetWidth);
         const el = byId('printArea');
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
-        const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
+        
         const opt = {
-            margin: [6, 6, 6, 6],
+            margin: [5, 5, 5, 5],
             filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1048,8 +1051,8 @@ function printOrExportPDF() {
                 allowTaint: true,
                 scrollX: 0,
                 scrollY: 0,
-                width: el.scrollWidth,
-                windowWidth: el.scrollWidth
+                width: targetWidth,
+                windowWidth: targetWidth
             },
             jsPDF: {
                 unit: 'mm',
@@ -1057,35 +1060,33 @@ function printOrExportPDF() {
                 orientation: orientation
             }
         };
+
         showToast('جاري تجهيز ملف PDF...');
-        // انتظار قصير لإعادة رسم الصفحة قبل التقاط الصورة
         setTimeout(() => {
             html2pdf().set(opt).from(el).save().then(() => {
                 _exitPrintMode();
                 showToast('تم تصدير ملف PDF بنجاح ✅');
-            }).catch(() => {
+            }).catch(err => {
+                console.error(err);
                 _exitPrintMode();
                 window.print();
             });
-        }, 150);
+        }, 250);
     } else {
         window.print();
     }
 }
 
-// تفعيل وضع الطباعة يدوياً (لأن html2pdf لا يطبق @media print)
-function _enterPrintMode() {
-    // إخفاء عناصر التعديل وعناصر no-print
+function _enterPrintMode(isMobilePDF = false, targetWidth = 1122) {
     document.querySelectorAll('.no-print, .cell-tools, .subject-select, .add-subject-btn').forEach(el => {
         el.dataset._origDisplay = el.style.display;
         el.style.display = 'none';
     });
-    // إظهار عناصر الطباعة النهائية
     document.querySelectorAll('.print-subject').forEach(el => {
         el.dataset._origDisplay = el.style.display;
         el.style.display = 'block';
     });
-    // إضافة تلوين رؤوس الجدول
+
     const thead = byId('table_head');
     if (thead) {
         thead.dataset._origBg = thead.style.backgroundColor;
@@ -1093,9 +1094,26 @@ function _enterPrintMode() {
         thead.style.backgroundColor = '#064e3b';
         thead.style.color = 'white';
     }
+
+    if (isMobilePDF) {
+        const el = byId('printArea');
+        el.dataset._origWidth = el.style.width;
+        el.dataset._origMaxWidth = el.style.maxWidth;
+        el.dataset._origOverflow = el.style.overflow;
+        
+        el.style.width = targetWidth + 'px';
+        el.style.maxWidth = 'none';
+        el.style.overflow = 'visible';
+        
+        // إجبار الأب على عدم القص
+        const wrapper = el.parentElement;
+        if (wrapper) {
+            wrapper.dataset._origOverflow = wrapper.style.overflow;
+            wrapper.style.overflow = 'visible';
+        }
+    }
 }
 
-// الخروج من وضع الطباعة واستعادة الحالة الأصلية
 function _exitPrintMode() {
     document.querySelectorAll('.no-print, .cell-tools, .subject-select, .add-subject-btn').forEach(el => {
         el.style.display = el.dataset._origDisplay || '';
@@ -1111,6 +1129,22 @@ function _exitPrintMode() {
         thead.style.color = thead.dataset._origColor || '';
         delete thead.dataset._origBg;
         delete thead.dataset._origColor;
+    }
+
+    const el = byId('printArea');
+    if (el && el.dataset._origWidth !== undefined) {
+        el.style.width = el.dataset._origWidth;
+        el.style.maxWidth = el.dataset._origMaxWidth;
+        el.style.overflow = el.dataset._origOverflow;
+        delete el.dataset._origWidth;
+        delete el.dataset._origMaxWidth;
+        delete el.dataset._origOverflow;
+        
+        const wrapper = el.parentElement;
+        if (wrapper && wrapper.dataset._origOverflow !== undefined) {
+            wrapper.style.overflow = wrapper.dataset._origOverflow;
+            delete wrapper.dataset._origOverflow;
+        }
     }
 }
 
