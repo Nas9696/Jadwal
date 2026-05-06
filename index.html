@@ -237,10 +237,10 @@
                         <div class="space-y-1">
                             <label class="compact-label">المرحلة الدراسية</label>
                             <select id="stageSelect" class="field font-black bg-emerald-50">
-                                <option value="early_childhood">الطفولة المبكرة (أول-ثاني-ثالث)</option>
-                                <option value="elementary">الابتدائية (رابع-خامس-سادس)</option>
-                                <option value="intermediate">المتوسطة (أول-ثاني-ثالث)</option>
-                                <option value="secondary">الثانوية</option>
+                                <option value="early_childhood">الطفولة المبكرة (١-٣)</option>
+                                <option value="elementary">المرحلة الابتدائية (١-٦)</option>
+                                <option value="intermediate">المرحلة المتوسطة (١-٣)</option>
+                                <option value="secondary">المرحلة الثانوية</option>
                             </select>
                         </div>
 
@@ -288,6 +288,10 @@
                                 📅 تفعيل الأسبوع الثاني
                             </label>
                             <div id="week2_settings" class="hidden">
+                                <label class="flex items-center gap-2 text-xs font-black text-slate-800 mb-2 cursor-pointer bg-white p-2 rounded border border-violet-100">
+                                    <input type="checkbox" id="merge_weeks" class="accent-violet-700">
+                                    دمج الأسبوعين في جدول واحد (متصلين)
+                                </label>
                                 <div class="space-y-1 mb-2">
                                     <label class="compact-label">رقم الأسبوع الثاني</label>
                                     <input type="text" id="week2_number" class="field font-bold" value="الأسبوع الخامس عشر">
@@ -358,9 +362,9 @@
                 </div>
 
                 <!-- العنوان الرئيسي -->
-                <div class="text-center mb-4 px-8">
-                    <div class="inline-block bg-yellow-200 border-b-4 border-emerald-600 px-8 py-2">
-                        <h1 id="main_title_display" class="font-black text-xl text-emerald-900"></h1>
+                <div class="text-center mb-4 px-2 sm:px-8" style="position: relative; z-index: 10;">
+                    <div id="main_title_wrapper" class="inline-block bg-[#fef08a] border-b-4 border-[#059669] px-4 sm:px-8 py-2 rounded-t-sm shadow-sm" style="transform: translateZ(0); -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                        <h1 id="main_title_display" class="font-black text-xl leading-relaxed pb-1 m-0" style="color: #064e3b !important; font-size: 24px;"></h1>
                     </div>
                 </div>
 
@@ -400,6 +404,29 @@
             </div>
         </div>
     </div>
+
+    <footer class="no-print bg-emerald-900 text-white text-center py-8 mt-12 rounded-t-[3rem] shadow-2xl border-t-4 border-yellow-400">
+        <div class="max-w-4xl mx-auto px-6">
+            <h2 class="text-xl font-black mb-4 flex items-center justify-center gap-2">
+                <i data-lucide="layout" class="w-6 h-6 text-yellow-400"></i>
+                نظام جداول الاختبارات الذكي
+            </h2>
+            <div class="flex flex-wrap justify-center items-center gap-4 text-sm font-bold">
+                <div class="flex items-center gap-2 bg-white/10 px-5 py-2.5 rounded-2xl border border-white/20 backdrop-blur-sm">
+                    <i data-lucide="user" class="w-5 h-5 text-yellow-400"></i>
+                    <span>تصميم أ. ناصر مسعود آل مستنير</span>
+                </div>
+                <a href="tel:0505723776" class="flex items-center gap-2 bg-white/10 px-5 py-2.5 rounded-2xl border border-white/20 backdrop-blur-sm hover:bg-white/20 transition-all">
+                    <i data-lucide="phone" class="w-5 h-5 text-yellow-400"></i>
+                    <span>ت . 0505723776</span>
+                </a>
+                <a href="https://wa.me/966505723776" target="_blank" class="flex items-center gap-2 bg-green-600 px-5 py-2.5 rounded-2xl border border-green-500 hover:bg-green-500 transition-all shadow-lg shadow-green-900/20">
+                    <i data-lucide="message-circle" class="w-5 h-5 text-white"></i>
+                    <span>تواصل واتساب</span>
+                </a>
+            </div>
+        </div>
+    </footer>
 
     <div id="toast" class="toast"></div>
     <script src="app.js"></script>

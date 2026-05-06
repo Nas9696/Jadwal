@@ -19,35 +19,27 @@ const materialVisuals = {
 };
 const classTemplates = {
     elementary: {
-        elementary6: ['الصف 1', 'الصف 2', 'الصف 3', 'الصف 4', 'الصف 5', 'الصف 6']
+        elementary6: ['الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس'],
+        elementary3: ['الصف الرابع', 'الصف الخامس', 'الصف السادس']
     },
     intermediate: {
         intermediate3: ['الأول متوسط', 'الثاني متوسط', 'الثالث متوسط']
     },
     secondary: {
         secondaryNew: ['أول ثانوي (المشترك)', 'ثاني ثانوي (العام)', 'ثالث ثانوي (العام)'],
-        secondaryLevels: ['الأول ثانوي', 'الثاني ثانوي', 'الثالث ثانوي'],
-        secondaryTracks: ['أول ثانوي عام', 'ثاني ثانوي عام', 'ثالث ثانوي عام', 'ثاني ثانوي علمي', 'ثالث ثانوي علمي', 'ثاني ثانوي أدبي', 'ثالث ثانوي أدبي'],
-        secondaryScienceArts: ['الأول ثانوي', 'الثاني ثانوي علمي', 'الثالث ثانوي علمي', 'الثاني ثانوي أدبي', 'الثالث ثانوي أدبي'],
-        secondaryPathways: ['المسار العام', 'مسار علوم الحاسب والهندسة', 'مسار الصحة والحياة', 'مسار إدارة الأعمال', 'المسار الشرعي']
+        secondaryLevels: ['الأول ثانوي', 'الثاني ثانوي', 'الثالث ثانوي']
     },
     early_childhood: {
         early3: ['الصف الأول', 'الصف الثاني', 'الصف الثالث']
-    },
-    elementary_upper: {
-        elementary3: ['الصف الرابع', 'الصف الخامس', 'الصف السادس']
     }
 };
 const classTemplateLabels = {
-    elementary6: 'الابتدائية - 1-6',
-    intermediate3: 'متوسط - 1-3',
-    secondaryNew: 'ثانوي - عام ومشترك',
-    secondaryLevels: 'ثانوي - مستويات',
-    secondaryTracks: 'ثانوي - مسارات قديمة',
-    secondaryScienceArts: 'ثانوي - علمي/أدبي',
-    secondaryPathways: 'ثانوي - مسارات حديثة',
-    early3: 'الطفولة المبكرة - 1-3',
-    elementary3: 'الابتدائية - 4-6'
+    elementary6: 'الابتدائية كاملة (١-٦)',
+    elementary3: 'الابتدائية العليا (٤-٦)',
+    intermediate3: 'المتوسطة (١-٣)',
+    secondaryNew: 'ثانوي (عام ومشترك)',
+    secondaryLevels: 'ثانوي (مستويات)',
+    early3: 'الطفولة المبكرة (١-٣)'
 };
 
 const stageClassesText = {
@@ -61,10 +53,10 @@ const defaultState = {
     currentStage: 'early_childhood',
     classNames: ['الصف الأول', 'الصف الثاني', 'الصف الثالث'],
     materials: {
-        early_childhood: ['القرآن والدراسات الإسلامية', 'اللغة العربية', 'الرياضيات', 'العلوم', 'اللغة الإنجليزية', 'التربية الفنية', 'مهارات حياتية وأسرية', 'التربية البدنية والدفاع عن النفس', 'نشاط'],
-        elementary: ['الدراسات الاجتماعية', 'التربية الفنية', 'القرآن والدراسات الإسلامية', 'التربية البدنية والدفاع عن النفس', 'مهارات حياتية وأسرية', 'المهارات الرقمية', 'الرياضيات', 'اللغة الإنجليزية', 'علوم', 'اللغة العربية'],
-        intermediate: ['الدراسات الاجتماعية', 'القرآن والدراسات الإسلامية', 'التربية البدنية والدفاع عن النفس', 'التربية الفنية', 'مهارات حياتية وأسرية', 'الرياضيات', 'المهارات الرقمية', 'اللغة الإنجليزية', 'التفكير الناقد', 'لغة عربية', 'العلوم'],
-        secondary: ['الفيزياء', 'الرياضيات', 'الكفايات اللغوية', 'علم البيئة', 'اللغة الإنجليزية', 'التقنية الرقمية', 'الحديث', 'الدراسات الاجتماعية', 'المعرفة المالية', 'التربية الصحية والبدنية', 'التربية المهنية', 'نشاط', 'التوحيد', 'اللياقة والثقافة الصحية', 'الفنون', 'المهارات الحياتية', 'المواطنة الرقمية', 'الدراسات الأدبية', 'الفقه', 'الدراسات النفسية والاجتماعية', 'الأحياء', 'الجغرافيا', 'علوم الأرض والفضاء', 'الكيمياء']
+        early_childhood: ['إسلامية', 'لغتي', 'رياضيات', 'علوم', 'إنجليزي', 'فنية', 'م. حياتية', 'بدنية', 'نشاط'],
+        elementary: ['اجتماعيات', 'فنية', 'إسلامية', 'بدنية', 'م. حياتية', 'رقمية', 'رياضيات', 'إنجليزي', 'علوم', 'لغتي'],
+        intermediate: ['اجتماعيات', 'إسلامية', 'بدنية', 'فنية', 'م. حياتية', 'رياضيات', 'رقمية', 'إنجليزي', 'تفكير ناقد', 'لغتي', 'علوم'],
+        secondary: ['فيزياء', 'رياضيات', 'كفايات', 'علم البيئة', 'إنجليزي', 'تقنية رقمية', 'اجتماعيات', 'معرفة مالية', 'بدنية', 'تربية مهنية', 'نشاط', 'لياقة وثقافة', 'فنون', 'م. حياتية', 'مواطنة رقمية', 'دراسات أدبية', 'إسلامية', 'علم نفس', 'أحياء', 'جغرافيا', 'علم الأرض', 'كيمياء']
     },
     materialColors: { early_childhood: {}, elementary: {}, intermediate: {}, secondary: {} },
     classColors: ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdf4'],
@@ -110,6 +102,7 @@ const defaultState = {
         show_week_box: 'true',
         font_family: 'Cairo',
         week2_enabled: 'false',
+        merge_weeks: 'false',
         week2_number: 'الأسبوع الخامس عشر',
         week2_days_count: '5',
         week2_start_day: '30',
@@ -131,7 +124,8 @@ function byId(id) {
 function setText(id, value) {
     const el = byId(id);
     if (!el) return;
-    el.textContent = isEnabled('use_arabic_numerals') ? toArabicDigits(value) : value || '';
+    const text = isEnabled('use_arabic_numerals') ? toArabicDigits(value) : value || '';
+    el.innerHTML = text; // Use innerHTML to ensure consistent rendering
 }
 
 function toArabicDigits(str) {
@@ -216,7 +210,7 @@ function attachInputs() {
         el.addEventListener(eventType, () => {
             state.fields[id] = el.value;
             if (id === 'logo_url_input') state.fields.logo_data_url = '';
-            if (['days_count', 'start_day', 'start_month'].includes(id)) {
+            if (['days_count', 'start_day', 'start_month', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
                 normalizeDateInputs();
                 initTable();
             }
@@ -262,6 +256,15 @@ function normalizeDateInputs() {
     byId('days_count').value = state.fields.days_count;
     byId('start_day').value = state.fields.start_day;
     byId('start_month').value = state.fields.start_month;
+
+    if (byId('week2_days_count')) {
+        state.fields.week2_days_count = String(clampNumber(byId('week2_days_count').value, 1, 12, 5));
+        state.fields.week2_start_day = String(clampNumber(byId('week2_start_day').value, 1, 30, 1));
+        state.fields.week2_start_month = String(clampNumber(byId('week2_start_month').value, 1, 12, 1));
+        byId('week2_days_count').value = state.fields.week2_days_count;
+        byId('week2_start_day').value = state.fields.week2_start_day;
+        byId('week2_start_month').value = state.fields.week2_start_month;
+    }
 }
 
 function loadState() {
@@ -306,7 +309,45 @@ function mergeLoadedState(loaded) {
         tableRows2: Array.isArray(loaded.tableRows2) ? loaded.tableRows2 : []
     };
 
-    // Ensure no default materials are lost if user had older localStorage
+    // Migrate old long names to short names
+    const migrations = {
+        'القرآن والدراسات الإسلامية': 'إسلامية',
+        'اللغة العربية': 'لغتي',
+        'التربية الفنية': 'فنية',
+        'مهارات حياتية وأسرية': 'م. حياتية',
+        'التربية البدنية والدفاع عن النفس': 'بدنية',
+        'الدراسات الاجتماعية': 'اجتماعيات',
+        'المهارات الرقمية': 'رقمية',
+        'اللغة الإنجليزية': 'إنجليزي',
+        'الكفايات اللغوية': 'كفايات',
+        'التقنية الرقمية': 'تقنية رقمية',
+        'التربية المهنية': 'تربية مهنية',
+        'المعرفة المالية': 'معرفة مالية',
+        'الدراسات الأدبية': 'دراسات أدبية',
+        'علوم الأرض والفضاء': 'علم الأرض'
+    };
+
+    Object.keys(merged.materials).forEach(stage => {
+        merged.materials[stage] = merged.materials[stage].map(m => migrations[m] || m);
+        // Remove duplicates
+        merged.materials[stage] = [...new Set(merged.materials[stage])];
+    });
+
+    // Update subjects in rows
+    merged.tableRows.forEach(row => {
+        if (row.material && migrations[row.material]) row.material = migrations[row.material];
+        if (row.subjects) {
+            row.subjects = row.subjects.map(list => list.map(s => migrations[s] || s));
+        }
+    });
+    merged.tableRows2.forEach(row => {
+        if (row.material && migrations[row.material]) row.material = migrations[row.material];
+        if (row.subjects) {
+            row.subjects = row.subjects.map(list => list.map(s => migrations[s] || s));
+        }
+    });
+
+    // Ensure no default materials are lost
     Object.keys(defaultState.materials).forEach(stage => {
         if (!merged.materials[stage]) merged.materials[stage] = [];
         defaultState.materials[stage].forEach(mat => {
@@ -427,28 +468,44 @@ function renderTablesContainer() {
     const isMinisterial = state.fields.table_mode === 'ministerial';
 
     if (isMinisterial) {
-        if (isEnabled('show_week_box')) {
-            const wb1 = document.createElement('div');
-            wb1.className = 'text-center mb-4';
-            wb1.innerHTML = `<div class="inline-block bg-[#2a8da8] text-white px-10 py-2 rounded-lg font-black text-base shadow">${isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week_number) : state.fields.week_number}</div>`;
-            container.appendChild(wb1);
-        }
-        const t1 = buildMinisterialTable(state.tableRows);
-        container.appendChild(t1);
-
-        if (isEnabled('week2_enabled') && state.tableRows2.length) {
-            const sep = document.createElement('div');
-            sep.className = 'my-8';
-            container.appendChild(sep);
-
+        if (isEnabled('merge_weeks') && isEnabled('week2_enabled')) {
+            // أسابيع متصلة في جدول واحد
             if (isEnabled('show_week_box')) {
-                const wb2 = document.createElement('div');
-                wb2.className = 'text-center mb-4';
-                wb2.innerHTML = `<div class="inline-block bg-[#2a8da8] text-white px-10 py-2 rounded-lg font-black text-base shadow">${isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week2_number) : state.fields.week2_number}</div>`;
-                container.appendChild(wb2);
+                const wb1 = document.createElement('div');
+                wb1.className = 'text-center mb-4';
+                const week1Text = isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week_number) : state.fields.week_number;
+                const week2Text = isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week2_number) : state.fields.week2_number;
+                wb1.innerHTML = `<div class="inline-block bg-[#2a8da8] text-white px-10 py-2 rounded-lg font-black text-base shadow">${week1Text} و ${week2Text}</div>`;
+                container.appendChild(wb1);
             }
-            const t2 = buildMinisterialTable(state.tableRows2, true);
-            container.appendChild(t2);
+            const mergedRows = [...state.tableRows, ...state.tableRows2];
+            const t1 = buildMinisterialTable(mergedRows);
+            container.appendChild(t1);
+        } else {
+            // أسابيع منفصلة
+            if (isEnabled('show_week_box')) {
+                const wb1 = document.createElement('div');
+                wb1.className = 'text-center mb-4';
+                wb1.innerHTML = `<div class="inline-block bg-[#2a8da8] text-white px-10 py-2 rounded-lg font-black text-base shadow">${isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week_number) : state.fields.week_number}</div>`;
+                container.appendChild(wb1);
+            }
+            const t1 = buildMinisterialTable(state.tableRows);
+            container.appendChild(t1);
+
+            if (isEnabled('week2_enabled') && state.tableRows2.length) {
+                const sep = document.createElement('div');
+                sep.className = 'my-8';
+                container.appendChild(sep);
+
+                if (isEnabled('show_week_box')) {
+                    const wb2 = document.createElement('div');
+                    wb2.className = 'text-center mb-4';
+                    wb2.innerHTML = `<div class="inline-block bg-[#2a8da8] text-white px-10 py-2 rounded-lg font-black text-base shadow">${isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week2_number) : state.fields.week2_number}</div>`;
+                    container.appendChild(wb2);
+                }
+                const t2 = buildMinisterialTable(state.tableRows2, true);
+                container.appendChild(t2);
+            }
         }
     } else {
         if (isEnabled('show_week_box')) {
@@ -459,9 +516,9 @@ function renderTablesContainer() {
         }
         // Traditional table
         const tableWrap = document.createElement('div');
-        tableWrap.className = 'table-wrapper';
+        tableWrap.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar';
         const table = document.createElement('table');
-        table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center';
+        table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-[700px] print:min-w-0 md:min-w-full';
         const thead = document.createElement('thead');
         thead.id = 'table_head';
         thead.className = 'bg-emerald-900 text-white';
@@ -478,8 +535,9 @@ function renderTablesContainer() {
 
 function buildMinisterialTable(rows, isWeek2) {
     const wrapper = document.createElement('div');
+    wrapper.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar';
     const table = document.createElement('table');
-    table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center';
+    table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-[650px] print:min-w-0 md:min-w-full';
 
     const thead = document.createElement('thead');
     thead.className = 'bg-emerald-900 text-white';
@@ -1397,6 +1455,16 @@ function updatePrintStyle() {
     const footerMargin = orientation === 'landscape' ? 12 : 16;
 
     document.documentElement.style.setProperty('--print-font-size', `${fontSize.toFixed(1)}pt`);
+    // Auto-shrink padding and font size if many rows to fit A4
+    const rowCount = state.tableRows.length + (isEnabled('week2_enabled') ? state.tableRows2.length : 0);
+    if (rowCount > 8) {
+        padding = Math.max(1.5, padding - 1.5);
+        headerFont = Math.max(7, headerFont - 1);
+        titleFont = Math.max(12, titleFont - 2);
+    } else if (rowCount > 5) {
+        padding = Math.max(2.5, padding - 1);
+    }
+
     document.documentElement.style.setProperty('--print-cell-padding', `${padding.toFixed(1)}px`);
     document.documentElement.style.setProperty('--print-header-font-size', `${headerFont.toFixed(1)}pt`);
     document.documentElement.style.setProperty('--print-title-font-size', `${titleFont.toFixed(1)}pt`);
@@ -1408,26 +1476,29 @@ function updatePrintStyle() {
     const previewWidth = orientation === 'landscape' ? '297mm' : '210mm';
     const previewMinHeight = orientation === 'landscape' ? '210mm' : '297mm';
     style.textContent = `
-                @page { size: ${pageSize}; margin: ${orientation === 'landscape' ? '6mm' : '7mm'}; }
+                @page { size: ${pageSize}; margin: ${orientation === 'landscape' ? '5mm' : '6mm'}; }
                 #printArea {
                     width: ${previewWidth};
                     max-width: 100%;
                     min-height: ${previewMinHeight};
                 }
+                .schedule-table th, .schedule-table td { padding: var(--print-cell-padding, 4px) !important; }
                 @media print {
                     html, body, #printArea, .print-container {
                         writing-mode: horizontal-tb !important;
                         transform: none !important;
                         rotate: 0deg !important;
+                        height: auto !important;
                     }
                     .print-container {
                         width: 100% !important;
                         max-width: 100% !important;
-                        min-height: auto !important;
+                        min-height: 0 !important;
+                        height: auto !important;
                     }
                     .schedule-table th:first-child, .schedule-table td:first-child { width: ${orientation === 'landscape' ? '58px' : '44px'} !important; }
                     .schedule-table th:nth-child(2), .schedule-table td:nth-child(2) { width: ${orientation === 'landscape' ? '82px' : '66px'} !important; }
-                    .schedule-table { min-width: 0 !important; }
+                    .schedule-table { min-width: 0 !important; border-collapse: collapse !important; }
                     @supports (size: 297mm 210mm) {
                         html, body { width: auto !important; height: auto !important; }
                     }
@@ -1452,17 +1523,17 @@ function printOrExportPDF() {
     updatePrintStyle();
     saveState(false);
 
-    if (isMobile() && typeof html2pdf !== 'undefined') {
+    // Always use html2pdf if available for better consistency across all devices (Desktop & Mobile)
+    if (typeof html2pdf !== 'undefined') {
         const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
-        // Always render wide, let html2pdf scale it down if portrait to prevent cutoff
-        const targetWidth = 1122;
+        const targetWidth = 1122; // Keep wide for high quality, let PDF scale to A4
         
         _enterPrintMode(true, targetWidth);
         const el = byId('printArea');
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
 
         const opt = {
-            margin: 0, // الهوامش سنتحكم بها عبر CSS لضمان الدقة
+            margin: 0,
             filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1477,19 +1548,22 @@ function printOrExportPDF() {
             jsPDF: {
                 unit: 'mm',
                 format: 'a4',
-                orientation: orientation
-            }
+                orientation: orientation,
+                compress: true
+            },
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
-        showToast('جاري تجهيز ملف PDF...');
+        showToast('جاري تجهيز ملف PDF بدقة عالية...');
         setTimeout(() => {
+            updateAll(); // Ensure latest data is reflected
             html2pdf().set(opt).from(el).save().then(() => {
                 _exitPrintMode();
                 showToast('تم تصدير ملف PDF بنجاح ✅');
             }).catch(err => {
-                console.error(err);
+                console.error('PDF Export Error:', err);
                 _exitPrintMode();
-                window.print();
+                window.print(); // Fallback to browser print if library fails
             });
         }, 250);
     } else {
@@ -1498,9 +1572,12 @@ function printOrExportPDF() {
 }
 
 function _enterPrintMode(isMobilePDF = false, targetWidth = 1122) {
-    document.querySelectorAll('.no-print, .cell-tools, .subject-select, .add-subject-btn').forEach(el => {
+    // Hide all editing tools and buttons
+    const selectors = '.no-print, .cell-tools, .subject-select, .add-subject-btn, .delete-subject-btn, .class-delete-btn, .instruction-delete-btn, button:not(.action-btn)';
+    document.querySelectorAll(selectors).forEach(el => {
         el.dataset._origDisplay = el.style.display;
         el.style.display = 'none';
+        el.setAttribute('style', (el.getAttribute('style') || '') + '; display: none !important;');
     });
     document.querySelectorAll('.print-subject').forEach(el => {
         el.dataset._origDisplay = el.style.display;

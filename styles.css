@@ -414,15 +414,15 @@
             }
 
             .schedule-table {
-                min-width: 700px;
-                table-layout: fixed;
+                /* Let app.js handle min-width via inline classes */
+                table-layout: auto;
             }
 
             .schedule-table th,
             .schedule-table td {
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+                white-space: normal;
+                overflow: visible;
+                word-break: break-word;
             }
 
             .schedule-table th:first-child,
@@ -443,17 +443,7 @@
                 min-width: 90px;
             }
 
-            /* إخفاء السهم الافتراضية لحقل الرقم في متصفحات الجوال */
-            input[type="number"]::-webkit-inner-spin-button,
-            input[type="number"]::-webkit-outer-spin-button {
-                -webkit-appearance: none;
-                margin: 0;
-            }
-
-            input[type="number"] {
-                -moz-appearance: textfield;
-                appearance: textfield;
-            }
+            /* تم إزالة كود إخفاء أسهم حقل الأرقام لتمكين المستخدم من الضغط عليها */
         }
 
         @media print {
@@ -470,7 +460,7 @@
             }
             table {
                 width: 100% !important;
-                table-layout: fixed !important;
+                table-layout: auto !important;
                 border: 1.5px solid #000 !important;
                 page-break-inside: avoid;
                 border-collapse: collapse !important;
@@ -545,7 +535,11 @@
             }
             .header-line { font-size: var(--print-header-font-size, 9pt) !important; }
             #main_title_display {
-                font-size: var(--print-title-font-size, 14pt) !important;
+                font-size: var(--print-title-font-size, 18pt) !important;
+                color: #064e3b !important;
+                display: block !important;
+                visibility: visible !important;
+                min-width: 100px;
             }
             #printArea > .grid {
                 margin-top: var(--print-footer-margin, 18px) !important;
@@ -556,6 +550,19 @@
                 padding-top: 8px !important;
             }
         }
+
+/* Scrollbar hiding for mobile table */
+.hide-scrollbar::-webkit-scrollbar {
+    height: 6px;
+}
+.hide-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+.hide-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
 
 /* Toast */
 .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #064e3b; color: white; padding: 12px 24px; border-radius: 99px; font-weight: bold; z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s; }
