@@ -43,10 +43,10 @@ const classTemplateLabels = {
 };
 
 const stageClassesText = {
-    early_childhood: 'أول – ثاني – ثالث',
-    elementary: 'رابع – خامس – سادس',
-    intermediate: 'أول – ثاني – ثالث',
-    secondary: 'أول ثانوي (المشترك)'
+    early_childhood: ['أول - ثاني - ثالث', 'أول', 'ثاني', 'ثالث'],
+    elementary: ['رابع - خامس - سادس', 'رابع', 'خامس', 'سادس'],
+    intermediate: ['أول - ثاني - ثالث', 'أول', 'ثاني', 'ثالث'],
+    secondary: ['أول ثانوي (المشترك)']
 };
 
 const defaultState = {
@@ -194,7 +194,67 @@ function padArabic(text, width) {
     return value + ' '.repeat(Math.max(1, width - value.length));
 }
 
+function parseArabicNum(str) {
+    if (!str && str !== 0) return 0;
+    const englishDigits = String(str).replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    return parseInt(englishDigits, 10) || 0;
+}
+
+function convertNumberInputs() {
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+        // Build the wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center border border-emerald-200 rounded-lg overflow-hidden bg-white shadow-sm';
+        input.parentNode.replaceChild(wrapper, input);
+        
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.className = 'w-full text-center font-black text-sm outline-none bg-transparent py-1.5';
+        
+        const min = input.hasAttribute('min') ? parseInt(input.getAttribute('min')) : -999;
+        const max = input.hasAttribute('max') ? parseInt(input.getAttribute('max')) : 999;
+
+        const btnMinus = document.createElement('button');
+        btnMinus.type = 'button';
+        btnMinus.className = 'w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-l border-emerald-100 active:bg-slate-200';
+        btnMinus.textContent = '-';
+        btnMinus.onclick = () => {
+             let val = parseArabicNum(input.value);
+             if (val > min) val--;
+             input.value = toArabicDigits(val);
+             input.dispatchEvent(new Event('input'));
+        };
+        
+        const btnPlus = document.createElement('button');
+        btnPlus.type = 'button';
+        btnPlus.className = 'w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-r border-emerald-100 active:bg-slate-200';
+        btnPlus.textContent = '+';
+        btnPlus.onclick = () => {
+             let val = parseArabicNum(input.value);
+             if (val < max) val++;
+             input.value = toArabicDigits(val);
+             input.dispatchEvent(new Event('input'));
+        };
+        
+        input.addEventListener('blur', () => {
+             let val = parseArabicNum(input.value);
+             if (val < min) val = min;
+             if (val > max) val = max;
+             input.value = toArabicDigits(val);
+             input.dispatchEvent(new Event('input'));
+        });
+        
+        wrapper.appendChild(btnPlus);
+        wrapper.appendChild(input);
+        wrapper.appendChild(btnMinus);
+        
+        // initial formatting
+        if(input.value) input.value = toArabicDigits(input.value);
+    });
+}
+
 function attachInputs() {
+    convertNumberInputs();
     Object.keys(defaultState.fields).forEach(id => {
         const el = byId(id);
         if (!el) return;
@@ -250,20 +310,20 @@ function attachInputs() {
 }
 
 function normalizeDateInputs() {
-    state.fields.days_count = String(clampNumber(byId('days_count').value, 1, 12, 5));
-    state.fields.start_day = String(clampNumber(byId('start_day').value, 1, 30, 1));
-    state.fields.start_month = String(clampNumber(byId('start_month').value, 1, 12, 1));
-    byId('days_count').value = state.fields.days_count;
-    byId('start_day').value = state.fields.start_day;
-    byId('start_month').value = state.fields.start_month;
+    state.fields.days_count = String(clampNumber(parseArabicNum(byId('days_count').value), 1, 12, 5));
+    state.fields.start_day = String(clampNumber(parseArabicNum(byId('start_day').value), 1, 30, 1));
+    state.fields.start_month = String(clampNumber(parseArabicNum(byId('start_month').value), 1, 12, 1));
+    byId('days_count').value = toArabicDigits(state.fields.days_count);
+    byId('start_day').value = toArabicDigits(state.fields.start_day);
+    byId('start_month').value = toArabicDigits(state.fields.start_month);
 
     if (byId('week2_days_count')) {
-        state.fields.week2_days_count = String(clampNumber(byId('week2_days_count').value, 1, 12, 5));
-        state.fields.week2_start_day = String(clampNumber(byId('week2_start_day').value, 1, 30, 1));
-        state.fields.week2_start_month = String(clampNumber(byId('week2_start_month').value, 1, 12, 1));
-        byId('week2_days_count').value = state.fields.week2_days_count;
-        byId('week2_start_day').value = state.fields.week2_start_day;
-        byId('week2_start_month').value = state.fields.week2_start_month;
+        state.fields.week2_days_count = String(clampNumber(parseArabicNum(byId('week2_days_count').value), 1, 12, 5));
+        state.fields.week2_start_day = String(clampNumber(parseArabicNum(byId('week2_start_day').value), 1, 30, 1));
+        state.fields.week2_start_month = String(clampNumber(parseArabicNum(byId('week2_start_month').value), 1, 12, 1));
+        byId('week2_days_count').value = toArabicDigits(state.fields.week2_days_count);
+        byId('week2_start_day').value = toArabicDigits(state.fields.week2_start_day);
+        byId('week2_start_month').value = toArabicDigits(state.fields.week2_start_month);
     }
 }
 
@@ -283,7 +343,8 @@ function applyStateToInputs() {
         if (byId(id).type === 'checkbox') {
             byId(id).checked = value === 'true';
         } else {
-            byId(id).value = value;
+            const isNumeric = byId(id).inputMode === 'numeric';
+            byId(id).value = isNumeric ? toArabicDigits(value) : value;
         }
     });
     byId('stageSelect').value = state.currentStage;
@@ -552,7 +613,7 @@ function buildMinisterialTable(rows, isWeek2) {
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    const classesDefault = stageClassesText[state.currentStage] || '';
+    const classesDefault = (stageClassesText[state.currentStage] || [])[0] || '';
 
     rows.forEach((row, rIdx) => {
         const tr = document.createElement('tr');
@@ -572,15 +633,10 @@ function buildMinisterialTable(rows, isWeek2) {
         classesTd.className = 'p-1 border border-slate-900';
         
         const classSelect = document.createElement('select');
-        classSelect.className = 'list-mode-input cell-tools';
+        classSelect.className = 'list-mode-input cell-tools font-black text-sm';
         
-        const classOptions = [...state.classNames];
-        if (state.classNames.length > 1) {
-            if (state.classNames.length > 2) {
-                classOptions.push(state.classNames.slice(1).join(' + '));
-            }
-            classOptions.push(state.classNames.join(' + '));
-        }
+        const stageOpts = stageClassesText[state.currentStage] || [state.classNames.join(' - ')];
+        const classOptions = [...stageOpts];
 
         let hasSelected = false;
         classOptions.forEach(optVal => {
@@ -600,7 +656,7 @@ function buildMinisterialTable(rows, isWeek2) {
              classSelect.appendChild(o);
         }
 
-        if (!row.classes) {
+        if (!row.classes || !classOptions.includes(row.classes)) {
             row.classes = classOptions[0] || '';
             if (classSelect.options.length > 0) classSelect.options[0].selected = true;
         }
@@ -727,7 +783,7 @@ function buildWeekRows(daysCountRaw, startDayRaw, startMonthRaw, startDayName, o
     const startDay = clampNumber(startDayRaw, 1, 30, 1);
     const startMonth = clampNumber(startMonthRaw, 1, 12, 1);
     const startIdx = Math.max(0, daysSequence.indexOf(startDayName));
-    const classesDefault = stageClassesText[state.currentStage] || '';
+    const classesDefault = (stageClassesText[state.currentStage] || [])[0] || '';
 
     const rows = [];
     let currentD = startDay;
