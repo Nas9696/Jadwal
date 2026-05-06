@@ -1,11 +1,85 @@
 :root {
-            --brand: #047857;
-            --brand-dark: #064e3b;
-            --ink: #0f172a;
-            --muted: #64748b;
-            --paper: #ffffff;
-            --soft: #f8fafc;
-        }
+    --brand: #047857;
+    --brand-dark: #064e3b;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --paper: #ffffff;
+    --soft: #f8fafc;
+
+    /* Theme Emerald (Default) */
+    --emerald-900: #064e3b;
+    --emerald-700: #047857;
+    --emerald-600: #059669;
+    --emerald-500: #10b981;
+    --emerald-100: #d1fae5;
+    --emerald-50: #ecfdf5;
+
+    /* Theme Purple */
+    --purple-900: #4c1d95;
+    --purple-700: #6d28d9;
+    --purple-600: #7c3aed;
+    --purple-500: #8b5cf6;
+    --purple-100: #ede9fe;
+    --purple-50: #f5f3ff;
+
+    /* Theme Ocean */
+    --ocean-900: #0c4a6e;
+    --ocean-700: #0369a1;
+    --ocean-600: #0284c7;
+    --ocean-500: #0ea5e9;
+    --ocean-100: #e0f2fe;
+    --ocean-50: #f0f9ff;
+
+    /* Theme Modern */
+    --modern-900: #0f172a;
+    --modern-700: #334155;
+    --modern-600: #475569;
+    --modern-500: #64748b;
+    --modern-100: #f1f5f9;
+    --modern-50: #f8fafc;
+}
+
+.theme-purple .schedule-table thead { background-color: #065f46 !important; }
+.theme-purple #main_title_wrapper { background-color: #fef08a !important; border-color: #059669 !important; }
+.theme-purple #main_title_display { color: #064e3b !important; }
+.theme-purple .text-emerald-900 { color: #064e3b !important; }
+.theme-purple .bg-emerald-900 { background-color: #064e3b !important; }
+.theme-purple .border-emerald-500 { border-color: #10b981 !important; }
+.theme-purple #week_display_box { background-color: #2a8da8 !important; }
+.theme-purple .schedule-table, 
+.theme-purple .schedule-table td, 
+.theme-purple .schedule-table th { border-color: #064e3b !important; border-width: 1px !important; }
+
+.theme-ocean .schedule-table thead { background-color: var(--ocean-900) !important; }
+.theme-ocean #main_title_display { text-decoration-color: var(--ocean-600) !important; }
+.theme-ocean .text-emerald-900 { color: var(--ocean-900) !important; }
+.theme-ocean .bg-emerald-900 { background-color: var(--ocean-900) !important; }
+.theme-ocean .border-emerald-500 { border-color: var(--ocean-500) !important; }
+
+.theme-modern .schedule-table thead { background-color: var(--modern-900) !important; }
+.theme-modern #main_title_display { text-decoration-color: var(--modern-600) !important; }
+.theme-modern .text-emerald-900 { color: var(--modern-900) !important; }
+.theme-modern .bg-emerald-900 { background-color: var(--modern-900) !important; }
+.theme-modern .border-emerald-500 { border-color: var(--modern-500) !important; }
+
+.list-mode-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-weight: bold;
+    padding: 6px 4px;
+    font-size: 11px;
+}
+.list-mode-input:focus {
+    background: rgba(255,255,255,0.8);
+    outline: none;
+}
+.print-list-text { display: none; }
+@media print {
+    .list-mode-input { display: none; }
+    .print-list-text { display: block; font-weight: 900; }
+}
 
         * { box-sizing: border-box; }
 
@@ -388,7 +462,7 @@
             body { background: white; padding: 0; margin: 0; }
             .main-wrapper { width: 100%; max-width: 100%; margin: 0; }
             .tab-content { display: none !important; }
-            #final-tab { display: block !important; }
+            #preview-tab { display: block !important; }
             .table-scroll {
                 overflow: visible !important;
                 margin: 0 !important;
@@ -482,3 +556,19 @@
                 padding-top: 8px !important;
             }
         }
+
+/* Toast */
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #064e3b; color: white; padding: 12px 24px; border-radius: 99px; font-weight: bold; z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s; }
+.toast.show { display: block; opacity: 1; }
+
+/* List mode inputs for ministerial table */
+.list-mode-input {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 4px;
+    padding: 4px 6px; font-size: 12px; font-weight: 700;
+    text-align: center; background: white; font-family: inherit;
+}
+.print-list-text { display: none; font-weight: 900; font-size: 13px; color: #000; }
+
+@media print {
+    .list-mode-input, .cell-tools { display: none !important; }
+    .print-list-text { display: block !important; text-align: center; }
