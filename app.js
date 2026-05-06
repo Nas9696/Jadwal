@@ -209,14 +209,14 @@ function convertNumberInputs() {
         
         input.type = 'text';
         input.inputMode = 'numeric';
-        input.className = 'w-full text-center font-black text-sm outline-none bg-transparent py-1.5';
+        input.className = 'flex-1 min-w-0 text-center font-black text-sm outline-none bg-transparent py-1.5';
         
         const min = input.hasAttribute('min') ? parseInt(input.getAttribute('min')) : -999;
         const max = input.hasAttribute('max') ? parseInt(input.getAttribute('max')) : 999;
 
         const btnMinus = document.createElement('button');
         btnMinus.type = 'button';
-        btnMinus.className = 'w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-l border-emerald-100 active:bg-slate-200';
+        btnMinus.className = 'w-8 h-8 flex-shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-l border-emerald-100 active:bg-slate-200';
         btnMinus.textContent = '-';
         btnMinus.onclick = () => {
              let val = parseArabicNum(input.value);
@@ -227,7 +227,7 @@ function convertNumberInputs() {
         
         const btnPlus = document.createElement('button');
         btnPlus.type = 'button';
-        btnPlus.className = 'w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-r border-emerald-100 active:bg-slate-200';
+        btnPlus.className = 'w-8 h-8 flex-shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-r border-emerald-100 active:bg-slate-200';
         btnPlus.textContent = '+';
         btnPlus.onclick = () => {
              let val = parseArabicNum(input.value);

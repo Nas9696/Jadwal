@@ -577,5 +577,6 @@
 .print-list-text { display: none; font-weight: 900; font-size: 13px; color: #000; }
 
 @media print {
-    .list-mode-input, .cell-tools { display: none !important; }
+    .list-mode-input, .cell-tools, .add-subject-btn, .icon-btn { display: none !important; }
     .print-list-text { display: block !important; text-align: center; }
+}
