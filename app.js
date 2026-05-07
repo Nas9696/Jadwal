@@ -100,7 +100,7 @@ const defaultState = {
         table_theme: 'purple',
         week_number: 'الأسبوع الرابع عشر',
         show_week_box: 'true',
-        font_family: 'Arial',
+        font_family: 'Cairo',
         week2_enabled: 'false',
         merge_weeks: 'false',
         week2_number: 'الأسبوع الخامس عشر',
@@ -206,50 +206,50 @@ function convertNumberInputs() {
         const wrapper = document.createElement('div');
         wrapper.className = 'flex items-center border border-emerald-200 rounded-lg overflow-hidden bg-white shadow-sm';
         input.parentNode.replaceChild(wrapper, input);
-        
+
         input.type = 'text';
         input.inputMode = 'numeric';
-        input.className = 'flex-1 min-w-0 text-center font-black text-sm outline-none bg-transparent py-1.5';
-        
+        input.className = 'w-full text-center font-black text-sm outline-none bg-transparent py-1.5';
+
         const min = input.hasAttribute('min') ? parseInt(input.getAttribute('min')) : -999;
         const max = input.hasAttribute('max') ? parseInt(input.getAttribute('max')) : 999;
 
         const btnMinus = document.createElement('button');
         btnMinus.type = 'button';
-        btnMinus.className = 'w-8 h-8 flex-shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-l border-emerald-100 active:bg-slate-200';
+        btnMinus.className = 'w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-l border-emerald-100 active:bg-slate-200';
         btnMinus.textContent = '-';
         btnMinus.onclick = () => {
-             let val = parseArabicNum(input.value);
-             if (val > min) val--;
-             input.value = toArabicDigits(val);
-             input.dispatchEvent(new Event('input'));
+            let val = parseArabicNum(input.value);
+            if (val > min) val--;
+            input.value = toArabicDigits(val);
+            input.dispatchEvent(new Event('input'));
         };
-        
+
         const btnPlus = document.createElement('button');
         btnPlus.type = 'button';
-        btnPlus.className = 'w-8 h-8 flex-shrink-0 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-r border-emerald-100 active:bg-slate-200';
+        btnPlus.className = 'w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold border-r border-emerald-100 active:bg-slate-200';
         btnPlus.textContent = '+';
         btnPlus.onclick = () => {
-             let val = parseArabicNum(input.value);
-             if (val < max) val++;
-             input.value = toArabicDigits(val);
-             input.dispatchEvent(new Event('input'));
+            let val = parseArabicNum(input.value);
+            if (val < max) val++;
+            input.value = toArabicDigits(val);
+            input.dispatchEvent(new Event('input'));
         };
-        
+
         input.addEventListener('blur', () => {
-             let val = parseArabicNum(input.value);
-             if (val < min) val = min;
-             if (val > max) val = max;
-             input.value = toArabicDigits(val);
-             input.dispatchEvent(new Event('input'));
+            let val = parseArabicNum(input.value);
+            if (val < min) val = min;
+            if (val > max) val = max;
+            input.value = toArabicDigits(val);
+            input.dispatchEvent(new Event('input'));
         });
-        
+
         wrapper.appendChild(btnPlus);
         wrapper.appendChild(input);
         wrapper.appendChild(btnMinus);
-        
+
         // initial formatting
-        if(input.value) input.value = toArabicDigits(input.value);
+        if (input.value) input.value = toArabicDigits(input.value);
     });
 }
 
@@ -270,7 +270,7 @@ function attachInputs() {
         el.addEventListener(eventType, () => {
             state.fields[id] = el.value;
             if (id === 'logo_url_input') state.fields.logo_data_url = '';
-            if (['days_count', 'start_day', 'start_month', 'week2_enabled', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
+            if (['days_count', 'start_day', 'start_month', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
                 normalizeDateInputs();
                 initTable();
             }
@@ -488,7 +488,7 @@ function updateAll() {
     setText('principal_display', state.fields.principal_input);
 
     const mainTitleEl = byId('main_title_display');
-    if (mainTitleEl) mainTitleEl.style.fontSize = `${clampNumber(state.fields.main_title_size, 10, 40, 20)}px`;
+    if (mainTitleEl) mainTitleEl.style.fontSize = `${clampNumber(state.fields.main_title_size, 14, 40, 20)}px`;
     const principalEl = byId('principal_display');
     if (principalEl) principalEl.style.fontSize = `${clampNumber(state.fields.principal_size, 10, 28, 14)}px`;
 
@@ -496,11 +496,6 @@ function updateAll() {
     if (logo) {
         logo.src = state.fields.logo_data_url || state.fields.logo_url_input || ministryLogo;
         logo.onerror = () => { logo.src = ministryLogo; };
-    }
-
-    const titleContainer = byId('title_container');
-    if (titleContainer) {
-        titleContainer.className = isEnabled('show_week_box') ? 'text-center mb-4 px-2 sm:px-8' : 'text-center mb-0 px-2 sm:px-8';
     }
 
     const printArea = byId('printArea');
@@ -560,7 +555,7 @@ function renderTablesContainer() {
 
             if (isEnabled('week2_enabled') && state.tableRows2.length) {
                 const sep = document.createElement('div');
-                sep.className = isEnabled('show_week_box') ? 'my-8' : 'my-2';
+                sep.className = 'my-8';
                 container.appendChild(sep);
 
                 if (isEnabled('show_week_box')) {
@@ -594,11 +589,7 @@ function renderTablesContainer() {
         table.appendChild(tbody);
         tableWrap.appendChild(table);
         container.appendChild(tableWrap);
-        if (state.fields.table_mode === 'list-mode') {
-            renderTableListMode(thead, tbody);
-        } else {
-            renderTableMultiColumn(thead, tbody);
-        }
+        renderTableMultiColumn(thead, tbody);
         if (window.lucide) lucide.createIcons();
     }
 }
@@ -640,10 +631,10 @@ function buildMinisterialTable(rows, isWeek2) {
 
         const classesTd = document.createElement('td');
         classesTd.className = 'p-1 border border-slate-900';
-        
+
         const classSelect = document.createElement('select');
         classSelect.className = 'list-mode-input cell-tools font-black text-sm';
-        
+
         const stageOpts = stageClassesText[state.currentStage] || [state.classNames.join(' - ')];
         const classOptions = [...stageOpts];
 
@@ -659,10 +650,10 @@ function buildMinisterialTable(rows, isWeek2) {
         });
 
         if (!hasSelected && row.classes) {
-             const o = document.createElement('option');
-             o.value = row.classes; o.textContent = row.classes;
-             o.selected = true;
-             classSelect.appendChild(o);
+            const o = document.createElement('option');
+            o.value = row.classes; o.textContent = row.classes;
+            o.selected = true;
+            classSelect.appendChild(o);
         }
 
         if (!row.classes || !classOptions.includes(row.classes)) {
@@ -670,16 +661,16 @@ function buildMinisterialTable(rows, isWeek2) {
             if (classSelect.options.length > 0) classSelect.options[0].selected = true;
         }
 
-        classSelect.addEventListener('change', () => { 
-            row.classes = classSelect.value; 
+        classSelect.addEventListener('change', () => {
+            row.classes = classSelect.value;
             classPrint.textContent = classSelect.value;
-            queueSave(); 
+            queueSave();
         });
 
         const classPrint = document.createElement('span');
         classPrint.className = 'print-list-text';
         classPrint.textContent = row.classes;
-        
+
         classesTd.appendChild(classSelect);
         classesTd.appendChild(classPrint);
         tr.appendChild(classesTd);
@@ -765,7 +756,7 @@ function updateHeaderBlock(id, lines, align, fontSize) {
     block.style.fontSize = `${clampNumber(fontSize, 8, 22, 11)}px`;
     lines.forEach(line => {
         const p = document.createElement('p');
-        p.textContent = (line && isEnabled('use_arabic_numerals')) ? toArabicDigits(line) : (line || '');
+        p.textContent = line || '';
         block.appendChild(p);
     });
 }
@@ -1137,8 +1128,19 @@ function deleteMaterial(i) {
 }
 
 function renderTable() {
-    renderTablesContainer();
-    updatePrintStyle();
+    const head = byId('table_head');
+    const body = byId('table_body');
+    head.innerHTML = '';
+    body.innerHTML = '';
+
+    const isListMode = state.fields.table_mode === 'list-mode';
+
+    if (isListMode) {
+        renderTableListMode(head, body);
+    } else {
+        renderTableMultiColumn(head, body);
+    }
+    if (window.lucide) lucide.createIcons();
 }
 
 function renderTableMultiColumn(head, body) {
@@ -1499,25 +1501,26 @@ function updatePrintStyle() {
     const cols = state.classNames.length + 2;
     const maxSubjects = Math.max(
         1,
-        ...state.tableRows.flatMap(row => (row.subjects || []).map(subjects => normalizeSubjectList(subjects).length || 1))
+        ...state.tableRows.flatMap(row => row.subjects.map(subjects => normalizeSubjectList(subjects).length || 1))
     );
     const baseFont = orientation === 'landscape' ? 9.2 : 8.3;
-    let fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
-    let padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
-    let headerFont = Math.max(7, fontSize + 0.8);
-    let titleFont = (clampNumber(state.fields.main_title_size, 14, 40, 20) * 0.75);
-    const footerMargin = orientation === 'landscape' ? 8 : 12;
-
-    const rowCount = state.tableRows.length + (isEnabled('week2_enabled') ? state.tableRows2.length : 0);
-    if (rowCount > 5) {
-        const shrink = (rowCount - 5) * 0.45;
-        fontSize = Math.max(4.5, fontSize - shrink);
-        padding = Math.max(1.0, padding - shrink * 0.5);
-        headerFont = Math.max(6, headerFont - shrink * 0.5);
-        titleFont = Math.max(10, titleFont - shrink * 0.5);
-    }
+    const fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
+    const padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
+    const headerFont = Math.max(7, fontSize + 0.8);
+    const titleFont = Math.max(11, fontSize + 4.5);
+    const footerMargin = orientation === 'landscape' ? 12 : 16;
 
     document.documentElement.style.setProperty('--print-font-size', `${fontSize.toFixed(1)}pt`);
+    // Auto-shrink padding and font size if many rows to fit A4
+    const rowCount = state.tableRows.length + (isEnabled('week2_enabled') ? state.tableRows2.length : 0);
+    if (rowCount > 8) {
+        padding = Math.max(1.5, padding - 1.5);
+        headerFont = Math.max(7, headerFont - 1);
+        titleFont = Math.max(12, titleFont - 2);
+    } else if (rowCount > 5) {
+        padding = Math.max(2.5, padding - 1);
+    }
+
     document.documentElement.style.setProperty('--print-cell-padding', `${padding.toFixed(1)}px`);
     document.documentElement.style.setProperty('--print-header-font-size', `${headerFont.toFixed(1)}pt`);
     document.documentElement.style.setProperty('--print-title-font-size', `${titleFont.toFixed(1)}pt`);
@@ -1542,10 +1545,6 @@ function updatePrintStyle() {
                         transform: none !important;
                         rotate: 0deg !important;
                         height: auto !important;
-                    }
-                    .print-title {
-                        font-size: var(--print-title-font-size, 18pt) !important;
-                        color: #000000 !important;
                     }
                     .print-container {
                         width: 100% !important;
@@ -1580,11 +1579,11 @@ function printOrExportPDF() {
     updatePrintStyle();
     saveState(false);
 
-    // Bypass html2pdf on mobile devices for reliable native PDF generation / printing
-    if (typeof html2pdf !== 'undefined' && !isMobile()) {
+    // Always use html2pdf if available for better consistency across all devices (Desktop & Mobile)
+    if (typeof html2pdf !== 'undefined') {
         const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
         const targetWidth = 1122; // Keep wide for high quality, let PDF scale to A4
-        
+
         _enterPrintMode(true, targetWidth);
         const el = byId('printArea');
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
@@ -1751,7 +1750,7 @@ function shareWhatsApp() {
             msg += `━━━━━━━━━━━━━━\n`;
             msg += `📅 *اليوم:* ${row.day}\n`;
             msg += `🗓️ *التاريخ:* ${isArabic ? toArabicDigits(row.date) : row.date}\n\n`;
-            
+
             if (isMinisterial) {
                 if (row.material) {
                     const materialVisual = getMaterialVisual(row.material);
@@ -1771,7 +1770,7 @@ function shareWhatsApp() {
     };
 
     renderTableToWhatsApp(state.tableRows, isEnabled('show_week_box') ? (isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week_number) : state.fields.week_number) : '');
-    
+
     if (isEnabled('week2_enabled')) {
         renderTableToWhatsApp(state.tableRows2, isEnabled('show_week_box') ? (isEnabled('use_arabic_numerals') ? toArabicDigits(state.fields.week2_number) : state.fields.week2_number) : '');
     }
