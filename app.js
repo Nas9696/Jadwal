@@ -1780,16 +1780,56 @@ function shareWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
+/**
+ * وظيفة الطباعة وتصدير PDF تدعم مختلف الأجهزة (كمبيوتر، أندرويد، آيفون)
+ */
+function printOrExportPDF() {
+    const element = document.getElementById('printArea');
+    if (!element) return;
+
+    // إعدادات تصدير PDF
+    const opt = {
+        margin: [5, 5, 5, 5],
+        filename: `جدول_الاختبارات_${new Date().getTime()}.pdf`,
+        image: { type: 'jpeg', quality: 1.0 },
+        html2canvas: { 
+            scale: 2, 
+            useCORS: true, 
+            letterRendering: true,
+            logging: false
+        },
+        jsPDF: { 
+            unit: 'mm', 
+            format: 'a4', 
+            orientation: state.fields.print_orientation || 'landscape' 
+        },
+        pagebreak: { mode: 'avoid-all' }
+    };
+
+    // إظهار رسالة للمستخدم
+    showToast('جاري معالجة الملف للطباعة...');
+
+    // استخدام html2pdf للمعالجة
+    html2pdf().set(opt).from(element).toPdf().get('pdf').then(function (pdf) {
+        const totalPages = pdf.internal.getNumberOfPages();
+        // إذا كان هناك أكثر من صفحة، نحاول تقليل الحجم قليلاً أو تنبيه المستخدم
+        if (totalPages > 1) {
+            console.warn('تحذير: الجدول يتجاوز صفحة واحدة.');
+        }
+    }).save().then(() => {
+        showToast('تم تحميل الملف بنجاح');
+    }).catch(err => {
+        console.error('PDF Error:', err);
+        showToast('حدث خطأ أثناء الطباعة، جرب متصفح كروم');
+        // fallback to standard print if html2pdf fails
+        window.print();
+    });
+}
+
 function boot() {
     loadState();
     attachInputs();
     refreshAppFromState();
-
-    // Update footer with Arabic digits if enabled
-    if (isEnabled('use_arabic_numerals')) {
-        const footer = document.querySelector('div.fixed.bottom-0');
-        if (footer) footer.textContent = toArabicDigits(footer.textContent);
-    }
 
     window.addEventListener('beforeprint', () => {
         updateAll();
