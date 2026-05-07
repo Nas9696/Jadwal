@@ -39,748 +39,235 @@
     --modern-50: #f8fafc;
 }
 
-.theme-purple .schedule-table thead { background-color: #065f46 !important; }
-.theme-purple #main_title_wrapper { background-color: #fef08a !important; border-color: #059669 !important; }
-.theme-purple #main_title_display { color: #064e3b !important; }
-.theme-purple .text-emerald-900 { color: #064e3b !important; }
-.theme-purple .bg-emerald-900 { background-color: #064e3b !important; }
-.theme-purple .border-emerald-500 { border-color: #10b981 !important; }
-.theme-purple #week_display_box { background-color: #2a8da8 !important; }
-.theme-purple .schedule-table, 
-.theme-purple .schedule-table td, 
-.theme-purple .schedule-table th { border-color: #064e3b !important; border-width: 1px !important; }
+/* Base Styles */
+* { box-sizing: border-box; }
+body {
+    font-family: Arial, sans-serif;
+    font-weight: 900;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef6f3 48%, #f1f5f9 100%);
+    color: #000000;
+    margin: 0;
+    padding: 0;
+    scroll-behavior: smooth;
+}
 
-.theme-ocean .schedule-table thead { background-color: var(--ocean-900) !important; }
-.theme-ocean #main_title_display { text-decoration-color: var(--ocean-600) !important; }
-.theme-ocean .text-emerald-900 { color: var(--ocean-900) !important; }
-.theme-ocean .bg-emerald-900 { background-color: var(--ocean-900) !important; }
-.theme-ocean .border-emerald-500 { border-color: var(--ocean-500) !important; }
+.main-wrapper {
+    width: min(1360px, calc(100% - 24px));
+    max-width: calc(100% - 24px);
+    margin: 14px auto 76px;
+}
 
-.theme-modern .schedule-table thead { background-color: var(--modern-900) !important; }
-.theme-modern #main_title_display { text-decoration-color: var(--modern-600) !important; }
-.theme-modern .text-emerald-900 { color: var(--modern-900) !important; }
-.theme-modern .bg-emerald-900 { background-color: var(--modern-900) !important; }
-.theme-modern .border-emerald-500 { border-color: var(--modern-500) !important; }
+/* Tabs */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.tab-btn {
+    border-bottom: 4px solid transparent;
+    color: #475569;
+    font-family: 'Cairo', sans-serif !important;
+    font-weight: 900;
+}
+.tab-btn.active {
+    border-bottom-color: var(--brand);
+    color: var(--brand);
+    background-color: #ecfdf5;
+}
 
+/* Panels & Layout */
+.panel {
+    background: rgba(255,255,255,0.96);
+    border: 1px solid #dbe6e1;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+    border-radius: 12px;
+}
+.control-panel { padding: 18px; }
+.settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+    gap: 18px;
+    align-items: start;
+}
+.settings-section { display: grid; gap: 14px; align-content: start; }
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 14px;
+    font-weight: 900;
+    font-family: 'Cairo', sans-serif !important;
+}
+
+/* Fields & Buttons */
+.field {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    background: white;
+    color: var(--ink);
+    outline: none;
+    min-height: 34px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 900;
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+.field:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.16);
+}
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 900;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+.action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+/* Table Styles */
+.print-container {
+    background: var(--paper);
+    min-height: 297mm;
+    padding: 18px;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-inline: auto;
+    width: 100%;
+    max-width: 297mm;
+}
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.schedule-table th, .schedule-table td {
+    border: 1px solid #000;
+    padding: 6px;
+    text-align: center;
+    font-weight: 900;
+}
+.schedule-table thead {
+    background-color: var(--emerald-900);
+    color: white;
+}
+
+/* Ministerial Inputs */
 .list-mode-input {
     width: 100%;
-    border: none;
-    background: transparent;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 12px;
+    font-weight: 900;
     text-align: center;
-    font-weight: bold;
-    padding: 6px 4px;
+    background: white;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+}
+.print-list-text {
+    display: none;
+    font-weight: 900;
+    font-size: 13px;
+    color: #000;
+}
+
+/* Controls inside cells */
+.subject-stack { display: grid; gap: 4px; }
+.add-subject-btn {
+    width: 100%;
+    min-height: 24px;
+    border: 1px dashed #a7f3d0;
+    background: #ecfdf5;
+    color: #047857;
+    border-radius: 7px;
     font-size: 11px;
+    font-weight: 900;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
-.list-mode-input:focus {
-    background: rgba(255,255,255,0.8);
-    outline: none;
-}
-.print-list-text { display: none; }
-@media print {
-    .list-mode-input { display: none; }
-    .print-list-text { display: block; font-weight: 900; }
-}
-
-        * { box-sizing: border-box; }
-
-        body {
-            font-family: Arial, sans-serif;
-            font-weight: 900;
-            background:
-                linear-gradient(180deg, #f8fafc 0%, #eef6f3 48%, #f1f5f9 100%);
-            color: #000000;
-            scroll-behavior: smooth;
-        }
-
-        .main-wrapper {
-            width: min(1360px, calc(100% - 24px));
-            max-width: calc(100% - 24px);
-            margin: 14px auto 76px;
-        }
-
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        .tab-btn {
-            border-bottom: 4px solid transparent;
-            color: #475569;
-        }
-
-        .tab-btn.active {
-            border-bottom-color: var(--brand);
-            color: var(--brand);
-            background-color: #ecfdf5;
-        }
-
-        .panel {
-            background: rgba(255,255,255,0.96);
-            border: 1px solid #dbe6e1;
-            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
-        }
-
-        .field {
-            width: 100%;
-            border: 1px solid #cbd5e1;
-            background: white;
-            color: var(--ink);
-            outline: none;
-            min-height: 34px;
-            padding: 7px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
-        }
-
-        .field:focus {
-            border-color: var(--brand);
-            box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.16);
-        }
-
-        .action-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            min-height: 34px;
-            border-radius: 8px;
-            padding: 7px 12px;
-            font-size: 12px;
-            font-weight: 900;
-            transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
-        }
-
-        .action-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
-        }
-
-        .control-panel {
-            padding: 18px;
-        }
-
-        .control-toolbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .control-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 20px;
-            line-height: 1.3;
-            font-weight: 900;
-            color: #065f46;
-        }
-
-        .compact-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 7px;
-        }
-
-        .settings-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
-            gap: 18px;
-            align-items: start;
-        }
-
-        .settings-section {
-            display: grid;
-            gap: 14px;
-            align-content: start;
-        }
-
-        .section-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-height: 38px;
-            padding: 9px 11px;
-            border-radius: 8px;
-            background: #ecfdf5;
-            color: #047857;
-            font-size: 14px;
-            font-weight: 900;
-        }
-
-        .form-cluster {
-            display: grid;
-            gap: 10px;
-        }
-
-        .compact-box {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 10px;
-        }
-
-        .compact-label {
-            font-size: 11px;
-            font-weight: 800;
-            color: #64748b;
-        }
-
-        .print-container {
-            width: min(100%, 297mm);
-            max-width: 100%;
-            margin-inline: auto;
-        }
-
-        .icon-btn {
-            width: 24px;
-            height: 24px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 7px;
-        }
-
-        .print-container {
-            background: var(--paper);
-            min-height: 297mm;
-            padding: 18px;
-            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-        }
-
-        .table-scroll {
-            overflow-x: visible;
-        }
-
-        .schedule-table {
-            table-layout: auto;
-            width: 100%;
-        }
-
-        .schedule-table th,
-        .schedule-table td {
-            white-space: normal;
-            overflow: visible;
-            word-break: break-word;
-        }
-
-        .schedule-table th:first-child,
-        .schedule-table td:first-child {
-            width: 70px;
-            min-width: 60px;
-            white-space: nowrap;
-        }
-
-        .schedule-table th:nth-child(2),
-        .schedule-table td:nth-child(2) {
-            width: 110px;
-            min-width: 90px;
-            white-space: nowrap;
-        }
-
-        .schedule-table th:nth-child(n+3),
-        .schedule-table td:nth-child(n+3) {
-            min-width: 90px;
-        }
-
-        .header-line {
-            font-size: 11px;
-            line-height: 1.85;
-        }
-
-        .subject-select {
-            min-height: 28px;
-            text-align-last: center;
-            font-size: 9px;
-            padding: 2px 4px;
-        }
-
-        .subject-stack {
-            display: grid;
-            gap: 4px;
-        }
-
-        .subject-row {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .subject-icon-slot {
-            width: 22px;
-            height: 24px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .material-icon {
-            width: 20px;
-            height: 20px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .print-material-icon {
-            width: 16px;
-            height: 16px;
-            margin-inline-end: 5px;
-            vertical-align: middle;
-        }
-
-        .add-subject-btn {
-            width: 100%;
-            min-height: 24px;
-            border: 1px dashed #a7f3d0;
-            background: #ecfdf5;
-            color: #047857;
-            border-radius: 7px;
-            font-size: 11px;
-            font-weight: 900;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-        }
-
-        .print-subject { display: none; }
-
-        .print-subject-line {
-            display: block;
-            padding: 3px 2px;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .print-subject-line + .print-subject-line {
-            border-top: 1px solid #111827;
-        }
-
-        .toast {
-            position: fixed;
-            left: 50%;
-            bottom: 56px;
-            transform: translateX(-50%) translateY(20px);
-            background: #0f172a;
-            color: white;
-            padding: 10px 18px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 800;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity .2s ease, transform .2s ease;
-            z-index: 100;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        @media (max-width: 760px) {
-            .main-wrapper {
-                max-width: calc(100% - 12px);
-                margin-top: 12px;
-            }
-
-            .control-toolbar {
-                align-items: stretch;
-                flex-direction: column;
-            }
-
-            .settings-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .print-container {
-                padding: 10px;
-                min-height: auto;
-            }
-
-            .table-scroll {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                margin: 0 -10px;
-                padding: 0 4px;
-            }
-
-            .schedule-table {
-                /* Let app.js handle min-width via inline classes */
-                table-layout: auto;
-            }
-
-            .schedule-table th,
-            .schedule-table td {
-                white-space: normal;
-                overflow: visible;
-                word-break: break-word;
-            }
-
-            .schedule-table th:first-child,
-            .schedule-table td:first-child {
-                width: 60px;
-                min-width: 60px;
-            }
-
-            .schedule-table th:nth-child(2),
-            .schedule-table td:nth-child(2) {
-                width: 90px;
-                min-width: 90px;
-            }
-
-            .schedule-table th:nth-child(n+3),
-            .schedule-table td:nth-child(n+3) {
-                width: 90px;
-                min-width: 90px;
-            }
-
-            /* تم إزالة كود إخفاء أسهم حقل الأرقام لتمكين المستخدم من الضغط عليها */
-        }
-
-        @media print {
-            .no-print { display: none !important; }
-            html, body { width: 100%; min-height: 0; }
-            body { background: white; padding: 0; margin: 0; }
-            .main-wrapper { width: 100%; max-width: 100%; margin: 0; }
-            .tab-content { display: none !important; }
-            #preview-tab { display: block !important; }
-            .table-scroll {
-                overflow: visible !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            table {
-                width: 100% !important;
-                table-layout: auto !important;
-                border: 1.5px solid #000 !important;
-                page-break-inside: avoid;
-                border-collapse: collapse !important;
-                margin: 0 auto !important;
-            }
-            .print-container {
-                box-shadow: none !important;
-                border: none !important;
-                padding: 0 !important;
-                margin: 0 auto !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                min-height: 0 !important;
-                border-radius: 0 !important;
-                background: white !important;
-                text-align: center;
-            }
-            .schedule-table th,
-            .schedule-table td {
-                white-space: normal !important;
-                overflow: visible !important;
-                word-break: break-word !important;
-                vertical-align: middle !important;
-            }
-            /* إلغاء min-width في الطباعة لتفادي التداخل */
-            .schedule-table th:first-child,
-            .schedule-table td:first-child {
-                width: 50px !important;
-                min-width: 50px !important;
-            }
-            .schedule-table th:nth-child(2),
-            .schedule-table td:nth-child(2) {
-                width: 80px !important;
-                min-width: 80px !important;
-            }
-            .schedule-table th:nth-child(n+3),
-            .schedule-table td:nth-child(n+3) {
-                min-width: 60px !important;
-            }
-            tr { page-break-inside: avoid; }
-            th, td {
-                border: 1px solid #000 !important;
-                font-size: var(--print-font-size, 8.5pt) !important;
-                line-height: 1.3 !important;
-                padding: var(--print-cell-padding, 3px) !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            thead {
-                background-color: #064e3b !important;
-                color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .subject-select { display: none !important; }
-            .cell-tools { display: none !important; }
-            .print-subject {
-                display: block !important;
-                font-weight: 900;
-                min-height: 20px;
-            }
-            .print-subject-line {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-                display: flex !important;
-                align-items: center;
-                justify-content: center;
-                gap: 4px;
-            }
-            .print-material-icon {
-                display: inline-flex !important;
-            }
-            .header-line { font-size: var(--print-header-font-size, 9pt) !important; }
-            #main_title_display {
-                font-size: var(--print-title-font-size, 18pt) !important;
-                color: #064e3b !important;
-                display: block !important;
-                visibility: visible !important;
-                min-width: 100px;
-            }
-            #printArea > .grid {
-                margin-top: var(--print-footer-margin, 18px) !important;
-                gap: 16px !important;
-            }
-            #printArea > .mt-12 {
-                margin-top: 18px !important;
-                padding-top: 8px !important;
-            }
-        }
-
-/* Scrollbar hiding for mobile table */
-.hide-scrollbar::-webkit-scrollbar {
-    height: 6px;
-}
-.hide-scrollbar::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-.hide-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
+.print-subject { display: none; }
 
 /* Toast */
-.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #064e3b; color: white; padding: 12px 24px; border-radius: 99px; font-weight: bold; z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s; }
+.toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f172a;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 99px;
+    font-weight: 900;
+    z-index: 1000;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
 .toast.show { display: block; opacity: 1; }
 
-/* List mode inputs for ministerial table */
-.list-mode-input {
-    width: 100%; border: 1px solid #d1d5db; border-radius: 4px;
-            pointer-events: none;
-            transition: opacity .2s ease, transform .2s ease;
-            z-index: 100;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        @media (max-width: 760px) {
-            .main-wrapper {
-                max-width: calc(100% - 12px);
-                margin-top: 12px;
-            }
-
-            .control-toolbar {
-                align-items: stretch;
-                flex-direction: column;
-            }
-
-            .settings-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .print-container {
-                padding: 10px;
-                min-height: auto;
-            }
-
-            .table-scroll {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                margin: 0 -10px;
-                padding: 0 4px;
-            }
-
-            .schedule-table {
-                /* Let app.js handle min-width via inline classes */
-                table-layout: auto;
-            }
-
-            .schedule-table th,
-            .schedule-table td {
-                white-space: normal;
-                overflow: visible;
-                word-break: break-word;
-            }
-
-            .schedule-table th:first-child,
-            .schedule-table td:first-child {
-                width: 60px;
-                min-width: 60px;
-            }
-
-            .schedule-table th:nth-child(2),
-            .schedule-table td:nth-child(2) {
-                width: 90px;
-                min-width: 90px;
-            }
-
-            .schedule-table th:nth-child(n+3),
-            .schedule-table td:nth-child(n+3) {
-                width: 90px;
-                min-width: 90px;
-            }
-
-            /* تم إزالة كود إخفاء أسهم حقل الأرقام لتمكين المستخدم من الضغط عليها */
-        }
-
-        @media print {
-            .no-print { display: none !important; }
-            html, body { width: 100%; min-height: 0; }
-            body { background: white; padding: 0; margin: 0; }
-            .main-wrapper { width: 100%; max-width: 100%; margin: 0; }
-            .tab-content { display: none !important; }
-            #preview-tab { display: block !important; }
-            .table-scroll {
-                overflow: visible !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            table {
-                width: 100% !important;
-                table-layout: auto !important;
-                border: 1.5px solid #000 !important;
-                page-break-inside: avoid;
-                border-collapse: collapse !important;
-                margin: 0 auto !important;
-            }
-            .print-container {
-                box-shadow: none !important;
-                border: none !important;
-                padding: 0 !important;
-                margin: 0 auto !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                min-height: 0 !important;
-                border-radius: 0 !important;
-                background: white !important;
-                text-align: center;
-            }
-            .schedule-table th,
-            .schedule-table td {
-                white-space: normal !important;
-                overflow: visible !important;
-                word-break: break-word !important;
-                vertical-align: middle !important;
-            }
-            /* إلغاء min-width في الطباعة لتفادي التداخل */
-            .schedule-table th:first-child,
-            .schedule-table td:first-child {
-                width: 50px !important;
-                min-width: 50px !important;
-            }
-            .schedule-table th:nth-child(2),
-            .schedule-table td:nth-child(2) {
-                width: 80px !important;
-                min-width: 80px !important;
-            }
-            .schedule-table th:nth-child(n+3),
-            .schedule-table td:nth-child(n+3) {
-                min-width: 60px !important;
-            }
-            tr { page-break-inside: avoid; }
-            th, td {
-                border: 1px solid #000 !important;
-                font-size: var(--print-font-size, 8.5pt) !important;
-                line-height: 1.3 !important;
-                padding: var(--print-cell-padding, 3px) !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            thead {
-                background-color: #064e3b !important;
-                color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .subject-select { display: none !important; }
-            .cell-tools { display: none !important; }
-            .print-subject {
-                display: block !important;
-                font-weight: 900;
-                min-height: 20px;
-            }
-            .print-subject-line {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-                display: flex !important;
-                align-items: center;
-                justify-content: center;
-                gap: 4px;
-            }
-            .print-material-icon {
-                display: inline-flex !important;
-            }
-            .header-line { font-size: var(--print-header-font-size, 9pt) !important; }
-            #main_title_display {
-                font-size: var(--print-title-font-size, 18pt) !important;
-                color: #064e3b !important;
-                display: block !important;
-                visibility: visible !important;
-                min-width: 100px;
-            }
-            #printArea > .grid {
-                margin-top: var(--print-footer-margin, 18px) !important;
-                gap: 16px !important;
-            }
-            #printArea > .mt-12 {
-                margin-top: 18px !important;
-                padding-top: 8px !important;
-            }
-        }
-
-/* Scrollbar hiding for mobile table */
-.hide-scrollbar::-webkit-scrollbar {
-    height: 6px;
-}
-.hide-scrollbar::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-.hide-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-
-/* Toast */
-.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #064e3b; color: white; padding: 12px 24px; border-radius: 99px; font-weight: bold; z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s; }
-.toast.show { display: block; opacity: 1; }
-
-/* List mode inputs for ministerial table */
-.list-mode-input {
-    width: 100%; border: 1px solid #d1d5db; border-radius: 4px;
-    padding: 4px 6px; font-size: 12px; font-weight: 700;
-    text-align: center; background: white; font-family: inherit;
-}
-.print-list-text { display: none; font-weight: 900; font-size: 13px; color: #000; }
-
-@media print {
-    .list-mode-input, .cell-tools, .add-subject-btn, .icon-btn { display: none !important; }
-    .print-list-text { display: block !important; text-align: center; }
-}
-
-/* Custom Font Settings */
+/* Font Overrides */
 h1, h2, h3, h4, h5, h6, .control-title, .section-title, .tab-btn, #main_title_display, #header_right, #header_left, #principal_display {
     font-family: 'Cairo', sans-serif !important;
 }
-.schedule-table, .schedule-table th, .schedule-table td {
-    font-weight: 900 !important;
+
+#main_title_display {
+    font-size: 24px;
+    color: #000000 !important;
 }
+
+/* Mobile Overrides */
+@media (max-width: 760px) {
+    .settings-grid { grid-template-columns: 1fr; }
+    .main-wrapper { max-width: calc(100% - 12px); }
+    .print-container { padding: 10px; min-height: auto; }
+}
+
+/* Print Overrides */
+@media print {
+    .no-print { display: none !important; }
+    body { background: white !important; }
+    .main-wrapper { margin: 0; width: 100%; max-width: 100%; }
+    .tab-content { display: none !important; }
+    #preview-tab { display: block !important; }
+    .print-container {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 0 !important;
+    }
+    .schedule-table th, .schedule-table td {
+        font-size: var(--print-font-size, 8.5pt) !important;
+        padding: var(--print-cell-padding, 3px) !important;
+        border: 1px solid #000 !important;
+    }
+    .cell-tools, .add-subject-btn, .icon-btn, .list-mode-input { display: none !important; }
+    .print-subject { display: block !important; }
+    .print-list-text { display: block !important; }
+    .header-line { font-size: var(--print-header-font-size, 9pt) !important; }
+    #main_title_display {
+        font-size: var(--print-title-font-size, 18pt) !important;
+        color: #000000 !important;
+    }
+    #printArea > .grid { margin-top: var(--print-footer-margin, 18px) !important; }
+}
+
+/* Theme Overrides */
+.theme-purple .schedule-table thead { background-color: #4c1d95 !important; }
+.theme-ocean .schedule-table thead { background-color: #0c4a6e !important; }
+.theme-modern .schedule-table thead { background-color: #0f172a !important; }

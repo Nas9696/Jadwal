@@ -145,12 +145,12 @@
                         <div class="grid grid-cols-2 gap-2">
                             <div class="space-y-1">
                                 <label class="compact-label">حجم خط العنوان</label>
-                                <input type="number" id="main_title_size" min="14" max="40" class="field text-center font-bold">
+                                <input type="number" id="main_title_size" class="field text-center font-bold" min="10" max="40">
                             </div>
                         </div>
 
-                        <div class="compact-box form-cluster bg-blue-50 border-blue-100 mt-3">
-                            <label class="compact-label text-blue-800">رقم الأسبوع الأول</label>
+                        <div class="compact-box form-cluster mt-3">
+                            <label class="compact-label">رقم الأسبوع الأول</label>
                             <div class="flex gap-2">
                                 <input type="text" id="week_number" class="field font-bold flex-1">
                                 <select onchange="byId('week_number').value=this.value; byId('week_number').dispatchEvent(new Event('input'))" class="field w-20 text-xs">
@@ -353,7 +353,7 @@
         <div id="preview-tab" class="tab-content">
             <div id="printArea" class="print-container">
                 <!-- الترويسة -->
-                <div class="flex justify-between items-start mb-4 px-8 pt-6">
+                <div class="flex justify-between items-start mb-2 px-8 pt-4 border-b-2 border-slate-900 pb-2">
                     <div id="header_right" class="w-2/5 text-right font-bold leading-relaxed"></div>
                     <div class="flex flex-col items-center">
                         <img id="logoImg" class="h-32 max-w-[200px] object-contain" alt="شعار" crossorigin="anonymous">
@@ -362,9 +362,9 @@
                 </div>
 
                 <!-- العنوان الرئيسي -->
-                <div class="text-center mb-4 px-2 sm:px-8" style="position: relative; z-index: 10;">
-                    <div id="main_title_wrapper" class="inline-block bg-[#fef08a] border-b-4 border-[#059669] px-4 sm:px-8 py-2 rounded-t-sm shadow-sm" style="transform: translateZ(0); -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                        <h1 id="main_title_display" class="font-black text-xl leading-relaxed pb-1 m-0" style="color: #064e3b !important; font-size: 24px;"></h1>
+                <div id="title_container" class="text-center mb-2 px-2 sm:px-8" style="position: relative; z-index: 10;">
+                    <div id="main_title_wrapper" class="inline-block px-4 sm:px-8 py-1" style="transform: translateZ(0); -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                        <h1 id="main_title_display" class="font-black text-xl leading-relaxed pb-0 m-0" style="color: #000000 !important;"></h1>
                     </div>
                 </div>
 

@@ -270,7 +270,7 @@ function attachInputs() {
         el.addEventListener(eventType, () => {
             state.fields[id] = el.value;
             if (id === 'logo_url_input') state.fields.logo_data_url = '';
-            if (['days_count', 'start_day', 'start_month', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
+            if (['days_count', 'start_day', 'start_month', 'week2_enabled', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
                 normalizeDateInputs();
                 initTable();
             }
@@ -488,7 +488,7 @@ function updateAll() {
     setText('principal_display', state.fields.principal_input);
 
     const mainTitleEl = byId('main_title_display');
-    if (mainTitleEl) mainTitleEl.style.fontSize = `${clampNumber(state.fields.main_title_size, 14, 40, 20)}px`;
+    if (mainTitleEl) mainTitleEl.style.fontSize = `${clampNumber(state.fields.main_title_size, 10, 40, 20)}px`;
     const principalEl = byId('principal_display');
     if (principalEl) principalEl.style.fontSize = `${clampNumber(state.fields.principal_size, 10, 28, 14)}px`;
 
@@ -496,6 +496,11 @@ function updateAll() {
     if (logo) {
         logo.src = state.fields.logo_data_url || state.fields.logo_url_input || ministryLogo;
         logo.onerror = () => { logo.src = ministryLogo; };
+    }
+
+    const titleContainer = byId('title_container');
+    if (titleContainer) {
+        titleContainer.className = isEnabled('show_week_box') ? 'text-center mb-4 px-2 sm:px-8' : 'text-center mb-0 px-2 sm:px-8';
     }
 
     const printArea = byId('printArea');
@@ -555,7 +560,7 @@ function renderTablesContainer() {
 
             if (isEnabled('week2_enabled') && state.tableRows2.length) {
                 const sep = document.createElement('div');
-                sep.className = 'my-8';
+                sep.className = isEnabled('show_week_box') ? 'my-8' : 'my-2';
                 container.appendChild(sep);
 
                 if (isEnabled('show_week_box')) {
@@ -589,7 +594,11 @@ function renderTablesContainer() {
         table.appendChild(tbody);
         tableWrap.appendChild(table);
         container.appendChild(tableWrap);
-        renderTableMultiColumn(thead, tbody);
+        if (state.fields.table_mode === 'list-mode') {
+            renderTableListMode(thead, tbody);
+        } else {
+            renderTableMultiColumn(thead, tbody);
+        }
         if (window.lucide) lucide.createIcons();
     }
 }
@@ -1128,19 +1137,8 @@ function deleteMaterial(i) {
 }
 
 function renderTable() {
-    const head = byId('table_head');
-    const body = byId('table_body');
-    head.innerHTML = '';
-    body.innerHTML = '';
-
-    const isListMode = state.fields.table_mode === 'list-mode';
-
-    if (isListMode) {
-        renderTableListMode(head, body);
-    } else {
-        renderTableMultiColumn(head, body);
-    }
-    if (window.lucide) lucide.createIcons();
+    renderTablesContainer();
+    updatePrintStyle();
 }
 
 function renderTableMultiColumn(head, body) {
@@ -1501,13 +1499,13 @@ function updatePrintStyle() {
     const cols = state.classNames.length + 2;
     const maxSubjects = Math.max(
         1,
-        ...state.tableRows.flatMap(row => row.subjects.map(subjects => normalizeSubjectList(subjects).length || 1))
+        ...state.tableRows.flatMap(row => (row.subjects || []).map(subjects => normalizeSubjectList(subjects).length || 1))
     );
     const baseFont = orientation === 'landscape' ? 9.2 : 8.3;
     let fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
     let padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
     let headerFont = Math.max(7, fontSize + 0.8);
-    let titleFont = Math.max(11, fontSize + 4.5);
+    let titleFont = (clampNumber(state.fields.main_title_size, 14, 40, 20) * 0.75);
     const footerMargin = orientation === 'landscape' ? 8 : 12;
 
     const rowCount = state.tableRows.length + (isEnabled('week2_enabled') ? state.tableRows2.length : 0);
@@ -1544,6 +1542,10 @@ function updatePrintStyle() {
                         transform: none !important;
                         rotate: 0deg !important;
                         height: auto !important;
+                    }
+                    .print-title {
+                        font-size: var(--print-title-font-size, 18pt) !important;
+                        color: #000000 !important;
                     }
                     .print-container {
                         width: 100% !important;
