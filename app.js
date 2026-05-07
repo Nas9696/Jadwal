@@ -756,7 +756,7 @@ function updateHeaderBlock(id, lines, align, fontSize) {
     block.style.fontSize = `${clampNumber(fontSize, 8, 22, 11)}px`;
     lines.forEach(line => {
         const p = document.createElement('p');
-        p.textContent = line || '';
+        p.textContent = (line && isEnabled('use_arabic_numerals')) ? toArabicDigits(line) : (line || '');
         block.appendChild(p);
     });
 }
@@ -1504,7 +1504,7 @@ function updatePrintStyle() {
         ...state.tableRows.flatMap(row => row.subjects.map(subjects => normalizeSubjectList(subjects).length || 1))
     );
     const baseFont = orientation === 'landscape' ? 9.2 : 8.3;
-    const fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
+    let fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
     let padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
     let headerFont = Math.max(7, fontSize + 0.8);
     let titleFont = Math.max(11, fontSize + 4.5);
