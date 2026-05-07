@@ -84,10 +84,11 @@
         * { box-sizing: border-box; }
 
         body {
-            font-family: 'Cairo', sans-serif;
+            font-family: Arial, sans-serif;
+            font-weight: 900;
             background:
                 linear-gradient(180deg, #f8fafc 0%, #eef6f3 48%, #f1f5f9 100%);
-            color: var(--ink);
+            color: #000000;
             scroll-behavior: smooth;
         }
 
@@ -777,12 +778,9 @@
 }
 
 /* Custom Font Settings */
-.schedule-table {
-    font-weight: 900 !important;
-}
-.schedule-table th, .schedule-table td {
-    font-weight: 900 !important;
-}
-#main_title_display, #header_right, #header_left, #principal_display, .control-title {
+h1, h2, h3, h4, h5, h6, .control-title, .section-title, .tab-btn, #main_title_display, #header_right, #header_left, #principal_display {
     font-family: 'Cairo', sans-serif !important;
+}
+.schedule-table, .schedule-table th, .schedule-table td {
+    font-weight: 900 !important;
 }
