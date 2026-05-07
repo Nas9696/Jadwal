@@ -100,7 +100,7 @@ const defaultState = {
         table_theme: 'purple',
         week_number: 'الأسبوع الرابع عشر',
         show_week_box: 'true',
-        font_family: 'Cairo',
+        font_family: 'Arial',
         week2_enabled: 'false',
         merge_weeks: 'false',
         week2_number: 'الأسبوع الخامس عشر',
@@ -1505,22 +1505,21 @@ function updatePrintStyle() {
     );
     const baseFont = orientation === 'landscape' ? 9.2 : 8.3;
     const fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
-    const padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
-    const headerFont = Math.max(7, fontSize + 0.8);
-    const titleFont = Math.max(11, fontSize + 4.5);
-    const footerMargin = orientation === 'landscape' ? 12 : 16;
+    let padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
+    let headerFont = Math.max(7, fontSize + 0.8);
+    let titleFont = Math.max(11, fontSize + 4.5);
+    const footerMargin = orientation === 'landscape' ? 8 : 12;
 
-    document.documentElement.style.setProperty('--print-font-size', `${fontSize.toFixed(1)}pt`);
-    // Auto-shrink padding and font size if many rows to fit A4
     const rowCount = state.tableRows.length + (isEnabled('week2_enabled') ? state.tableRows2.length : 0);
-    if (rowCount > 8) {
-        padding = Math.max(1.5, padding - 1.5);
-        headerFont = Math.max(7, headerFont - 1);
-        titleFont = Math.max(12, titleFont - 2);
-    } else if (rowCount > 5) {
-        padding = Math.max(2.5, padding - 1);
+    if (rowCount > 5) {
+        const shrink = (rowCount - 5) * 0.45;
+        fontSize = Math.max(4.5, fontSize - shrink);
+        padding = Math.max(1.0, padding - shrink * 0.5);
+        headerFont = Math.max(6, headerFont - shrink * 0.5);
+        titleFont = Math.max(10, titleFont - shrink * 0.5);
     }
 
+    document.documentElement.style.setProperty('--print-font-size', `${fontSize.toFixed(1)}pt`);
     document.documentElement.style.setProperty('--print-cell-padding', `${padding.toFixed(1)}px`);
     document.documentElement.style.setProperty('--print-header-font-size', `${headerFont.toFixed(1)}pt`);
     document.documentElement.style.setProperty('--print-title-font-size', `${titleFont.toFixed(1)}pt`);
@@ -1579,8 +1578,8 @@ function printOrExportPDF() {
     updatePrintStyle();
     saveState(false);
 
-    // Always use html2pdf if available for better consistency across all devices (Desktop & Mobile)
-    if (typeof html2pdf !== 'undefined') {
+    // Bypass html2pdf on mobile devices for reliable native PDF generation / printing
+    if (typeof html2pdf !== 'undefined' && !isMobile()) {
         const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
         const targetWidth = 1122; // Keep wide for high quality, let PDF scale to A4
         

@@ -571,6 +571,201 @@
 /* List mode inputs for ministerial table */
 .list-mode-input {
     width: 100%; border: 1px solid #d1d5db; border-radius: 4px;
+            pointer-events: none;
+            transition: opacity .2s ease, transform .2s ease;
+            z-index: 100;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        @media (max-width: 760px) {
+            .main-wrapper {
+                max-width: calc(100% - 12px);
+                margin-top: 12px;
+            }
+
+            .control-toolbar {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .print-container {
+                padding: 10px;
+                min-height: auto;
+            }
+
+            .table-scroll {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 -10px;
+                padding: 0 4px;
+            }
+
+            .schedule-table {
+                /* Let app.js handle min-width via inline classes */
+                table-layout: auto;
+            }
+
+            .schedule-table th,
+            .schedule-table td {
+                white-space: normal;
+                overflow: visible;
+                word-break: break-word;
+            }
+
+            .schedule-table th:first-child,
+            .schedule-table td:first-child {
+                width: 60px;
+                min-width: 60px;
+            }
+
+            .schedule-table th:nth-child(2),
+            .schedule-table td:nth-child(2) {
+                width: 90px;
+                min-width: 90px;
+            }
+
+            .schedule-table th:nth-child(n+3),
+            .schedule-table td:nth-child(n+3) {
+                width: 90px;
+                min-width: 90px;
+            }
+
+            /* تم إزالة كود إخفاء أسهم حقل الأرقام لتمكين المستخدم من الضغط عليها */
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            html, body { width: 100%; min-height: 0; }
+            body { background: white; padding: 0; margin: 0; }
+            .main-wrapper { width: 100%; max-width: 100%; margin: 0; }
+            .tab-content { display: none !important; }
+            #preview-tab { display: block !important; }
+            .table-scroll {
+                overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            table {
+                width: 100% !important;
+                table-layout: auto !important;
+                border: 1.5px solid #000 !important;
+                page-break-inside: avoid;
+                border-collapse: collapse !important;
+                margin: 0 auto !important;
+            }
+            .print-container {
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 auto !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: 0 !important;
+                border-radius: 0 !important;
+                background: white !important;
+                text-align: center;
+            }
+            .schedule-table th,
+            .schedule-table td {
+                white-space: normal !important;
+                overflow: visible !important;
+                word-break: break-word !important;
+                vertical-align: middle !important;
+            }
+            /* إلغاء min-width في الطباعة لتفادي التداخل */
+            .schedule-table th:first-child,
+            .schedule-table td:first-child {
+                width: 50px !important;
+                min-width: 50px !important;
+            }
+            .schedule-table th:nth-child(2),
+            .schedule-table td:nth-child(2) {
+                width: 80px !important;
+                min-width: 80px !important;
+            }
+            .schedule-table th:nth-child(n+3),
+            .schedule-table td:nth-child(n+3) {
+                min-width: 60px !important;
+            }
+            tr { page-break-inside: avoid; }
+            th, td {
+                border: 1px solid #000 !important;
+                font-size: var(--print-font-size, 8.5pt) !important;
+                line-height: 1.3 !important;
+                padding: var(--print-cell-padding, 3px) !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            thead {
+                background-color: #064e3b !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .subject-select { display: none !important; }
+            .cell-tools { display: none !important; }
+            .print-subject {
+                display: block !important;
+                font-weight: 900;
+                min-height: 20px;
+            }
+            .print-subject-line {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }
+            .print-material-icon {
+                display: inline-flex !important;
+            }
+            .header-line { font-size: var(--print-header-font-size, 9pt) !important; }
+            #main_title_display {
+                font-size: var(--print-title-font-size, 18pt) !important;
+                color: #064e3b !important;
+                display: block !important;
+                visibility: visible !important;
+                min-width: 100px;
+            }
+            #printArea > .grid {
+                margin-top: var(--print-footer-margin, 18px) !important;
+                gap: 16px !important;
+            }
+            #printArea > .mt-12 {
+                margin-top: 18px !important;
+                padding-top: 8px !important;
+            }
+        }
+
+/* Scrollbar hiding for mobile table */
+.hide-scrollbar::-webkit-scrollbar {
+    height: 6px;
+}
+.hide-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+.hide-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+/* Toast */
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #064e3b; color: white; padding: 12px 24px; border-radius: 99px; font-weight: bold; z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s; }
+.toast.show { display: block; opacity: 1; }
+
+/* List mode inputs for ministerial table */
+.list-mode-input {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 4px;
     padding: 4px 6px; font-size: 12px; font-weight: 700;
     text-align: center; background: white; font-family: inherit;
 }
@@ -579,4 +774,15 @@
 @media print {
     .list-mode-input, .cell-tools, .add-subject-btn, .icon-btn { display: none !important; }
     .print-list-text { display: block !important; text-align: center; }
+}
+
+/* Custom Font Settings */
+.schedule-table {
+    font-weight: 900 !important;
+}
+.schedule-table th, .schedule-table td {
+    font-weight: 900 !important;
+}
+#main_title_display, #header_right, #header_left, #principal_display, .control-title {
+    font-family: 'Cairo', sans-serif !important;
 }
