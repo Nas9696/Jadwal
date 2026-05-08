@@ -1494,73 +1494,44 @@ function restoreDefaults() {
 }
 
 function updatePrintStyle() {
-    const oldStyle = byId('dynamic_print_style');
-    if (oldStyle) oldStyle.remove();
+    const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
+    const style = document.getElementById('dynamic_print_style') || document.createElement('style');
+    style.id = 'dynamic_print_style';
+    const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
+    
+    style.textContent = `
+        @page { 
+            size: ${pageSize}; 
+            margin: 8mm; 
+        }
+    `;
+    if (!style.parentNode) document.head.appendChild(style);
+}
+
+function autoFitPrint() {
+    const root = document.querySelector(".print-root");
+    if (!root) return;
 
     const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
-    const cols = state.classNames.length + 2;
-    const maxSubjects = Math.max(
-        1,
-        ...state.tableRows.flatMap(row => row.subjects.map(subjects => normalizeSubjectList(subjects).length || 1))
-    );
-    const baseFont = orientation === 'landscape' ? 9.2 : 8.3;
-    const fontSize = Math.max(5.6, baseFont - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
-    const padding = Math.max(1.8, 5 - Math.max(0, cols - 5) * 0.45 - Math.max(0, maxSubjects - 2) * 0.35);
-    const headerFont = Math.max(7, fontSize + 0.8);
-    const titleFont = Math.max(11, fontSize + 4.5);
-    const footerMargin = orientation === 'landscape' ? 12 : 16;
+    
+    // Reset scaling and set width
+    root.style.transform = "scale(1)";
+    root.style.transformOrigin = "top center";
+    root.style.width = orientation === 'landscape' ? '280mm' : '190mm'; // Account for margins
+    
+    // Target height minus safe margin (approx 15mm total)
+    // 96 DPI: 1mm = 3.78px
+    const targetHeight = orientation === 'landscape' ? (210 - 20) * 3.78 : (297 - 20) * 3.78;
+    
+    // Force a reflow before measuring
+    void root.offsetHeight;
+    const contentHeight = root.scrollHeight;
 
-    document.documentElement.style.setProperty('--print-font-size', `${fontSize.toFixed(1)}pt`);
-    // Auto-shrink padding and font size if many rows to fit A4
-    const rowCount = state.tableRows.length + (isEnabled('week2_enabled') ? state.tableRows2.length : 0);
-    if (rowCount > 8) {
-        padding = Math.max(1.5, padding - 1.5);
-        headerFont = Math.max(7, headerFont - 1);
-        titleFont = Math.max(12, titleFont - 2);
-    } else if (rowCount > 5) {
-        padding = Math.max(2.5, padding - 1);
+    if (contentHeight > targetHeight) {
+        let scale = targetHeight / contentHeight;
+        if (scale < 0.6) scale = 0.6; // Readability limit
+        root.style.transform = `scale(${scale})`;
     }
-
-    document.documentElement.style.setProperty('--print-cell-padding', `${padding.toFixed(1)}px`);
-    document.documentElement.style.setProperty('--print-header-font-size', `${headerFont.toFixed(1)}pt`);
-    document.documentElement.style.setProperty('--print-title-font-size', `${titleFont.toFixed(1)}pt`);
-    document.documentElement.style.setProperty('--print-footer-margin', `${footerMargin}px`);
-
-    const style = document.createElement('style');
-    style.id = 'dynamic_print_style';
-    const pageSize = orientation === 'landscape' ? '297mm 210mm' : '210mm 297mm';
-    const previewWidth = orientation === 'landscape' ? '297mm' : '210mm';
-    const previewMinHeight = orientation === 'landscape' ? '210mm' : '297mm';
-    style.textContent = `
-                @page { size: ${pageSize}; margin: ${orientation === 'landscape' ? '5mm' : '6mm'}; }
-                #printArea {
-                    width: ${previewWidth};
-                    max-width: 100%;
-                    min-height: ${previewMinHeight};
-                }
-                .schedule-table th, .schedule-table td { padding: var(--print-cell-padding, 4px) !important; }
-                @media print {
-                    html, body, #printArea, .print-container {
-                        writing-mode: horizontal-tb !important;
-                        transform: none !important;
-                        rotate: 0deg !important;
-                        height: auto !important;
-                    }
-                    .print-container {
-                        width: 100% !important;
-                        max-width: 100% !important;
-                        min-height: 0 !important;
-                        height: auto !important;
-                    }
-                    .schedule-table th:first-child, .schedule-table td:first-child { width: ${orientation === 'landscape' ? '58px' : '44px'} !important; }
-                    .schedule-table th:nth-child(2), .schedule-table td:nth-child(2) { width: ${orientation === 'landscape' ? '82px' : '66px'} !important; }
-                    .schedule-table { min-width: 0 !important; border-collapse: collapse !important; }
-                    @supports (size: 297mm 210mm) {
-                        html, body { width: auto !important; height: auto !important; }
-                    }
-                }
-            `;
-    document.head.appendChild(style);
 }
 
 function printSchedule() {
@@ -1613,6 +1584,7 @@ function printOrExportPDF() {
         showToast('جاري تجهيز ملف PDF بدقة عالية...');
         setTimeout(() => {
             updateAll(); // Ensure latest data is reflected
+            autoFitPrint(); // Apply intelligent scaling
             html2pdf().set(opt).from(el).save().then(() => {
                 _exitPrintMode();
                 showToast('تم تصدير ملف PDF بنجاح ✅');
@@ -1780,60 +1752,30 @@ function shareWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
-/**
- * وظيفة الطباعة وتصدير PDF تدعم مختلف الأجهزة (كمبيوتر، أندرويد، آيفون)
- */
-function printOrExportPDF() {
-    const element = document.getElementById('printArea');
-    if (!element) return;
-
-    // إعدادات تصدير PDF
-    const opt = {
-        margin: [5, 5, 5, 5],
-        filename: `جدول_الاختبارات_${new Date().getTime()}.pdf`,
-        image: { type: 'jpeg', quality: 1.0 },
-        html2canvas: { 
-            scale: 2, 
-            useCORS: true, 
-            letterRendering: true,
-            logging: false
-        },
-        jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', 
-            orientation: state.fields.print_orientation || 'landscape' 
-        },
-        pagebreak: { mode: 'avoid-all' }
-    };
-
-    // إظهار رسالة للمستخدم
-    showToast('جاري معالجة الملف للطباعة...');
-
-    // استخدام html2pdf للمعالجة
-    html2pdf().set(opt).from(element).toPdf().get('pdf').then(function (pdf) {
-        const totalPages = pdf.internal.getNumberOfPages();
-        // إذا كان هناك أكثر من صفحة، نحاول تقليل الحجم قليلاً أو تنبيه المستخدم
-        if (totalPages > 1) {
-            console.warn('تحذير: الجدول يتجاوز صفحة واحدة.');
-        }
-    }).save().then(() => {
-        showToast('تم تحميل الملف بنجاح');
-    }).catch(err => {
-        console.error('PDF Error:', err);
-        showToast('حدث خطأ أثناء الطباعة، جرب متصفح كروم');
-        // fallback to standard print if html2pdf fails
-        window.print();
-    });
-}
-
 function boot() {
     loadState();
     attachInputs();
     refreshAppFromState();
 
+    // Update footer with Arabic digits if enabled
+    if (isEnabled('use_arabic_numerals')) {
+        const footer = document.querySelector('div.fixed.bottom-0');
+        if (footer) footer.textContent = toArabicDigits(footer.textContent);
+    }
+
     window.addEventListener('beforeprint', () => {
         updateAll();
         updatePrintStyle();
+        autoFitPrint();
+    });
+
+    /* fallback للأندرويد و iOS */
+    window.matchMedia("print").addEventListener("change", function (e) {
+        if (e.matches) {
+            updateAll();
+            updatePrintStyle();
+            autoFitPrint();
+        }
     });
 }
 

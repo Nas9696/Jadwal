@@ -377,48 +377,54 @@
         <!-- ========== TAB 3: المعاينة ========== -->
         <div id="preview-tab" class="tab-content">
             <div id="printArea" class="print-container">
-                <!-- الترويسة -->
-                <div class="flex justify-between items-center mb-0 px-8 pt-6">
-                    <div id="header_right" class="w-2/5 text-right font-bold leading-relaxed"></div>
-                    <div class="flex flex-col items-center">
-                        <img id="logoImg" class="h-24 max-w-[150px] object-contain" alt="شعار" crossorigin="anonymous">
-                    </div>
-                    <div id="header_left" class="w-2/5 text-left font-bold leading-relaxed"></div>
-                </div>
-                <!-- خط فاصل رفيع تحت الترويسة مباشرة -->
-                <div class="border-b border-slate-300 mx-8 mb-4"></div>
-
-                <!-- العنوان الرئيسي -->
-                <div class="text-center mb-4 px-2 sm:px-8" style="position: relative; z-index: 10;">
-                    <div id="main_title_wrapper"
-                        class="inline-block px-4 sm:px-8 py-2"
-                        style="transform: translateZ(0); -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                        <h1 id="main_title_display" class="font-black text-xl leading-relaxed pb-1 m-0"
-                            style="color: #064e3b !important;"></h1>
-                    </div>
-                </div>
-
-                <!-- منطقة الجداول -->
-                <div id="tables_container" class="px-8"></div>
-
-                <!-- التذييل -->
-                <div class="grid grid-cols-2 gap-10 mt-10 px-8 pb-6">
-                    <div>
-                        <h4 class="font-black text-slate-800 border-b-2 border-emerald-500 w-fit pb-1 text-sm mb-3">
-                            تعليمات هامة:</h4>
-                        <ul id="instructions_display"
-                            class="text-[11px] space-y-1.5 font-bold text-slate-700 list-none"></ul>
-                    </div>
-                    <div class="text-center space-y-8">
-                        <div>
-                            <p class="font-black text-slate-900 text-sm">مدير المدرسة</p>
-                            <p id="principal_display"
-                                class="font-black text-emerald-900 text-sm border-b-2 border-dotted border-emerald-200 pb-1 w-4/5 mx-auto mt-1">
-                            </p>
+                <div class="print-root dense">
+                    <div class="print-header">
+                        <!-- الترويسة -->
+                        <div class="flex justify-between items-start mb-4 px-8 pt-6">
+                            <div id="header_right" class="w-2/5 text-right font-bold leading-relaxed"></div>
+                            <div class="flex flex-col items-center">
+                                <img id="logoImg" class="h-32 max-w-[200px] object-contain" alt="شعار"
+                                    crossorigin="anonymous">
+                            </div>
+                            <div id="header_left" class="w-2/5 text-left font-bold leading-relaxed"></div>
                         </div>
-                        <div
-                            class="w-24 h-14 border-2 border-dashed border-emerald-100 rounded-lg mx-auto flex items-center justify-center text-[9px] text-slate-300 italic">
-                            ختم المدرسة</div>
+
+                        <!-- العنوان الرئيسي -->
+                        <div class="text-center mb-4 px-2 sm:px-8" style="position: relative; z-index: 10;">
+                            <div id="main_title_wrapper"
+                                class="inline-block bg-[#fef08a] border-b-4 border-[#059669] px-4 sm:px-8 py-2 rounded-t-sm shadow-sm"
+                                style="transform: translateZ(0); -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                                <h1 id="main_title_display" class="font-black text-xl leading-relaxed pb-1 m-0"
+                                    style="color: #064e3b !important; font-size: 24px;"></h1>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="print-body">
+                        <!-- منطقة الجداول -->
+                        <div id="tables_container" class="px-8"></div>
+
+                        <!-- التذييل -->
+                        <div class="grid grid-cols-2 gap-10 mt-10 px-8 pb-6">
+                            <div>
+                                <h4
+                                    class="font-black text-slate-800 border-b-2 border-emerald-500 w-fit pb-1 text-sm mb-3">
+                                    تعليمات هامة:</h4>
+                                <ul id="instructions_display"
+                                    class="text-[11px] space-y-1.5 font-bold text-slate-700 list-none"></ul>
+                            </div>
+                            <div class="text-center space-y-8">
+                                <div>
+                                    <p class="font-black text-slate-900 text-sm">مدير المدرسة</p>
+                                    <p id="principal_display"
+                                        class="font-black text-emerald-900 text-sm border-b-2 border-dotted border-emerald-200 pb-1 w-4/5 mx-auto mt-1">
+                                    </p>
+                                </div>
+                                <div
+                                    class="w-24 h-14 border-2 border-dashed border-emerald-100 rounded-lg mx-auto flex items-center justify-center text-[9px] text-slate-300 italic">
+                                    ختم المدرسة</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
