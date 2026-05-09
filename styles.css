@@ -134,15 +134,13 @@
     display: none;
 }
 
-@media print {
-    .list-mode-input {
-        display: none;
-    }
-
-    .print-list-text {
-        display: block;
-        font-weight: 900;
-    }
+.icon-btn {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
 }
 
 * {
@@ -302,18 +300,6 @@ body {
     width: min(100%, 297mm);
     max-width: 100%;
     margin-inline: auto;
-}
-
-.icon-btn {
-    width: 24px;
-    height: 24px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 7px;
-}
-
-.print-container {
     background: var(--paper);
     min-height: 297mm;
     padding: 18px;
@@ -519,93 +505,224 @@ body {
     /* تم إزالة كود إخفاء أسهم حقل الأرقام لتمكين المستخدم من الضغط عليها */
 }
 
+/* ═══════════════════════════════════════════════════════════
+   نظام الطباعة الاحترافي — Professional Print System
+   ═══════════════════════════════════════════════════════════ */
 @media print {
-  @page {
-    size: A4;
-    margin: 8mm;
-  }
 
-  html, body {
-    margin: 0;
-    padding: 0;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+    @page {
+        size: A4;
+        margin: 6mm;
+    }
 
-  .no-print {
+    /* ─── 1. إعادة تعيين الجذر ─── */
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+    }
+
+    /* ─── 2. إخفاء كل شيء لا علاقة له بالطباعة ─── */
+    nav,
+    footer,
+    .no-print,
+    .tabs-nav,
+    .toast,
+    #header-tab,
+    #table-tab,
+    .cell-tools,
+    .subject-select,
+    .add-subject-btn,
+    .delete-subject-btn,
+    .class-delete-btn,
+    .instruction-delete-btn,
+    .list-mode-input {
+        display: none !important;
+    }
+
+    /* ─── 3. إعادة تعيين كل الحاويات الأب ─── */
+    /* هذا هو السبب الجذري للصفحة الفارغة:
+       .main-wrapper لها margin و max-width من الشاشة
+       يجب تصفيرها بالكامل */
+    .main-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* ─── 4. إجبار تاب المعاينة على الظهور ─── */
+    /* حتى لو المستخدم على تاب الترويسة أو الجدول */
+    .tab-content {
+        display: none !important;
+    }
+    #preview-tab {
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ─── 5. الحاوية الخارجية ─── */
+    .print-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 0 !important;  /* منع الصفحة الفارغة الثالثة */
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        overflow: visible !important;
+    }
+
+    /* ─── 6. الحاوية الداخلية (print-root) ─── */
+    .print-root {
+        width: 100% !important;
+        min-height: 275mm !important; /* ملء ارتفاع الصفحة دون تجاوزها */
+        padding: 4mm !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+        transform-origin: top center;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important; /* توزيع العناصر على كامل الصفحة */
+        gap: 10px !important;
+    }
+
+    /* ─── 7. الترويسة ─── */
+    .print-header {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin-bottom: 6px !important;
+    }
+
+    /* ─── 8. الجداول ─── */
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        table-layout: auto !important;
+        page-break-inside: auto !important;
+    }
+
+    thead { display: table-header-group !important; }
+
+    tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    th, td {
+        border: 1.5px solid #000 !important;
+        padding: 8px 5px !important;
+        text-align: center !important;
+        word-break: break-word !important;
+        overflow: visible !important;
+        font-size: 13px !important;
+    }
+
+    /* ─── 9. إظهار النصوص الطباعية ─── */
+    .print-subject,
+    .print-list-text {
+        display: block !important;
+        font-weight: 900 !important;
+        text-align: center !important;
+    }
+
+    /* ─── 10. الشعار ─── */
+    #logoImg {
+        max-height: 70px !important;
+        width: auto !important;
+        object-fit: contain !important;
+    }
+
+    /* ─── 11. التذييل ─── */
+    .print-body > div:last-child {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    /* ─── 12. أزرار المعاينة (طباعة/واتساب/إلخ) ─── */
+    #preview-tab > .flex.flex-wrap {
+        display: none !important;
+    }
+
+    /* ─── 13. نظام الضغط التدريجي ─── */
+    .print-root.compact-mode {
+        gap: 3px !important;
+        padding: 1mm !important;
+    }
+    .compact-mode .print-header { margin-bottom: 2px !important; }
+    .compact-mode table { margin-top: 1px !important; margin-bottom: 1px !important; }
+
+    .print-root.dense-mode { font-size: 0.88em !important; }
+    .dense-mode th, .dense-mode td {
+        padding: 4px 3px !important;
+        font-size: 11px !important;
+        line-height: 1.15 !important;
+    }
+    .dense-mode h1 { font-size: 16px !important; }
+
+    /* ─── 14. Safari / iOS ─── */
+    * { -webkit-region-break-inside: avoid; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   حالة is-printing — تُفعّل بواسطة JS أثناء تصدير PDF
+   ═══════════════════════════════════════════════════════════ */
+body.is-printing nav,
+body.is-printing footer,
+body.is-printing .no-print,
+body.is-printing .tabs-nav,
+body.is-printing .toast,
+body.is-printing .cell-tools,
+body.is-printing .subject-select,
+body.is-printing .add-subject-btn,
+body.is-printing .delete-subject-btn,
+body.is-printing .list-mode-input,
+body.is-printing #header-tab,
+body.is-printing #table-tab,
+body.is-printing #preview-tab > .flex.flex-wrap {
     display: none !important;
-  }
+}
 
-  .print-container {
-    padding: 0 !important;
-    margin: 0 !important;
-    min-height: 0 !important;
+body.is-printing .main-wrapper {
     width: 100% !important;
     max-width: 100% !important;
-    box-shadow: none !important;
-    border: none !important;
-    background: white !important;
-  }
+    margin: 0 !important;
+    padding: 0 !important;
+}
 
-  /* الحاوية الرئيسية */
-  .print-root {
-    width: 100%;
-    margin: auto;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    transform-origin: top center;
-  }
-
-  /* منع فصل الترويسة */
-  .print-header {
-    page-break-after: avoid !important;
-    break-after: avoid !important;
-  }
-
-  /* منع تقطيع الجداول */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    font-size: 11px;
-  }
-
-  thead {
-    display: table-header-group;
-  }
-
-  tr, td, th {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    padding: 3px;
-  }
-
-  /* ضغط النصوص */
-  .dense {
-    line-height: 1.2;
-    letter-spacing: 0;
-  }
-
-  /* حل مشاكل iPhone / Safari */
-  * {
-    -webkit-region-break-inside: avoid;
-  }
-
-  /* App specific print overrides */
-  .subject-select, .cell-tools, .add-subject-btn {
+body.is-printing .tab-content {
     display: none !important;
-  }
+}
 
-  .print-subject {
+body.is-printing #preview-tab {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+body.is-printing .print-container {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
+
+body.is-printing .print-subject,
+body.is-printing .print-list-text {
     display: block !important;
     font-weight: 900;
-  }
-
-  .print-list-text {
-    display: block !important;
     text-align: center;
-  }
 }
 
 /* Theme Overrides */

@@ -694,7 +694,7 @@ function buildMinisterialTable(rows, isWeek2) {
         tr.appendChild(typeTd);
 
         const matTd = document.createElement('td');
-        matTd.className = 'p-1 border border-slate-900';
+        matTd.className = 'p-2 border border-slate-900 text-center';
         const matSelect = document.createElement('select');
         matSelect.className = 'list-mode-input cell-tools';
         const emptyOpt = document.createElement('option');
@@ -712,7 +712,7 @@ function buildMinisterialTable(rows, isWeek2) {
             queueSave();
         });
         const matPrint = document.createElement('span');
-        matPrint.className = 'print-list-text font-black text-sm';
+        matPrint.className = 'print-list-text font-black text-sm text-center';
         matPrint.style.color = '#000';
         matPrint.textContent = row.material || '-';
         if (row.material) {
@@ -1498,13 +1498,7 @@ function updatePrintStyle() {
     const style = document.getElementById('dynamic_print_style') || document.createElement('style');
     style.id = 'dynamic_print_style';
     const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
-    
-    style.textContent = `
-        @page { 
-            size: ${pageSize}; 
-            margin: 8mm; 
-        }
-    `;
+    style.textContent = `@page { size: ${pageSize}; margin: 6mm; }`;
     if (!style.parentNode) document.head.appendChild(style);
 }
 
@@ -1513,24 +1507,42 @@ function autoFitPrint() {
     if (!root) return;
 
     const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
-    
-    // Reset scaling and set width
-    root.style.transform = "scale(1)";
-    root.style.transformOrigin = "top center";
-    root.style.width = orientation === 'landscape' ? '280mm' : '190mm'; // Account for margins
-    
-    // Target height minus safe margin (approx 15mm total)
-    // 96 DPI: 1mm = 3.78px
-    const targetHeight = orientation === 'landscape' ? (210 - 20) * 3.78 : (297 - 20) * 3.78;
-    
-    // Force a reflow before measuring
-    void root.offsetHeight;
-    const contentHeight = root.scrollHeight;
 
-    if (contentHeight > targetHeight) {
-        let scale = targetHeight / contentHeight;
-        if (scale < 0.6) scale = 0.6; // Readability limit
+    // 1. تصفير كل شيء
+    root.classList.remove('compact-mode', 'dense-mode');
+    root.style.transform = 'none';
+    root.style.width = '100%';
+
+    // 2. حساب ارتفاع A4 المتاح (بعد خصم الهوامش)
+    // @page margin: 6mm ، padding: 4mm → مجموع = 10mm من كل جانب = 20mm
+    const MM_TO_PX = 3.7795275591; // 96 DPI
+    const pageHeight = (orientation === 'portrait' ? 297 : 210) * MM_TO_PX;
+    const margins = 20 * MM_TO_PX; // 6mm page + 4mm padding × 2
+    const availableHeight = pageHeight - margins;
+
+    // 3. قياس الارتفاع الحالي
+    void root.offsetHeight;
+    let h = root.scrollHeight;
+
+    // 4. المرحلة 1: تقليل المسافات
+    if (h > availableHeight) {
+        root.classList.add('compact-mode');
+        void root.offsetHeight;
+        h = root.scrollHeight;
+    }
+
+    // 5. المرحلة 2: تصغير الخطوط
+    if (h > availableHeight) {
+        root.classList.add('dense-mode');
+        void root.offsetHeight;
+        h = root.scrollHeight;
+    }
+
+    // 6. المرحلة 3: تصغير هندسي (آخر حل)
+    if (h > availableHeight) {
+        const scale = Math.max(0.5, (availableHeight / h) * 0.98);
         root.style.transform = `scale(${scale})`;
+        root.style.transformOrigin = "top center";
     }
 }
 
@@ -1550,17 +1562,19 @@ function printOrExportPDF() {
     updatePrintStyle();
     saveState(false);
 
-    // Always use html2pdf if available for better consistency across all devices (Desktop & Mobile)
     if (typeof html2pdf !== 'undefined') {
         const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
-        const targetWidth = 1122; // Keep wide for high quality, let PDF scale to A4
+        // A4 at 96 DPI: portrait=794px, landscape=1123px
+        const targetWidth = orientation === 'portrait' ? 794 : 1123;
 
-        _enterPrintMode(true, targetWidth);
+        _enterPrintMode();
+        autoFitPrint();
+
         const el = byId('printArea');
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
 
         const opt = {
-            margin: 0,
+            margin: [6, 6, 6, 6], // 6mm margins matching @page
             filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1570,7 +1584,9 @@ function printOrExportPDF() {
                 allowTaint: true,
                 letterRendering: true,
                 width: targetWidth,
-                windowWidth: targetWidth
+                windowWidth: targetWidth,
+                scrollX: 0,
+                scrollY: 0
             },
             jsPDF: {
                 unit: 'mm',
@@ -1581,115 +1597,51 @@ function printOrExportPDF() {
             pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
-        showToast('جاري تجهيز ملف PDF بدقة عالية...');
+        showToast('جاري تجهيز ملف PDF...');
         setTimeout(() => {
-            updateAll(); // Ensure latest data is reflected
-            autoFitPrint(); // Apply intelligent scaling
             html2pdf().set(opt).from(el).save().then(() => {
                 _exitPrintMode();
                 showToast('تم تصدير ملف PDF بنجاح ✅');
             }).catch(err => {
                 console.error('PDF Export Error:', err);
                 _exitPrintMode();
-                window.print(); // Fallback to browser print if library fails
+                window.print();
             });
-        }, 250);
+        }, 400);
     } else {
         window.print();
     }
 }
 
-function _enterPrintMode(isMobilePDF = false, targetWidth = 1122) {
-    // Hide all editing tools and buttons
-    const selectors = '.no-print, .cell-tools, .subject-select, .add-subject-btn, .delete-subject-btn, .class-delete-btn, .instruction-delete-btn, button:not(.action-btn)';
-    document.querySelectorAll(selectors).forEach(el => {
-        el.dataset._origDisplay = el.style.display;
-        el.style.display = 'none';
-        el.setAttribute('style', (el.getAttribute('style') || '') + '; display: none !important;');
-    });
-    document.querySelectorAll('.print-subject').forEach(el => {
-        el.dataset._origDisplay = el.style.display;
-        el.style.display = 'block';
-    });
-
-    const thead = byId('table_head');
-    if (thead) {
-        thead.dataset._origBg = thead.style.backgroundColor;
-        thead.dataset._origColor = thead.style.color;
-        thead.style.backgroundColor = '#064e3b';
-        thead.style.color = 'white';
-    }
-
-    if (isMobilePDF) {
-        const el = byId('printArea');
-        el.dataset._origWidth = el.style.width;
-        el.dataset._origMaxWidth = el.style.maxWidth;
-        el.dataset._origOverflow = el.style.overflow;
-        el.dataset._origMargin = el.style.margin;
-        el.dataset._origPadding = el.style.padding;
-        el.dataset._origMinHeight = el.style.minHeight;
-
-        el.style.width = targetWidth + 'px';
-        el.style.maxWidth = 'none';
-        el.style.overflow = 'visible';
-        el.style.margin = '0';
-        el.style.padding = '10mm'; // هامش داخلي للطباعة
-        el.style.minHeight = '0'; // إلغاء الحد الأدنى للارتفاع لتجنب الصفحة الثانية
-        el.style.backgroundColor = 'white';
-
-        // إجبار الأب على عدم القص وتوسيط المحتوى
-        const wrapper = el.parentElement;
-        if (wrapper) {
-            wrapper.dataset._origOverflow = wrapper.style.overflow;
-            wrapper.dataset._origDisplay = wrapper.style.display;
-            wrapper.style.overflow = 'visible';
-            wrapper.style.display = 'block';
-        }
+function _enterPrintMode() {
+    document.body.classList.add('is-printing');
+    const el = byId('printArea');
+    if (el) {
+        el.style.border = 'none';
+        el.style.boxShadow = 'none';
+        el.style.borderRadius = '0';
     }
 }
 
 function _exitPrintMode() {
-    document.querySelectorAll('.no-print, .cell-tools, .subject-select, .add-subject-btn').forEach(el => {
-        el.style.display = el.dataset._origDisplay || '';
-        delete el.dataset._origDisplay;
-    });
-    document.querySelectorAll('.print-subject').forEach(el => {
-        el.style.display = el.dataset._origDisplay || '';
-        delete el.dataset._origDisplay;
-    });
-    const thead = byId('table_head');
-    if (thead) {
-        thead.style.backgroundColor = thead.dataset._origBg || '';
-        thead.style.color = thead.dataset._origColor || '';
-        delete thead.dataset._origBg;
-        delete thead.dataset._origColor;
+    document.body.classList.remove('is-printing');
+    const root = document.querySelector('.print-root');
+    if (root) {
+        root.classList.remove('compact-mode', 'dense-mode');
+        root.style.transform = '';
+        root.style.width = '';
+        root.style.minHeight = '';
     }
-
     const el = byId('printArea');
-    if (el && el.dataset._origWidth !== undefined) {
-        el.style.width = el.dataset._origWidth;
-        el.style.maxWidth = el.dataset._origMaxWidth;
-        el.style.overflow = el.dataset._origOverflow;
-        el.style.margin = el.dataset._origMargin || '';
-        el.style.padding = el.dataset._origPadding || '';
-        el.style.minHeight = el.dataset._origMinHeight || '';
-
-        delete el.dataset._origWidth;
-        delete el.dataset._origMaxWidth;
-        delete el.dataset._origOverflow;
-        delete el.dataset._origMargin;
-        delete el.dataset._origPadding;
-        delete el.dataset._origMinHeight;
-
-        const wrapper = el.parentElement;
-        if (wrapper && wrapper.dataset._origOverflow !== undefined) {
-            wrapper.style.overflow = wrapper.dataset._origOverflow;
-            wrapper.style.display = wrapper.dataset._origDisplay || '';
-            delete wrapper.dataset._origOverflow;
-            delete wrapper.dataset._origDisplay;
-        }
+    if (el) {
+        el.style.border = '';
+        el.style.boxShadow = '';
+        el.style.borderRadius = '';
     }
+    updateAll();
 }
+
+
 
 function stepNumber(id, delta) {
     const input = byId(id);
