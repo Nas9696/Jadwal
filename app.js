@@ -1539,9 +1539,12 @@ function showBulkMaterialSelector(rowIndex, btnEl, isMinisterial = false, weekRo
     const clearBtn = document.createElement('button');
     clearBtn.className = 'text-[12px] font-bold text-red-600 p-2 hover:bg-red-50 rounded text-right flex items-center gap-2';
     clearBtn.innerHTML = '<i data-lucide="eraser" class="w-4 h-4"></i> مسح الكل';
-    clearBtn.onclick = () => {
+    clearBtn.onclick = (e) => {
+        e.stopPropagation();
         if (isMinisterial && weekRows) {
-            weekRows[rowIndex].material = '';
+            const row = weekRows[rowIndex];
+            const target = row.isWeek2 ? state.tableRows2 : state.tableRows;
+            if (target[row.originalIdx]) target[row.originalIdx].material = '';
         } else {
             state.tableRows[rowIndex].subjects = state.classNames.map(() => []);
         }
@@ -1555,9 +1558,12 @@ function showBulkMaterialSelector(rowIndex, btnEl, isMinisterial = false, weekRo
         item.className = 'text-[12px] font-bold text-slate-700 p-2 hover:bg-emerald-50 hover:text-emerald-700 rounded text-right flex items-center gap-2 transition-colors';
         const color = state.materialColors[state.currentStage]?.[m] || '#10b981';
         item.innerHTML = `<span class="w-3 h-3 rounded-full" style="background-color: ${color}"></span> ${m}`;
-        item.onclick = () => {
+        item.onclick = (e) => {
+            e.stopPropagation();
             if (isMinisterial && weekRows) {
-                weekRows[rowIndex].material = m;
+                const row = weekRows[rowIndex];
+                const target = row.isWeek2 ? state.tableRows2 : state.tableRows;
+                if (target[row.originalIdx]) target[row.originalIdx].material = m;
             } else {
                 state.tableRows[rowIndex].subjects = state.classNames.map(() => [m]);
             }
@@ -1569,14 +1575,18 @@ function showBulkMaterialSelector(rowIndex, btnEl, isMinisterial = false, weekRo
     document.body.appendChild(menu);
     if (window.lucide) lucide.createIcons();
 
-    // Close on outside click
+    // Close on outside click - increased timeout for mobile
     const closer = (e) => {
         if (!menu.contains(e.target) && !btnEl.contains(e.target)) {
             menu.remove();
             document.removeEventListener('click', closer);
+            document.removeEventListener('touchstart', closer);
         }
     };
-    setTimeout(() => document.addEventListener('click', closer), 10);
+    setTimeout(() => {
+        document.addEventListener('click', closer);
+        document.addEventListener('touchstart', closer);
+    }, 300);
 }
 
 function finishBulkApply(menu) {
