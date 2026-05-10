@@ -106,7 +106,9 @@ const defaultState = {
         week2_number: 'الأسبوع الخامس عشر',
         week2_days_count: '5',
         week2_start_day: '30',
-        week2_start_month: '11'
+        week2_start_month: '11',
+        gender_mode: 'male',
+        principal_label_input: 'مدير المدرسة'
     }
 };
 
@@ -261,14 +263,32 @@ function attachInputs() {
         if (el.type === 'checkbox') {
             el.addEventListener('change', () => {
                 state.fields[id] = el.checked ? 'true' : 'false';
+                if (id === 'week2_enabled') initTable(true);
                 updateAll();
                 queueSave();
             });
             return;
         }
+
         const eventType = (el.tagName === 'SELECT' || el.type === 'checkbox') ? 'change' : 'input';
         el.addEventListener(eventType, () => {
+            const oldValue = state.fields[id];
             state.fields[id] = el.value;
+
+            if (id === 'gender_mode' && oldValue !== el.value) {
+                const isFemale = el.value === 'female';
+                const maleLabel = 'مدير المدرسة';
+                const femaleLabel = 'مديرة المدرسة';
+                
+                // Only auto-update if the user hasn't already customized it to something unique
+                if (state.fields.principal_label_input === maleLabel && isFemale) {
+                    state.fields.principal_label_input = femaleLabel;
+                    if (byId('principal_label_input')) byId('principal_label_input').value = femaleLabel;
+                } else if (state.fields.principal_label_input === femaleLabel && !isFemale) {
+                    state.fields.principal_label_input = maleLabel;
+                    if (byId('principal_label_input')) byId('principal_label_input').value = maleLabel;
+                }
+            }
             if (id === 'logo_url_input') state.fields.logo_data_url = '';
             if (['days_count', 'start_day', 'start_month', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
                 normalizeDateInputs();
@@ -485,6 +505,21 @@ function updateAll() {
         state.fields.header_left_align, state.fields.header_left_size);
 
     setText('main_title_display', state.fields.main_title_input);
+    const isFemale = state.fields.gender_mode === 'female';
+    setText('principal_label', state.fields.principal_label_input);
+    
+    // Update instructions gender if they are default
+    const defaultMaleInst = 'على كل طالب احضار ادواته.';
+    const defaultFemaleInst = 'على كل طالبة احضار ادواتها.';
+    let changed = false;
+    state.instructions = state.instructions.map(inst => {
+        if (inst === defaultMaleInst && isFemale) { changed = true; return defaultFemaleInst; }
+        if (inst === defaultFemaleInst && !isFemale) { changed = true; return defaultMaleInst; }
+        return inst;
+    });
+    if (changed) renderInstructionsEditor();
+    renderInstructionsDisplay();
+
     setText('principal_display', state.fields.principal_input);
 
     const mainTitleEl = byId('main_title_display');
@@ -724,20 +759,31 @@ function buildMinisterialTable(rows, isWeek2) {
             o.selected = m === row.material;
             matSelect.appendChild(o);
         });
+        const updateMatColor = () => {
+            if (isEnabled('use_material_colors') && row.material) {
+                const mColor = state.materialColors[state.currentStage]?.[row.material];
+                if (mColor) { matTd.style.backgroundColor = mColor; return; }
+            }
+            if (row.material) {
+                const matColors = ['#e8f5e9', '#e3f2fd', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#fff8e1', '#f1f8e9', '#e8eaf6'];
+                const matIdx = state.materials[state.currentStage].indexOf(row.material);
+                matTd.style.backgroundColor = (matIdx >= 0) ? matColors[matIdx % matColors.length] : 'transparent';
+            } else {
+                matTd.style.backgroundColor = 'transparent';
+            }
+        };
+
         matSelect.addEventListener('change', () => {
             row.material = matSelect.value;
             matPrint.textContent = matSelect.value || '-';
+            updateMatColor();
             queueSave();
         });
         const matPrint = document.createElement('span');
         matPrint.className = 'print-list-text font-black text-sm text-center';
         matPrint.style.color = '#000';
         matPrint.textContent = row.material || '-';
-        if (row.material) {
-            const matColors = ['#e8f5e9', '#e3f2fd', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#fff8e1', '#f1f8e9', '#e8eaf6'];
-            const matIdx = state.materials[state.currentStage].indexOf(row.material);
-            if (matIdx >= 0) matTd.style.backgroundColor = matColors[matIdx % matColors.length];
-        }
+        updateMatColor();
         matTd.appendChild(matSelect);
         matTd.appendChild(matPrint);
         tr.appendChild(matTd);

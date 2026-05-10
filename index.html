@@ -92,8 +92,15 @@
                             </div>
                         </div>
 
-                        <div class="space-y-1 mt-3">
-                            <label class="compact-label">اسم المدرسة</label>
+                        <div class="flex flex-col gap-1 mt-3">
+                            <label class="control-title">نوع المدرسة (بنين/بنات)</label>
+                            <select id="gender_mode" class="field font-black">
+                                <option value="male">بنين (مدير / طالب)</option>
+                                <option value="female">بنات (مديرة / طالبة)</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="control-title">اسم المدرسة</label>
                             <input type="text" id="school_name_input" class="field font-bold">
                         </div>
 
@@ -181,13 +188,20 @@
                         </div>
 
                         <!-- مدير المدرسة -->
-                        <h3 class="section-title mt-4"><i data-lucide="user" class="w-5 h-5"></i> مدير المدرسة</h3>
-                        <div class="space-y-1">
-                            <label class="compact-label">اسم مدير المدرسة</label>
-                            <input type="text" id="principal_input" class="field font-black">
+                        <!-- مسمى القائد والاسم -->
+                        <h3 class="section-title mt-4"><i data-lucide="user" class="w-5 h-5"></i> توقيع القائد/ة</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">المسمى (مدير/مديرة)</label>
+                                <input type="text" id="principal_label_input" class="field font-black" placeholder="مدير المدرسة">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">اسم القائد/ة</label>
+                                <input type="text" id="principal_input" class="field font-black">
+                            </div>
                         </div>
-                        <div class="space-y-1">
-                            <label class="compact-label">حجم خط المدير</label>
+                        <div class="space-y-1 mt-2">
+                            <label class="compact-label">حجم خط التوقيع</label>
                             <input type="number" id="principal_size" min="10" max="28"
                                 class="field text-center font-bold w-24">
                         </div>
