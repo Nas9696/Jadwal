@@ -53,10 +53,10 @@ const defaultState = {
     currentStage: 'early_childhood',
     classNames: ['الصف الأول', 'الصف الثاني', 'الصف الثالث'],
     materials: {
-        early_childhood: ['إسلامية', 'لغتي', 'رياضيات', 'علوم', 'إنجليزي', 'فنية', 'م. حياتية', 'بدنية', 'نشاط'],
-        elementary: ['اجتماعيات', 'فنية', 'إسلامية', 'بدنية', 'م. حياتية', 'رقمية', 'رياضيات', 'إنجليزي', 'علوم', 'لغتي'],
-        intermediate: ['اجتماعيات', 'إسلامية', 'بدنية', 'فنية', 'م. حياتية', 'رياضيات', 'رقمية', 'إنجليزي', 'تفكير ناقد', 'لغتي', 'علوم'],
-        secondary: ['فيزياء', 'رياضيات', 'كفايات', 'علم البيئة', 'إنجليزي', 'تقنية رقمية', 'اجتماعيات', 'معرفة مالية', 'بدنية', 'تربية مهنية', 'نشاط', 'لياقة وثقافة', 'فنون', 'م. حياتية', 'مواطنة رقمية', 'دراسات أدبية', 'إسلامية', 'علم نفس', 'أحياء', 'جغرافيا', 'علم الأرض', 'كيمياء']
+        early_childhood: ['رياضيات', 'إنجليزي', 'لغتي', 'علوم', 'إسلامية', 'م. حياتية', 'بدنية', 'فنية', 'نشاط'],
+        elementary: ['رياضيات', 'إنجليزي', 'لغتي', 'علوم', 'إسلامية', 'اجتماعيات', 'رقمية', 'م. حياتية', 'بدنية', 'فنية'],
+        intermediate: ['رياضيات', 'إنجليزي', 'لغتي', 'علوم', 'إسلامية', 'اجتماعيات', 'رقمية', 'تفكير ناقد', 'م. حياتية', 'بدنية', 'فنية'],
+        secondary: ['رياضيات', 'إنجليزي', 'فيزياء', 'كيمياء', 'أحياء', 'علم الأرض', 'كفايات', 'علم البيئة', 'تقنية رقمية', 'اجتماعيات', 'معرفة مالية', 'بدنية', 'تربية مهنية', 'نشاط', 'لياقة وثقافة', 'فنون', 'م. حياتية', 'مواطنة رقمية', 'دراسات أدبية', 'إسلامية', 'علم نفس', 'جغرافيا']
     },
     materialColors: { early_childhood: {}, elementary: {}, intermediate: {}, secondary: {} },
     classColors: ['#ecfdf5', '#eff6ff', '#fff7ed', '#fdf2f8', '#f5f3ff', '#f0fdf4'],
@@ -622,7 +622,23 @@ function buildMinisterialTable(rows, isWeek2) {
 
         const dayTd = document.createElement('td');
         dayTd.className = 'p-2 border border-slate-900 font-black text-sm';
-        dayTd.textContent = row.day;
+        
+        const dayWrap = document.createElement('div');
+        dayWrap.className = 'flex flex-col items-center gap-1';
+        
+        const dayText = document.createElement('span');
+        dayText.textContent = row.day;
+        dayWrap.appendChild(dayText);
+
+        const bulkBtn = document.createElement('button');
+        bulkBtn.type = 'button';
+        bulkBtn.className = 'bulk-apply-btn no-print w-6 h-6 bg-emerald-500 text-white rounded-full shadow-sm hover:bg-emerald-600 transition-colors flex items-center justify-center mt-1';
+        bulkBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i>';
+        bulkBtn.title = 'اختيار مادة من البنك';
+        bulkBtn.onclick = (e) => showBulkMaterialSelector(rIdx, bulkBtn, true, rows);
+        dayWrap.appendChild(bulkBtn);
+
+        dayTd.appendChild(dayWrap);
         tr.appendChild(dayTd);
 
         const dateTd = document.createElement('td');
@@ -1486,7 +1502,7 @@ function deleteSubjectSlot(rowIndex, classIndex, subjectIndex) {
     queueSave();
 }
 
-function showBulkMaterialSelector(rowIndex, btnEl) {
+function showBulkMaterialSelector(rowIndex, btnEl, isMinisterial = false, weekRows = null) {
     const materials = state.materials[state.currentStage];
     
     // Remove any existing menu
@@ -1495,11 +1511,24 @@ function showBulkMaterialSelector(rowIndex, btnEl) {
 
     const menu = document.createElement('div');
     menu.id = 'bulk-material-menu';
-    menu.className = 'fixed z-[999] bg-white border border-slate-200 shadow-2xl rounded-xl p-3 flex flex-col gap-2 min-w-[180px] animate-in fade-in zoom-in duration-200';
+    menu.className = 'absolute z-[999] bg-white border border-slate-200 shadow-2xl rounded-xl p-3 flex flex-col gap-2 min-w-[180px] animate-in fade-in zoom-in duration-200';
     
     const rect = btnEl.getBoundingClientRect();
-    menu.style.top = `${rect.bottom + 5}px`;
-    menu.style.left = `${rect.left}px`;
+    let top = rect.bottom + window.scrollY + 5;
+    let left = rect.left + window.scrollX;
+
+    // Viewport boundary checks
+    const menuWidth = 180;
+    if (left + menuWidth > window.innerWidth) {
+        left = window.innerWidth - menuWidth - 15;
+    }
+    if (left < 15) left = 15;
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.maxHeight = '300px'; // Support long lists on mobile
+    menu.style.overflowY = 'auto';
+    menu.style.scrollbarWidth = 'none'; // Hide scrollbar for cleaner look
 
     const title = document.createElement('div');
     title.className = 'text-[11px] font-black text-slate-400 mb-1 border-b pb-1 text-center';
@@ -1511,7 +1540,11 @@ function showBulkMaterialSelector(rowIndex, btnEl) {
     clearBtn.className = 'text-[12px] font-bold text-red-600 p-2 hover:bg-red-50 rounded text-right flex items-center gap-2';
     clearBtn.innerHTML = '<i data-lucide="eraser" class="w-4 h-4"></i> مسح الكل';
     clearBtn.onclick = () => {
-        state.tableRows[rowIndex].subjects = state.classNames.map(() => []);
+        if (isMinisterial && weekRows) {
+            weekRows[rowIndex].material = '';
+        } else {
+            state.tableRows[rowIndex].subjects = state.classNames.map(() => []);
+        }
         finishBulkApply(menu);
     };
     menu.appendChild(clearBtn);
@@ -1523,7 +1556,11 @@ function showBulkMaterialSelector(rowIndex, btnEl) {
         const color = state.materialColors[state.currentStage]?.[m] || '#10b981';
         item.innerHTML = `<span class="w-3 h-3 rounded-full" style="background-color: ${color}"></span> ${m}`;
         item.onclick = () => {
-            state.tableRows[rowIndex].subjects = state.classNames.map(() => [m]);
+            if (isMinisterial && weekRows) {
+                weekRows[rowIndex].material = m;
+            } else {
+                state.tableRows[rowIndex].subjects = state.classNames.map(() => [m]);
+            }
             finishBulkApply(menu);
         };
         menu.appendChild(item);
