@@ -152,8 +152,8 @@ function showToast(message) {
 }
 
 function clampNumber(value, min, max, fallback) {
-    const n = parseInt(value, 10);
-    if (Number.isNaN(n)) return fallback;
+    const n = parseArabicNum(value);
+    if (Number.isNaN(n) || n === 0 && value !== '0' && value !== 0) return fallback;
     return Math.min(Math.max(n, min), max);
 }
 
@@ -525,6 +525,7 @@ function renderTablesContainer() {
     const container = byId('tables_container');
     if (!container) return;
     container.innerHTML = '';
+    container.className = 'px-8 flex flex-col flex-1 gap-2';
 
     const isMinisterial = state.fields.table_mode === 'ministerial';
 
@@ -555,7 +556,7 @@ function renderTablesContainer() {
 
             if (isEnabled('week2_enabled') && state.tableRows2.length) {
                 const sep = document.createElement('div');
-                sep.className = 'my-8';
+                sep.className = 'my-2';
                 container.appendChild(sep);
 
                 if (isEnabled('show_week_box')) {
@@ -577,7 +578,7 @@ function renderTablesContainer() {
         }
         // Traditional table
         const tableWrap = document.createElement('div');
-        tableWrap.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar';
+        tableWrap.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar flex-1';
         const table = document.createElement('table');
         table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-[700px] print:min-w-0 md:min-w-full';
         const thead = document.createElement('thead');
@@ -596,7 +597,7 @@ function renderTablesContainer() {
 
 function buildMinisterialTable(rows, isWeek2) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar';
+    wrapper.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar flex-1';
     const table = document.createElement('table');
     table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-[650px] print:min-w-0 md:min-w-full';
 
@@ -626,7 +627,8 @@ function buildMinisterialTable(rows, isWeek2) {
 
         const dateTd = document.createElement('td');
         dateTd.className = 'p-2 border border-slate-900 text-xs font-bold';
-        dateTd.textContent = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
+        const dateVal = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
+        dateTd.innerHTML = `<span dir="ltr">${dateVal}</span>`;
         tr.appendChild(dateTd);
 
         const classesTd = document.createElement('td');
@@ -793,7 +795,7 @@ function buildWeekRows(daysCountRaw, startDayRaw, startMonthRaw, startDayName, o
         const oldRow = oldRows[i] || {};
         rows.push({
             day: daysSequence[(startIdx + i) % 5],
-            date: `${String(currentD).padStart(2, '0')} / ${String(currentM).padStart(2, '0')} / 1447`,
+            date: `${String(currentD).padStart(2, '0')} / ${String(currentM).padStart(2, '0')} / 1447 هـ`,
             subjects: Array.from({ length: state.classNames.length }, (_, idx) => normalizeSubjectList(oldRow.subjects?.[idx], true)),
             classes: oldRow.classes || classesDefault,
             test_type: oldRow.test_type || 'تكويني',
@@ -1170,17 +1172,34 @@ function renderTableMultiColumn(head, body) {
 
         const dayCell = document.createElement('td');
         dayCell.className = 'p-2 border-2 border-slate-900 font-black text-sm';
-        dayCell.textContent = row.day;
         if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
             dayCell.style.backgroundColor = state.rowColors[rIdx];
             dayCell.style.webkitPrintColorAdjust = 'exact';
             dayCell.style.printColorAdjust = 'exact';
         }
+
+        const dayWrap = document.createElement('div');
+        dayWrap.className = 'flex flex-col items-center gap-1';
+        
+        const dayText = document.createElement('span');
+        dayText.textContent = row.day;
+        dayWrap.appendChild(dayText);
+
+        const bulkBtn = document.createElement('button');
+        bulkBtn.type = 'button';
+        bulkBtn.className = 'bulk-apply-btn no-print w-6 h-6 bg-emerald-500 text-white rounded-full shadow-sm hover:bg-emerald-600 transition-colors flex items-center justify-center mt-1';
+        bulkBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i>';
+        bulkBtn.title = 'تعيين مادة موحدة لجميع الفصول';
+        bulkBtn.onclick = (e) => showBulkMaterialSelector(rIdx, bulkBtn);
+        dayWrap.appendChild(bulkBtn);
+
+        dayCell.appendChild(dayWrap);
         tr.appendChild(dayCell);
 
         const dateCell = document.createElement('td');
         dateCell.className = 'p-2 border-2 border-slate-900 text-xs font-bold';
-        const dateText = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
+        let dateText = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
+        if (!dateText.includes('هـ')) dateText += ' هـ';
         dateCell.innerHTML = `<span dir="ltr">${dateText}</span>`;
         if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
             dateCell.style.backgroundColor = state.rowColors[rIdx];
@@ -1467,6 +1486,69 @@ function deleteSubjectSlot(rowIndex, classIndex, subjectIndex) {
     queueSave();
 }
 
+function showBulkMaterialSelector(rowIndex, btnEl) {
+    const materials = state.materials[state.currentStage];
+    
+    // Remove any existing menu
+    const oldMenu = document.getElementById('bulk-material-menu');
+    if (oldMenu) oldMenu.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'bulk-material-menu';
+    menu.className = 'fixed z-[999] bg-white border border-slate-200 shadow-2xl rounded-xl p-3 flex flex-col gap-2 min-w-[180px] animate-in fade-in zoom-in duration-200';
+    
+    const rect = btnEl.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 5}px`;
+    menu.style.left = `${rect.left}px`;
+
+    const title = document.createElement('div');
+    title.className = 'text-[11px] font-black text-slate-400 mb-1 border-b pb-1 text-center';
+    title.textContent = 'اختر المادة للكل';
+    menu.appendChild(title);
+
+    // Option: Clear
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'text-[12px] font-bold text-red-600 p-2 hover:bg-red-50 rounded text-right flex items-center gap-2';
+    clearBtn.innerHTML = '<i data-lucide="eraser" class="w-4 h-4"></i> مسح الكل';
+    clearBtn.onclick = () => {
+        state.tableRows[rowIndex].subjects = state.classNames.map(() => []);
+        finishBulkApply(menu);
+    };
+    menu.appendChild(clearBtn);
+
+    // List materials
+    materials.forEach(m => {
+        const item = document.createElement('button');
+        item.className = 'text-[12px] font-bold text-slate-700 p-2 hover:bg-emerald-50 hover:text-emerald-700 rounded text-right flex items-center gap-2 transition-colors';
+        const color = state.materialColors[state.currentStage]?.[m] || '#10b981';
+        item.innerHTML = `<span class="w-3 h-3 rounded-full" style="background-color: ${color}"></span> ${m}`;
+        item.onclick = () => {
+            state.tableRows[rowIndex].subjects = state.classNames.map(() => [m]);
+            finishBulkApply(menu);
+        };
+        menu.appendChild(item);
+    });
+
+    document.body.appendChild(menu);
+    if (window.lucide) lucide.createIcons();
+
+    // Close on outside click
+    const closer = (e) => {
+        if (!menu.contains(e.target) && !btnEl.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('click', closer);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closer), 10);
+}
+
+function finishBulkApply(menu) {
+    menu.remove();
+    renderTable();
+    queueSave();
+    showToast('تم تحديث الصف بالكامل');
+}
+
 function resetScheduleOnly() {
     if (!confirm('هل تريد تفريغ مواد الجدول مع بقاء التواريخ والإعدادات؟')) return;
     state.tableRows.forEach(row => {
@@ -1502,7 +1584,7 @@ function updatePrintStyle() {
     if (!style.parentNode) document.head.appendChild(style);
 }
 
-function autoFitPrint() {
+function autoFitPrint(forcedWidth) {
     const root = document.querySelector(".print-root");
     if (!root) return;
 
@@ -1511,13 +1593,12 @@ function autoFitPrint() {
     // 1. تصفير كل شيء
     root.classList.remove('compact-mode', 'dense-mode');
     root.style.transform = 'none';
-    root.style.width = '100%';
+    root.style.width = forcedWidth ? (forcedWidth + 'px') : '100%';
 
     // 2. حساب ارتفاع A4 المتاح (بعد خصم الهوامش)
-    // @page margin: 6mm ، padding: 4mm → مجموع = 10mm من كل جانب = 20mm
     const MM_TO_PX = 3.7795275591; // 96 DPI
     const pageHeight = (orientation === 'portrait' ? 297 : 210) * MM_TO_PX;
-    const margins = 20 * MM_TO_PX; // 6mm page + 4mm padding × 2
+    const margins = 20 * MM_TO_PX; 
     const availableHeight = pageHeight - margins;
 
     // 3. قياس الارتفاع الحالي
@@ -1567,14 +1648,14 @@ function printOrExportPDF() {
         // A4 at 96 DPI: portrait=794px, landscape=1123px
         const targetWidth = orientation === 'portrait' ? 794 : 1123;
 
-        _enterPrintMode();
-        autoFitPrint();
+        _enterPrintMode(targetWidth);
+        autoFitPrint(targetWidth);
 
         const el = byId('printArea');
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
 
         const opt = {
-            margin: [6, 6, 6, 6], // 6mm margins matching @page
+            margin: [4, 4, 4, 4], // Reduced margins for better fit
             filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1586,7 +1667,8 @@ function printOrExportPDF() {
                 width: targetWidth,
                 windowWidth: targetWidth,
                 scrollX: 0,
-                scrollY: 0
+                scrollY: 0,
+                x: 0
             },
             jsPDF: {
                 unit: 'mm',
@@ -1613,13 +1695,13 @@ function printOrExportPDF() {
     }
 }
 
-function _enterPrintMode() {
+function _enterPrintMode(targetWidth) {
     document.body.classList.add('is-printing');
     const el = byId('printArea');
-    if (el) {
-        el.style.border = 'none';
-        el.style.boxShadow = 'none';
-        el.style.borderRadius = '0';
+    if (el && targetWidth) {
+        el.style.width = targetWidth + 'px';
+        el.style.margin = '0';
+        el.style.maxWidth = 'none';
     }
 }
 
@@ -1634,6 +1716,9 @@ function _exitPrintMode() {
     }
     const el = byId('printArea');
     if (el) {
+        el.style.width = '';
+        el.style.margin = '';
+        el.style.maxWidth = '';
         el.style.border = '';
         el.style.boxShadow = '';
         el.style.borderRadius = '';

@@ -333,9 +333,8 @@ body {
 
 .schedule-table th:nth-child(2),
 .schedule-table td:nth-child(2) {
-    width: 110px;
-    min-width: 90px;
-    white-space: nowrap;
+    width: 170px;
+    min-width: 150px;
 }
 
 .schedule-table th:nth-child(n+3),
@@ -385,10 +384,12 @@ body {
 }
 
 .print-material-icon {
-    width: 16px;
-    height: 16px;
-    margin-inline-end: 5px;
-    vertical-align: middle;
+    width: 24px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 .add-subject-btn {
@@ -411,12 +412,16 @@ body {
 }
 
 .print-subject-line {
-    display: block;
-    padding: 3px 2px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 4px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+}
+
+.print-subject-line > span:last-child {
+    font-weight: 900;
 }
 
 .print-subject-line+.print-subject-line {
@@ -510,10 +515,7 @@ body {
    ═══════════════════════════════════════════════════════════ */
 @media print {
 
-    @page {
-        size: A4;
-        margin: 6mm;
-    }
+    /* يتم التعامل مع @page ديناميكياً عبر JS */
 
     /* ─── 1. إعادة تعيين الجذر ─── */
     html, body {
@@ -572,7 +574,7 @@ body {
     .print-container {
         width: 100% !important;
         max-width: 100% !important;
-        min-height: 0 !important;  /* منع الصفحة الفارغة الثالثة */
+        min-height: 0 !important;
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
@@ -585,8 +587,8 @@ body {
     /* ─── 6. الحاوية الداخلية (print-root) ─── */
     .print-root {
         width: 100% !important;
-        min-height: 275mm !important; /* ملء ارتفاع الصفحة دون تجاوزها */
-        padding: 4mm !important;
+        min-height: auto !important;
+        padding: 2mm !important;
         margin: 0 !important;
         box-sizing: border-box !important;
         transform-origin: top center;
@@ -602,6 +604,15 @@ body {
         break-inside: avoid !important;
         margin-bottom: 6px !important;
     }
+
+    .print-body {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+    }
+
+    .flex-1 { flex: 1 1 0% !important; }
 
     /* ─── 8. الجداول ─── */
     table {
@@ -619,12 +630,20 @@ body {
     }
 
     th, td {
-        border: 1.5px solid #000 !important;
-        padding: 8px 5px !important;
+        border: 2px solid #000 !important;
+        padding: 14px 8px !important; /* Significantly increased padding */
         text-align: center !important;
         word-break: break-word !important;
         overflow: visible !important;
-        font-size: 13px !important;
+        font-size: 18px !important; /* Even larger font */
+        line-height: 1.4 !important;
+    }
+
+    /* موازنة عمود التاريخ لمنع التداخل */
+    .schedule-table td:nth-child(2) {
+        font-size: 15px !important;
+        min-width: 170px !important;
+        white-space: nowrap !important;
     }
 
     /* ─── 9. إظهار النصوص الطباعية ─── */
@@ -661,13 +680,13 @@ body {
     .compact-mode .print-header { margin-bottom: 2px !important; }
     .compact-mode table { margin-top: 1px !important; margin-bottom: 1px !important; }
 
-    .print-root.dense-mode { font-size: 0.88em !important; }
+    .print-root.dense-mode { font-size: 0.98em !important; }
     .dense-mode th, .dense-mode td {
-        padding: 4px 3px !important;
-        font-size: 11px !important;
-        line-height: 1.15 !important;
+        padding: 8px 6px !important;
+        font-size: 16px !important;
+        line-height: 1.2 !important;
     }
-    .dense-mode h1 { font-size: 16px !important; }
+    .dense-mode h1 { font-size: 24px !important; }
 
     /* ─── 14. Safari / iOS ─── */
     * { -webkit-region-break-inside: avoid; }
@@ -714,7 +733,7 @@ body.is-printing .print-container {
     box-shadow: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10px !important;
     min-height: 0 !important;
 }
 
