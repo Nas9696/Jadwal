@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بوابة المعلم | الجدول الذكي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="teacher.css?v=3">
+</head>
+<body>
+    <nav class="topbar no-print">
+        <div class="topbar-inner">
+            <a href="../home.html" class="brand">
+                <span class="brand-icon"><i data-lucide="layout-grid"></i></span>
+                <span>
+                    <strong>بوابة المعلم</strong>
+                    <small id="header-stage">إعداد المرحلة...</small>
+                </span>
+            </a>
+            <div class="top-links">
+                <a href="../home.html">الرئيسية</a>
+                <a href="../index.html">الاختبارات</a>
+                <a class="active" href="teacher.html">المعلم</a>
+                <a href="../student/student.html">الطالب</a>
+            </div>
+            <div id="live-clock" class="clock">00:00</div>
+        </div>
+    </nav>
+
+    <main class="layout">
+        <aside class="control-panel no-print">
+            <section class="panel">
+                <div class="panel-heading">
+                    <i data-lucide="sliders-horizontal"></i>
+                    <h2>لوحة التحكم</h2>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>اسم المعلم</span>
+                        <input id="teacher-name" type="text" placeholder="مثال: أ. أحمد محمد">
+                    </label>
+                    <label>
+                        <span>القاعة / المكتب</span>
+                        <input id="teacher-room" type="text" placeholder="اختياري">
+                    </label>
+                    <label>
+                        <span>المرحلة</span>
+                        <select id="stage-select"></select>
+                    </label>
+                    <label>
+                        <span>الصف الافتراضي</span>
+                        <select id="grade-select"></select>
+                    </label>
+                    <label>
+                        <span>نمط تسمية الفصول</span>
+                        <select id="section-pattern"></select>
+                    </label>
+                    <label>
+                        <span>عدد الشعب</span>
+                        <input id="section-count" type="number" min="1" max="12">
+                    </label>
+                    <label class="wide">
+                        <span>أسماء مخصصة للفصول</span>
+                        <textarea id="section-custom" rows="3" placeholder="مثال:&#10;1 / 1&#10;1 / 2&#10;أول أ"></textarea>
+                    </label>
+                    <label>
+                        <span>نوع التوقيت</span>
+                        <select id="timing-mode"></select>
+                    </label>
+                    <label>
+                        <span>بداية اليوم</span>
+                        <input id="timing-start" type="time">
+                    </label>
+                    <label>
+                        <span>مدة الحصة</span>
+                        <input id="period-minutes" type="number" min="20" max="90">
+                    </label>
+                    <label>
+                        <span>عدد الحصص</span>
+                        <input id="period-count" type="number" min="1" max="10">
+                    </label>
+                    <label>
+                        <span>الفسحة بعد الحصة</span>
+                        <input id="break-after" type="number" min="0" max="10">
+                    </label>
+                    <label>
+                        <span>مدة الفسحة</span>
+                        <input id="break-minutes" type="number" min="0" max="60">
+                    </label>
+                </div>
+                <label class="switch-row">
+                    <span>جرس تلقائي عند بداية/نهاية الحصة</span>
+                    <input id="sound-enabled" type="checkbox">
+                </label>
+            </section>
+
+            <section class="panel">
+                <div class="panel-heading">
+                    <i data-lucide="plus-circle"></i>
+                    <h2>إضافة حصة</h2>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>المادة</span>
+                        <select id="subject-select"></select>
+                    </label>
+                    <label>
+                        <span>الفصل / الشعبة</span>
+                        <select id="section-select"></select>
+                    </label>
+                    <label>
+                        <span>اليوم</span>
+                        <select id="day-select">
+                            <option>الأحد</option>
+                            <option>الاثنين</option>
+                            <option>الثلاثاء</option>
+                            <option>الأربعاء</option>
+                            <option>الخميس</option>
+                        </select>
+                    </label>
+                    <label class="wide">
+                        <span>الحصة والتوقيت</span>
+                        <select id="period-select"></select>
+                    </label>
+                    <label>
+                        <span>بداية مخصصة</span>
+                        <input id="custom-start" type="time">
+                    </label>
+                    <label>
+                        <span>نهاية مخصصة</span>
+                        <input id="custom-end" type="time">
+                    </label>
+                </div>
+                <div class="action-row">
+                    <button class="primary-btn" onclick="addSession()"><i data-lucide="save"></i> حفظ الحصة</button>
+                    <button class="soft-btn" onclick="generateWeek()"><i data-lucide="wand-sparkles"></i> توليد أسبوع</button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-heading">
+                    <i data-lucide="database"></i>
+                    <h2>البيانات</h2>
+                </div>
+                <div class="action-row stack">
+                    <button class="soft-btn" onclick="exportData()"><i data-lucide="download"></i> تصدير</button>
+                    <button class="soft-btn" onclick="byId('import-file').click()"><i data-lucide="upload"></i> استيراد</button>
+                    <button class="danger-btn" onclick="clearSchedule()"><i data-lucide="eraser"></i> تفريغ الجدول</button>
+                    <button class="danger-btn" onclick="clearData()"><i data-lucide="trash-2"></i> مسح الكل</button>
+                    <input id="import-file" type="file" accept=".json" hidden>
+                </div>
+            </section>
+        </aside>
+
+        <section class="workspace">
+            <section class="status-card">
+                <div class="timer-wrap">
+                    <svg viewBox="0 0 140 140">
+                        <circle cx="70" cy="70" r="60"></circle>
+                        <circle id="timer-progress" cx="70" cy="70" r="60"></circle>
+                    </svg>
+                    <strong id="countdown">00:00</strong>
+                </div>
+                <div>
+                    <p id="header-teacher">أضف اسم المعلم من لوحة التحكم</p>
+                    <h1 id="current-task">جاري التحميل...</h1>
+                    <span id="next-task">القادم: -</span>
+                </div>
+                <div class="summary-grid">
+                    <div><span>المرحلة</span><strong id="summary-stage">-</strong></div>
+                    <div><span>الصف</span><strong id="summary-grade">-</strong></div>
+                    <div><span>الحصص</span><strong id="summary-lessons">0</strong></div>
+                    <div><span>التوقيت</span><strong id="summary-timing">-</strong></div>
+                </div>
+            </section>
+
+            <div class="tabs no-print">
+                <button onclick="switchTab('grid')" id="btn-grid" class="tab-btn active"><i data-lucide="table-2"></i> الجدول</button>
+                <button onclick="switchTab('timeline')" id="btn-timeline" class="tab-btn"><i data-lucide="list-timeline"></i> اليوم</button>
+                <button onclick="switchTab('manage')" id="btn-manage" class="tab-btn"><i data-lucide="settings-2"></i> التفاصيل</button>
+            </div>
+
+            <section id="view-grid" class="tab-content active">
+                <div class="table-shell">
+                    <div id="weekly-grid-container"></div>
+                </div>
+            </section>
+
+            <section id="view-timeline" class="tab-content">
+                <div id="timeline-container" class="timeline-list"></div>
+            </section>
+
+            <section id="view-manage" class="tab-content">
+                <div class="details-grid">
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <i data-lucide="clock-3"></i>
+                            <h2>معاينة التوقيت</h2>
+                        </div>
+                        <div id="timing-preview" class="period-grid"></div>
+                    </article>
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <i data-lucide="book-open"></i>
+                            <h2>مواد المرحلة</h2>
+                        </div>
+                        <div id="subject-list" class="subject-list"></div>
+                    </article>
+                    <article class="panel">
+                        <div class="panel-heading">
+                            <i data-lucide="layers-3"></i>
+                            <h2>الفصول الناتجة</h2>
+                        </div>
+                        <div id="section-list" class="subject-list"></div>
+                    </article>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="../shared/shared.js"></script>
+    <script src="teacher.js?v=3"></script>
+</body>
+</html>

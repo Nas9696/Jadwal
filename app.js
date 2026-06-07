@@ -15,8 +15,35 @@ const materialVisuals = {
     'كيمياء': { emoji: '🧪', icon: 'flask-conical', color: '#0d9488' },
     'أحياء': { emoji: '🧬', icon: 'dna', color: '#16a34a' },
     'كفايات': { emoji: '✍️', icon: 'pen-line', color: '#9333ea' },
-    'إجازة': { emoji: '☕', icon: 'coffee', color: '#64748b' }
+    'إجازة': { emoji: '☕', icon: 'coffee', color: '#64748b' },
+    'مركزي': { emoji: '🏛️', icon: 'landmark', color: '#b45309' }
 };
+const HOLIDAY_SUBJECT = 'إجازة';
+const CENTRAL_SUBJECT = 'مركزي';
+const REST_SUBJECT = 'راحة';
+Object.assign(materialVisuals, {
+    'رياضيات': { emoji: '🧮', icon: 'calculator', color: '#2563eb' },
+    'لغتي': { emoji: '📚', icon: 'book-open-text', color: '#dc2626' },
+    'علوم': { emoji: '🧪', icon: 'flask-conical', color: '#059669' },
+    'إسلامية': { emoji: '🕌', icon: 'landmark', color: '#047857' },
+    'إنجليزي': { emoji: '🔤', icon: 'languages', color: '#7c3aed' },
+    'رقمية': { emoji: '💻', icon: 'monitor-smartphone', color: '#0891b2' },
+    'تقنية رقمية': { emoji: '💻', icon: 'monitor-smartphone', color: '#0891b2' },
+    'م. حياتية': { emoji: '🤝', icon: 'heart-handshake', color: '#65a30d' },
+    'مهارات حياتية': { emoji: '🤝', icon: 'heart-handshake', color: '#65a30d', short: 'م. حياتية' },
+    'اجتماعيات': { emoji: '🗺️', icon: 'map', color: '#ca8a04' },
+    'فنية': { emoji: '🎨', icon: 'palette', color: '#db2777' },
+    'بدنية': { emoji: '🏃', icon: 'dumbbell', color: '#ea580c' },
+    'فيزياء': { emoji: '⚛️', icon: 'atom', color: '#4f46e5' },
+    'كيمياء': { emoji: '⚗️', icon: 'flask-conical', color: '#0d9488' },
+    'أحياء': { emoji: '🧬', icon: 'dna', color: '#16a34a' },
+    'كفايات': { emoji: '✍️', icon: 'pen-line', color: '#9333ea' },
+    'تفكير ناقد': { emoji: '🧠', icon: 'brain', color: '#7c2d12' },
+    'نشاط': { emoji: '✨', icon: 'sparkles', color: '#0f766e' },
+    'إجازة': { emoji: '☕', icon: 'coffee', color: '#64748b' },
+    'راحة': { emoji: '🛋️', icon: 'armchair', color: '#475569' },
+    'مركزي': { emoji: '🏛️', icon: 'landmark', color: '#b45309' }
+});
 const classTemplates = {
     elementary: {
         elementary6: ['الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس'],
@@ -114,6 +141,7 @@ const defaultState = {
 
 let state = deepClone(defaultState);
 let saveTimer = null;
+let previewFitTimer = null;
 
 function deepClone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -182,12 +210,16 @@ function getMaterialVisual(subject) {
     return materialVisuals[subject] || { emoji: '📌', icon: 'sparkles', color: '#475569' };
 }
 
+function isCentralSubject(subject) {
+    return String(subject || '').includes('مركزي');
+}
+
 function createMaterialIcon(subject, extraClass = '') {
     const visual = getMaterialVisual(subject);
     const icon = document.createElement('span');
     icon.className = `material-icon ${extraClass}`.trim();
     icon.style.color = visual.color;
-    icon.innerHTML = `<i data-lucide="${visual.icon}" class="w-4 h-4"></i>`;
+    icon.textContent = visual.emoji || '📌';
     return icon;
 }
 
@@ -200,6 +232,12 @@ function parseArabicNum(str) {
     if (!str && str !== 0) return 0;
     const englishDigits = String(str).replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
     return parseInt(englishDigits, 10) || 0;
+}
+
+function getHijriMonthLength(year, month) {
+    if (year === 1447 && month === 12) return 29;
+    if (findGregorianForHijri(year, month, 30)) return 30;
+    return 29;
 }
 
 function convertNumberInputs() {
@@ -291,7 +329,7 @@ function attachInputs() {
             }
             if (id === 'logo_url_input') state.fields.logo_data_url = '';
             if (['days_count', 'start_day', 'start_month', 'week2_days_count', 'week2_start_day', 'week2_start_month'].includes(id)) {
-                normalizeDateInputs();
+                normalizeDateInputs(false);
                 initTable();
             }
             updateAll();
@@ -329,21 +367,34 @@ function attachInputs() {
     });
 }
 
-function normalizeDateInputs() {
+function normalizeDateInputs(commitDisplay = true) {
+    const scheduleYear = getScheduleHijriYear();
     state.fields.days_count = String(clampNumber(parseArabicNum(byId('days_count').value), 1, 12, 5));
-    state.fields.start_day = String(clampNumber(parseArabicNum(byId('start_day').value), 1, 30, 1));
     state.fields.start_month = String(clampNumber(parseArabicNum(byId('start_month').value), 1, 12, 1));
-    byId('days_count').value = toArabicDigits(state.fields.days_count);
-    byId('start_day').value = toArabicDigits(state.fields.start_day);
-    byId('start_month').value = toArabicDigits(state.fields.start_month);
+    const startMonthLength = getHijriMonthLength(scheduleYear, parseArabicNum(state.fields.start_month));
+    const requestedStartDay = parseArabicNum(byId('start_day').value);
+    state.fields.start_day = String(clampNumber(requestedStartDay, 1, startMonthLength, 1));
+    if (commitDisplay) {
+        byId('days_count').value = toArabicDigits(state.fields.days_count);
+        byId('start_day').value = toArabicDigits(state.fields.start_day);
+        byId('start_month').value = toArabicDigits(state.fields.start_month);
+    } else if (requestedStartDay > startMonthLength) {
+        byId('start_day').value = toArabicDigits(state.fields.start_day);
+    }
 
     if (byId('week2_days_count')) {
         state.fields.week2_days_count = String(clampNumber(parseArabicNum(byId('week2_days_count').value), 1, 12, 5));
-        state.fields.week2_start_day = String(clampNumber(parseArabicNum(byId('week2_start_day').value), 1, 30, 1));
         state.fields.week2_start_month = String(clampNumber(parseArabicNum(byId('week2_start_month').value), 1, 12, 1));
-        byId('week2_days_count').value = toArabicDigits(state.fields.week2_days_count);
-        byId('week2_start_day').value = toArabicDigits(state.fields.week2_start_day);
-        byId('week2_start_month').value = toArabicDigits(state.fields.week2_start_month);
+        const week2MonthLength = getHijriMonthLength(scheduleYear, parseArabicNum(state.fields.week2_start_month));
+        const requestedWeek2StartDay = parseArabicNum(byId('week2_start_day').value);
+        state.fields.week2_start_day = String(clampNumber(requestedWeek2StartDay, 1, week2MonthLength, 1));
+        if (commitDisplay) {
+            byId('week2_days_count').value = toArabicDigits(state.fields.week2_days_count);
+            byId('week2_start_day').value = toArabicDigits(state.fields.week2_start_day);
+            byId('week2_start_month').value = toArabicDigits(state.fields.week2_start_month);
+        } else if (requestedWeek2StartDay > week2MonthLength) {
+            byId('week2_start_day').value = toArabicDigits(state.fields.week2_start_day);
+        }
     }
 }
 
@@ -374,6 +425,27 @@ function applyStateToInputs() {
 function saveState(manual = false) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if (manual) showToast('تم حفظ البيانات بنجاح');
+}
+
+const materialSortOrder = [
+    'رياضيات', 'لغتي', 'إنجليزي', 'علوم', 'إسلامية',
+    'فيزياء', 'كيمياء', 'أحياء', 'علم الأرض', 'علم البيئة',
+    'اجتماعيات', 'جغرافيا', 'علم نفس',
+    'رقمية', 'تقنية رقمية', 'مواطنة رقمية',
+    'كفايات', 'تفكير ناقد', 'دراسات أدبية',
+    'م. حياتية', 'مهارات حياتية', 'معرفة مالية', 'تربية مهنية',
+    'بدنية', 'لياقة وثقافة', 'فنية', 'فنون', 'نشاط',
+    HOLIDAY_SUBJECT, REST_SUBJECT, CENTRAL_SUBJECT
+];
+
+function sortMaterialsList(materials) {
+    const order = new Map(materialSortOrder.map((name, index) => [name, index]));
+    return [...new Set(materials)].sort((a, b) => {
+        const aOrder = order.has(a) ? order.get(a) : 999;
+        const bOrder = order.has(b) ? order.get(b) : 999;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return String(a).localeCompare(String(b), 'ar');
+    });
 }
 
 function mergeLoadedState(loaded) {
@@ -411,7 +483,7 @@ function mergeLoadedState(loaded) {
     Object.keys(merged.materials).forEach(stage => {
         merged.materials[stage] = merged.materials[stage].map(m => migrations[m] || m);
         // Remove duplicates
-        merged.materials[stage] = [...new Set(merged.materials[stage])];
+        merged.materials[stage] = sortMaterialsList(merged.materials[stage]);
     });
 
     // Update subjects in rows
@@ -436,6 +508,7 @@ function mergeLoadedState(loaded) {
                 merged.materials[stage].push(mat);
             }
         });
+        merged.materials[stage] = sortMaterialsList(merged.materials[stage]);
     });
 
     return merged;
@@ -537,6 +610,10 @@ function updateAll() {
     if (printArea && state.fields.font_family) {
         printArea.style.fontFamily = `'${state.fields.font_family}', sans-serif`;
     }
+    const printRoot = document.querySelector('.print-root');
+    if (printRoot && state.fields.font_family) {
+        printRoot.style.fontFamily = `'${state.fields.font_family}', sans-serif`;
+    }
 
     const w2s = byId('week2_settings');
     if (w2s) w2s.classList.toggle('hidden', !isEnabled('week2_enabled'));
@@ -554,13 +631,14 @@ function updateAll() {
         }
     }
     if (window.lucide) lucide.createIcons();
+    fitPreviewToViewport();
 }
 
 function renderTablesContainer() {
     const container = byId('tables_container');
     if (!container) return;
     container.innerHTML = '';
-    container.className = 'px-8 flex flex-col flex-1 gap-2';
+    container.className = 'tables-container px-4 md:px-8';
 
     const isMinisterial = state.fields.table_mode === 'ministerial';
 
@@ -613,9 +691,9 @@ function renderTablesContainer() {
         }
         // Traditional table
         const tableWrap = document.createElement('div');
-        tableWrap.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar flex-1';
+        tableWrap.className = 'table-scroll w-full overflow-x-hidden print:overflow-visible hide-scrollbar';
         const table = document.createElement('table');
-        table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-[700px] print:min-w-0 md:min-w-full';
+        table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-0 print:min-w-0 md:min-w-full';
         const thead = document.createElement('thead');
         thead.id = 'table_head';
         thead.className = 'bg-emerald-900 text-white';
@@ -632,9 +710,9 @@ function renderTablesContainer() {
 
 function buildMinisterialTable(rows, isWeek2) {
     const wrapper = document.createElement('div');
-    wrapper.className = 'w-full overflow-x-auto print:overflow-visible pb-4 hide-scrollbar flex-1';
+    wrapper.className = 'table-scroll w-full overflow-x-hidden print:overflow-visible hide-scrollbar';
     const table = document.createElement('table');
-    table.className = 'schedule-table w-full border-collapse border-2 border-slate-900 text-center min-w-[650px] print:min-w-0 md:min-w-full';
+    table.className = 'schedule-table schedule-table--printable w-full border-collapse border-2 border-slate-900 text-center min-w-0';
 
     const thead = document.createElement('thead');
     thead.className = 'bg-emerald-900 text-white';
@@ -667,10 +745,10 @@ function buildMinisterialTable(rows, isWeek2) {
 
         const bulkBtn = document.createElement('button');
         bulkBtn.type = 'button';
-        bulkBtn.className = 'bulk-apply-btn no-print w-6 h-6 bg-emerald-500 text-white rounded-full shadow-sm hover:bg-emerald-600 transition-colors flex items-center justify-center mt-1';
+        bulkBtn.className = 'bulk-apply-btn no-print w-7 h-7 bg-slate-500 text-white rounded-full shadow-sm hover:bg-slate-600 transition-colors flex items-center justify-center mt-1';
         bulkBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i>';
-        bulkBtn.title = 'اختيار مادة من البنك';
-        bulkBtn.onclick = (e) => showBulkMaterialSelector(rIdx, bulkBtn, true, rows);
+        bulkBtn.title = 'تعبئة اليوم من قائمة المواد';
+        bulkBtn.onclick = (event) => showBulkMaterialSelector(rIdx, event.currentTarget, true, rows);
         dayWrap.appendChild(bulkBtn);
 
         dayTd.appendChild(dayWrap);
@@ -678,8 +756,9 @@ function buildMinisterialTable(rows, isWeek2) {
 
         const dateTd = document.createElement('td');
         dateTd.className = 'p-2 border border-slate-900 text-xs font-bold';
-        const dateVal = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
-        dateTd.innerHTML = `<span dir="ltr">${dateVal}</span>`;
+        const arabicDate = isEnabled('use_arabic_numerals');
+        const dateVal = arabicDate ? toArabicDigits(row.date) : row.date;
+        dateTd.innerHTML = renderDateHtml(dateVal, arabicDate);
         tr.appendChild(dateTd);
 
         const classesTd = document.createElement('td');
@@ -732,7 +811,7 @@ function buildMinisterialTable(rows, isWeek2) {
         typeTd.className = 'p-1 border border-slate-900';
         const typeSelect = document.createElement('select');
         typeSelect.className = 'list-mode-input cell-tools';
-        ['تكويني', 'اختبار الفترة', 'تكويني -فتري', 'تكويني- فتري', 'نهائي'].forEach(v => {
+        ['تكويني', 'اختبار الفترة', 'تكويني -فتري', 'تكويني- فتري', 'نهائي', HOLIDAY_SUBJECT, REST_SUBJECT].forEach(v => {
             const o = document.createElement('option');
             o.value = v; o.textContent = v;
             o.selected = v === row.test_type;
@@ -759,10 +838,35 @@ function buildMinisterialTable(rows, isWeek2) {
             o.selected = m === row.material;
             matSelect.appendChild(o);
         });
+        const centralOpt = document.createElement('option');
+        centralOpt.value = CENTRAL_SUBJECT;
+        centralOpt.textContent = CENTRAL_SUBJECT;
+        centralOpt.selected = row.material === CENTRAL_SUBJECT;
+        matSelect.appendChild(centralOpt);
+
+        const holidayOpt = document.createElement('option');
+        holidayOpt.value = HOLIDAY_SUBJECT;
+        holidayOpt.textContent = HOLIDAY_SUBJECT;
+        holidayOpt.selected = row.material === HOLIDAY_SUBJECT;
+        matSelect.appendChild(holidayOpt);
+
+        const restOpt = document.createElement('option');
+        restOpt.value = REST_SUBJECT;
+        restOpt.textContent = REST_SUBJECT;
+        restOpt.selected = row.material === REST_SUBJECT;
+        matSelect.appendChild(restOpt);
+
         const updateMatColor = () => {
+            matTd.classList.toggle('central-ministerial-cell', isCentralSubject(row.material));
             if (isEnabled('use_material_colors') && row.material) {
                 const mColor = state.materialColors[state.currentStage]?.[row.material];
                 if (mColor) { matTd.style.backgroundColor = mColor; return; }
+            }
+            if (isCentralSubject(row.material)) {
+                matTd.style.backgroundColor = '#fffbeb';
+                matTd.style.webkitPrintColorAdjust = 'exact';
+                matTd.style.printColorAdjust = 'exact';
+                return;
             }
             if (row.material) {
                 const matColors = ['#e8f5e9', '#e3f2fd', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#fff8e1', '#f1f8e9', '#e8eaf6'];
@@ -776,11 +880,13 @@ function buildMinisterialTable(rows, isWeek2) {
         matSelect.addEventListener('change', () => {
             row.material = matSelect.value;
             matPrint.textContent = matSelect.value || '-';
+            matPrint.classList.toggle('central-subject-print', isCentralSubject(row.material));
             updateMatColor();
             queueSave();
         });
         const matPrint = document.createElement('span');
         matPrint.className = 'print-list-text font-black text-sm text-center';
+        if (isCentralSubject(row.material)) matPrint.classList.add('central-subject-print');
         matPrint.style.color = '#000';
         matPrint.textContent = row.material || '-';
         updateMatColor();
@@ -808,7 +914,10 @@ function switchTab(tab) {
     const btnEl = byId('btn-' + tab);
     if (tabEl) tabEl.classList.add('active');
     if (btnEl) btnEl.classList.add('active');
-    if (tab === 'preview') updateAll();
+    if (tab === 'preview') {
+        updateAll();
+        window.requestAnimationFrame(fitPreviewToViewport);
+    }
     if (window.lucide) lucide.createIcons();
 }
 
@@ -823,6 +932,97 @@ function updateHeaderBlock(id, lines, align, fontSize) {
         p.textContent = line || '';
         block.appendChild(p);
     });
+}
+
+function getScheduleHijriYear() {
+    const yearText = `${state.fields.h_l3 || ''} ${state.fields.week_number || ''}`;
+    const match = yearText.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).match(/\d{4}/);
+    return match ? parseInt(match[0], 10) : 1447;
+}
+
+function getHijriPartsFromDate(date) {
+    try {
+        const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+            day: 'numeric',
+            month: 'numeric',
+            year: 'numeric',
+            timeZone: 'Asia/Riyadh'
+        }).formatToParts(date);
+        const pick = type => parseInt(parts.find(part => part.type === type)?.value, 10);
+        const year = pick('year');
+        const month = pick('month');
+        const day = pick('day');
+        if (year && month && day) return { year, month, day };
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+function findGregorianForHijri(year, month, day) {
+    const islamicEpoch = Date.UTC(622, 6, 19);
+    const approxDays = Math.floor(((year - 1) * 354.367) + ((month - 1) * 29.53) + day);
+    const approx = islamicEpoch + (approxDays * 24 * 60 * 60 * 1000);
+    const start = approx - (45 * 24 * 60 * 60 * 1000);
+    const end = approx + (45 * 24 * 60 * 60 * 1000);
+    for (let time = start; time <= end; time += 24 * 60 * 60 * 1000) {
+        const date = new Date(time);
+        const parts = getHijriPartsFromDate(date);
+        if (parts && parts.year === year && parts.month === month && parts.day === day) {
+            return date;
+        }
+    }
+    return null;
+}
+
+function isTabularHijriLeapYear(year) {
+    return ((11 * year) + 14) % 30 < 11;
+}
+
+function getFallbackHijriMonthLength(year, month) {
+    if (year === 1447 && month === 12) return 29;
+    if (month === 12) return isTabularHijriLeapYear(year) ? 30 : 29;
+    return month % 2 === 1 ? 30 : 29;
+}
+
+function addFallbackHijriDays(parts, days) {
+    let { year, month, day } = parts;
+    for (let i = 0; i < days; i++) {
+        day += 1;
+        if (day > getFallbackHijriMonthLength(year, month)) {
+            day = 1;
+            month += 1;
+            if (month > 12) {
+                month = 1;
+                year += 1;
+            }
+        }
+    }
+    return { year, month, day };
+}
+
+function formatHijriDate(parts) {
+    return `${String(parts.day).padStart(2, '0')}/${String(parts.month).padStart(2, '0')}/${parts.year} هـ`;
+}
+
+function formatDateForDisplay(dateText) {
+    return String(dateText || '')
+        .replace(/\s*\/\s*/g, '/')
+        .replace(/\s*هـ\s*$/u, ' هـ')
+        .trim();
+}
+
+function renderDateHtml(dateText, arabicMode = false) {
+    const cleanDate = String(dateText || '')
+        .replace(/\s*\/\s*/g, '/')
+        .trim()
+        .split(/\s+/)[0] || '';
+    const parts = cleanDate.split('/');
+    const displayDate = arabicMode && parts.length === 3
+        ? `${parts[2]}/${parts[1]}/${parts[0]}`
+        : cleanDate;
+    const dir = arabicMode ? 'rtl' : 'ltr';
+    return `<span class="date-print date-print--${dir}" dir="${dir}"><span class="date-number">${displayDate}</span><span class="date-suffix">هـ</span></span>`;
 }
 
 function initTable(keepSubjects = false) {
@@ -846,25 +1046,32 @@ function buildWeekRows(daysCountRaw, startDayRaw, startMonthRaw, startDayName, o
     const count = clampNumber(daysCountRaw, 1, 10, 5);
     const startDay = clampNumber(startDayRaw, 1, 30, 1);
     const startMonth = clampNumber(startMonthRaw, 1, 12, 1);
+    const startYear = getScheduleHijriYear();
     const startIdx = Math.max(0, daysSequence.indexOf(startDayName));
     const classesDefault = (stageClassesText[state.currentStage] || [])[0] || '';
 
     const rows = [];
-    let currentD = startDay;
-    let currentM = startMonth;
+    let currentGregorian = findGregorianForHijri(startYear, startMonth, startDay);
+    let currentHijri = currentGregorian ? getHijriPartsFromDate(currentGregorian) : { year: startYear, month: startMonth, day: startDay };
 
     for (let i = 0; i < count; i++) {
         const oldRow = oldRows[i] || {};
+        const dayName = daysSequence[(startIdx + i) % 5];
         rows.push({
-            day: daysSequence[(startIdx + i) % 5],
-            date: `${String(currentD).padStart(2, '0')} / ${String(currentM).padStart(2, '0')} / 1447 هـ`,
+            day: dayName,
+            date: formatHijriDate(currentHijri),
             subjects: Array.from({ length: state.classNames.length }, (_, idx) => normalizeSubjectList(oldRow.subjects?.[idx], true)),
             classes: oldRow.classes || classesDefault,
             test_type: oldRow.test_type || 'تكويني',
             material: oldRow.material || ''
         });
-        currentD += (daysSequence[(startIdx + i) % 5] === 'الخميس') ? 3 : 1;
-        if (currentD > 30) { currentD -= 30; currentM++; if (currentM > 12) currentM = 1; }
+        const daysToAdd = dayName === 'الخميس' ? 3 : 1;
+        if (currentGregorian) {
+            currentGregorian = new Date(currentGregorian.getTime() + (daysToAdd * 24 * 60 * 60 * 1000));
+            currentHijri = getHijriPartsFromDate(currentGregorian) || addFallbackHijriDays(currentHijri, daysToAdd);
+        } else {
+            currentHijri = addFallbackHijriDays(currentHijri, daysToAdd);
+        }
     }
     return rows;
 }
@@ -1171,6 +1378,7 @@ function addMaterial() {
         return;
     }
     state.materials[state.currentStage].push(val);
+    state.materials[state.currentStage] = sortMaterialsList(state.materials[state.currentStage]);
     input.value = '';
     renderMaterialsBank();
     renderTable();
@@ -1205,6 +1413,8 @@ function renderTable() {
         renderTableMultiColumn(head, body);
     }
     if (window.lucide) lucide.createIcons();
+    renderTablesContainer();
+    fitPreviewToViewport();
 }
 
 function renderTableMultiColumn(head, body) {
@@ -1249,10 +1459,10 @@ function renderTableMultiColumn(head, body) {
 
         const bulkBtn = document.createElement('button');
         bulkBtn.type = 'button';
-        bulkBtn.className = 'bulk-apply-btn no-print w-6 h-6 bg-emerald-500 text-white rounded-full shadow-sm hover:bg-emerald-600 transition-colors flex items-center justify-center mt-1';
+        bulkBtn.className = 'bulk-apply-btn no-print w-7 h-7 bg-slate-500 text-white rounded-full shadow-sm hover:bg-slate-600 transition-colors flex items-center justify-center mt-1';
         bulkBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i>';
-        bulkBtn.title = 'تعيين مادة موحدة لجميع الفصول';
-        bulkBtn.onclick = (e) => showBulkMaterialSelector(rIdx, bulkBtn);
+        bulkBtn.title = 'تعبئة اليوم من قائمة المواد';
+        bulkBtn.onclick = (event) => showBulkMaterialSelector(rIdx, event.currentTarget);
         dayWrap.appendChild(bulkBtn);
 
         dayCell.appendChild(dayWrap);
@@ -1260,9 +1470,9 @@ function renderTableMultiColumn(head, body) {
 
         const dateCell = document.createElement('td');
         dateCell.className = 'p-2 border-2 border-slate-900 text-xs font-bold';
-        let dateText = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
-        if (!dateText.includes('هـ')) dateText += ' هـ';
-        dateCell.innerHTML = `<span dir="ltr">${dateText}</span>`;
+        const arabicDate = isEnabled('use_arabic_numerals');
+        const dateText = arabicDate ? toArabicDigits(row.date) : row.date;
+        dateCell.innerHTML = renderDateHtml(dateText, arabicDate);
         if (isEnabled('use_row_colors') && state.rowColors[rIdx]) {
             dateCell.style.backgroundColor = state.rowColors[rIdx];
             dateCell.style.webkitPrintColorAdjust = 'exact';
@@ -1293,12 +1503,26 @@ function renderTableMultiColumn(head, body) {
                 stack.appendChild(createSubjectSelect(rIdx, sIdx, subjectIdx, subject));
             });
 
+            const tools = document.createElement('div');
+            tools.className = 'subject-actions';
+
             const addBtn = document.createElement('button');
             addBtn.type = 'button';
             addBtn.className = 'add-subject-btn';
-            addBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i><span>إضافة مادة</span>';
+            addBtn.innerHTML = '<i data-lucide="plus" class="w-3.5 h-3.5"></i>';
+            addBtn.title = 'إضافة مادة';
             addBtn.addEventListener('click', () => addSubjectSlot(rIdx, sIdx));
-            stack.appendChild(addBtn);
+
+            const centralBtn = document.createElement('button');
+            centralBtn.type = 'button';
+            centralBtn.className = 'central-subject-btn';
+            centralBtn.innerHTML = '<i data-lucide="landmark" class="w-3.5 h-3.5"></i>';
+            centralBtn.title = 'إضافة اختبار مركزي';
+            centralBtn.addEventListener('click', () => addCentralSubjectSlot(rIdx, sIdx));
+
+            tools.appendChild(addBtn);
+            tools.appendChild(centralBtn);
+            stack.appendChild(tools);
 
             const printSpan = document.createElement('span');
             printSpan.className = 'print-subject';
@@ -1312,6 +1536,7 @@ function renderTableMultiColumn(head, body) {
                 printSubjects.forEach(subject => {
                     const line = document.createElement('span');
                     line.className = 'print-subject-line';
+                    if (isCentralSubject(subject)) line.classList.add('central-subject-print');
                     const icon = createMaterialIcon(subject, 'print-material-icon');
                     const text = document.createElement('span');
                     const visual = getMaterialVisual(subject);
@@ -1354,10 +1579,11 @@ function renderTableListMode(head, body) {
 
         const dayCell = createBasicCell(row.day, 'font-black text-sm');
 
-        const dateText = isEnabled('use_arabic_numerals') ? toArabicDigits(row.date) : row.date;
+        const arabicDate = isEnabled('use_arabic_numerals');
+        const dateText = arabicDate ? toArabicDigits(row.date) : row.date;
         const dateCell = document.createElement('td');
         dateCell.className = 'p-2 border-2 border-slate-900 text-xs font-bold';
-        dateCell.innerHTML = `<span dir="ltr">${dateText}</span>`;
+        dateCell.innerHTML = renderDateHtml(dateText, arabicDate);
 
         const classesCell = createInputCell(rIdx, 'classes', 'أدخل الصفوف...');
         const typeCell = createListTypeCell(rIdx);
@@ -1456,15 +1682,26 @@ function createListMaterialCell(rowIndex) {
         select.appendChild(opt);
     });
 
+    [CENTRAL_SUBJECT, HOLIDAY_SUBJECT, REST_SUBJECT].forEach(material => {
+        const opt = document.createElement('option');
+        opt.value = material;
+        opt.textContent = material;
+        opt.selected = material === state.tableRows[rowIndex].material;
+        select.appendChild(opt);
+    });
+
     select.addEventListener('change', () => {
         state.tableRows[rowIndex].material = select.value;
         queueSave();
-        byId(`print_material_${rowIndex}`).textContent = select.value || '-';
+        const printEl = byId(`print_material_${rowIndex}`);
+        printEl.textContent = select.value || '-';
+        printEl.classList.toggle('central-subject-print', isCentralSubject(select.value));
     });
 
     const printText = document.createElement('span');
     printText.id = `print_material_${rowIndex}`;
     printText.className = 'print-list-text';
+    if (isCentralSubject(state.tableRows[rowIndex].material)) printText.classList.add('central-subject-print');
     printText.textContent = state.tableRows[rowIndex].material || '-';
 
     td.appendChild(select);
@@ -1475,6 +1712,7 @@ function createListMaterialCell(rowIndex) {
 function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
     const row = document.createElement('div');
     row.className = 'subject-row';
+    if (isCentralSubject(currentValue)) row.classList.add('central-subject-row');
 
     const iconSlot = document.createElement('span');
     iconSlot.className = 'subject-icon-slot';
@@ -1483,7 +1721,7 @@ function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
     }
 
     const select = document.createElement('select');
-    select.className = 'subject-select min-w-0 flex-1 bg-white/70 border border-emerald-100 rounded font-black cursor-pointer outline-none';
+    select.className = 'subject-select';
     if (currentValue && isEnabled('use_material_colors')) {
         const materialColor = state.materialColors[state.currentStage]?.[currentValue];
         if (materialColor) select.style.backgroundColor = materialColor;
@@ -1513,22 +1751,34 @@ function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
         select.appendChild(option);
     });
 
+    const central = document.createElement('option');
+    central.value = CENTRAL_SUBJECT;
+    central.textContent = CENTRAL_SUBJECT;
+    central.selected = currentValue === CENTRAL_SUBJECT;
+    select.appendChild(central);
+
     const holiday = document.createElement('option');
-    holiday.value = 'إجازة';
-    holiday.textContent = 'إجازة';
-    holiday.selected = currentValue === 'إجازة';
+    holiday.value = HOLIDAY_SUBJECT;
+    holiday.textContent = HOLIDAY_SUBJECT;
+    holiday.selected = currentValue === HOLIDAY_SUBJECT;
     select.appendChild(holiday);
+
+    const rest = document.createElement('option');
+    rest.value = REST_SUBJECT;
+    rest.textContent = REST_SUBJECT;
+    rest.selected = currentValue === REST_SUBJECT;
+    select.appendChild(rest);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
-    deleteBtn.className = 'icon-btn text-red-600 hover:bg-red-50 border border-red-100 cell-tools flex-shrink-0';
+    deleteBtn.className = 'delete-subject-btn cell-tools';
     deleteBtn.title = 'حذف هذه المادة من اليوم';
     deleteBtn.innerHTML = '<i data-lucide="x" class="w-3.5 h-3.5"></i>';
     deleteBtn.addEventListener('click', () => deleteSubjectSlot(rowIndex, classIndex, subjectIndex));
 
-    row.appendChild(iconSlot);
-    row.appendChild(select);
     row.appendChild(deleteBtn);
+    row.appendChild(select);
+    row.appendChild(iconSlot);
     return row;
 }
 
@@ -1538,6 +1788,32 @@ function addSubjectSlot(rowIndex, classIndex) {
     state.tableRows[rowIndex].subjects[classIndex] = subjects;
     renderTable();
     queueSave();
+}
+
+function addCentralSubjectSlot(rowIndex, classIndex) {
+    const subjects = normalizeSubjectList(state.tableRows[rowIndex].subjects[classIndex], true);
+    if (!subjects.includes(CENTRAL_SUBJECT)) subjects.push(CENTRAL_SUBJECT);
+    state.tableRows[rowIndex].subjects[classIndex] = subjects;
+    renderTable();
+    queueSave();
+}
+
+function applyHolidayToRow(rowIndex) {
+    if (!state.tableRows[rowIndex]) return;
+    state.tableRows[rowIndex].subjects = state.classNames.map(() => [HOLIDAY_SUBJECT]);
+    renderTable();
+    queueSave();
+    showToast('تم تعبئة اليوم بإجازة');
+}
+
+function applyHolidayToMinisterialRow(rowIndex, rows) {
+    const row = rows?.[rowIndex];
+    if (!row) return;
+    row.material = HOLIDAY_SUBJECT;
+    row.test_type = HOLIDAY_SUBJECT;
+    renderTable();
+    queueSave();
+    showToast('تم تعبئة اليوم بإجازة');
 }
 
 function deleteSubjectSlot(rowIndex, classIndex, subjectIndex) {
@@ -1587,35 +1863,58 @@ function showBulkMaterialSelector(rowIndex, btnEl, isMinisterial = false, weekRo
     clearBtn.innerHTML = '<i data-lucide="eraser" class="w-4 h-4"></i> مسح الكل';
     clearBtn.onclick = (e) => {
         e.stopPropagation();
-        if (isMinisterial && weekRows) {
-            const row = weekRows[rowIndex];
-            const target = row.isWeek2 ? state.tableRows2 : state.tableRows;
-            if (target[row.originalIdx]) target[row.originalIdx].material = '';
-        } else {
-            state.tableRows[rowIndex].subjects = state.classNames.map(() => []);
-        }
+            if (isMinisterial && weekRows) {
+                const row = weekRows[rowIndex];
+                if (row) {
+                    row.material = '';
+                    row.test_type = (row.test_type === HOLIDAY_SUBJECT || row.test_type === REST_SUBJECT) ? '' : row.test_type;
+                }
+            } else {
+                state.tableRows[rowIndex].subjects = state.classNames.map(() => []);
+            }
         finishBulkApply(menu);
     };
     menu.appendChild(clearBtn);
 
-    // List materials
-    materials.forEach(m => {
-        const item = document.createElement('button');
-        item.className = 'text-[12px] font-bold text-slate-700 p-2 hover:bg-emerald-50 hover:text-emerald-700 rounded text-right flex items-center gap-2 transition-colors';
-        const color = state.materialColors[state.currentStage]?.[m] || '#10b981';
-        item.innerHTML = `<span class="w-3 h-3 rounded-full" style="background-color: ${color}"></span> ${m}`;
-        item.onclick = (e) => {
+    const menuItems = [
+        { name: HOLIDAY_SUBJECT, icon: 'coffee', color: '#64748b', className: 'hover:bg-slate-50 hover:text-slate-700' },
+        { name: REST_SUBJECT, icon: 'armchair', color: '#475569', className: 'hover:bg-slate-50 hover:text-slate-700' },
+        { name: CENTRAL_SUBJECT, icon: 'landmark', color: '#d97706', className: 'hover:bg-amber-50 hover:text-amber-700' },
+        ...materials.map(name => ({
+            name,
+            icon: '',
+            color: state.materialColors[state.currentStage]?.[name] || '#10b981',
+            className: 'hover:bg-emerald-50 hover:text-emerald-700'
+        }))
+    ];
+
+    // List materials and special day values.
+    menuItems.forEach(menuItem => {
+        const m = menuItem.name;
+        const itemBtn = document.createElement('button');
+        itemBtn.className = `text-[12px] font-bold text-slate-700 p-2 rounded text-right flex items-center gap-2 transition-colors ${menuItem.className}`;
+        const visual = menuItem.icon
+            ? `<i data-lucide="${menuItem.icon}" class="w-4 h-4" style="color: ${menuItem.color}"></i>`
+            : `<span class="w-3 h-3 rounded-full" style="background-color: ${menuItem.color}"></span>`;
+        itemBtn.innerHTML = `${visual} ${m}`;
+        itemBtn.onclick = (e) => {
             e.stopPropagation();
             if (isMinisterial && weekRows) {
                 const row = weekRows[rowIndex];
-                const target = row.isWeek2 ? state.tableRows2 : state.tableRows;
-                if (target[row.originalIdx]) target[row.originalIdx].material = m;
+                if (row) {
+                    row.material = m;
+                    if (m === HOLIDAY_SUBJECT || m === REST_SUBJECT) {
+                        row.test_type = m;
+                    } else if (row.test_type === HOLIDAY_SUBJECT || row.test_type === REST_SUBJECT) {
+                        row.test_type = 'تكويني';
+                    }
+                }
             } else {
                 state.tableRows[rowIndex].subjects = state.classNames.map(() => [m]);
             }
             finishBulkApply(menu);
         };
-        menu.appendChild(item);
+        menu.appendChild(itemBtn);
     });
 
     document.body.appendChild(menu);
@@ -1673,57 +1972,82 @@ function updatePrintStyle() {
     const style = document.getElementById('dynamic_print_style') || document.createElement('style');
     style.id = 'dynamic_print_style';
     const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
-    style.textContent = `@page { size: ${pageSize}; margin: 6mm; }`;
+    style.textContent = `@page { size: ${pageSize}; margin: 4mm; }
+@media print { body { overflow: visible !important; } }`;
     if (!style.parentNode) document.head.appendChild(style);
 }
 
 function autoFitPrint(forcedWidth) {
     const root = document.querySelector(".print-root");
     if (!root) return;
-
-    const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
-
-    // 1. تصفير كل شيء
     root.classList.remove('compact-mode', 'dense-mode');
     root.style.transform = 'none';
     root.style.width = forcedWidth ? (forcedWidth + 'px') : '100%';
+}
 
-    // 2. حساب ارتفاع A4 المتاح (بعد خصم الهوامش)
-    const MM_TO_PX = 3.7795275591; // 96 DPI
-    const pageHeight = (orientation === 'portrait' ? 297 : 210) * MM_TO_PX;
-    const margins = 20 * MM_TO_PX; 
-    const availableHeight = pageHeight - margins;
+function fitPdfToOnePage(root, orientation, targetWidth) {
+    if (!root) return 1;
+    const pageHeightPx = orientation === 'portrait' ? 1123 : 794;
+    const safeHeightPx = pageHeightPx - 36;
 
-    // 3. قياس الارتفاع الحالي
-    void root.offsetHeight;
-    let h = root.scrollHeight;
+    root.style.zoom = '';
+    root.style.width = `${targetWidth}px`;
+    root.style.maxWidth = 'none';
+    root.style.height = 'auto';
+    root.style.minHeight = '0';
+    root.getBoundingClientRect();
 
-    // 4. المرحلة 1: تقليل المسافات
-    if (h > availableHeight) {
-        root.classList.add('compact-mode');
-        void root.offsetHeight;
-        h = root.scrollHeight;
+    const contentHeight = Math.max(root.scrollHeight, root.getBoundingClientRect().height);
+    const scale = Math.max(0.72, Math.min(1, safeHeightPx / Math.max(1, contentHeight)));
+
+    if (scale < 1) {
+        root.style.width = `${Math.ceil(targetWidth / scale)}px`;
+        root.style.zoom = String(scale);
     }
 
-    // 5. المرحلة 2: تصغير الخطوط
-    if (h > availableHeight) {
-        root.classList.add('dense-mode');
-        void root.offsetHeight;
-        h = root.scrollHeight;
+    return scale;
+}
+
+function fitPreviewToViewport() {
+    const printArea = byId('printArea');
+    const root = document.querySelector('.print-root');
+    const previewTab = byId('preview-tab');
+    if (!printArea || !root || !previewTab) return;
+
+    if (document.body.classList.contains('is-printing') || window.matchMedia('print').matches) {
+        root.style.transform = '';
+        root.style.width = '';
+        root.style.maxWidth = '';
+        printArea.style.height = '';
+        printArea.style.overflow = '';
+        return;
     }
 
-    // 6. المرحلة 3: تصغير هندسي (آخر حل)
-    if (h > availableHeight) {
-        const scale = Math.max(0.5, (availableHeight / h) * 0.98);
-        root.style.transform = `scale(${scale})`;
-        root.style.transformOrigin = "top center";
+    if (!previewTab.classList.contains('active')) {
+        root.style.transform = '';
+        root.style.width = '';
+        root.style.maxWidth = '';
+        printArea.style.height = '';
+        printArea.style.overflow = '';
+        return;
     }
+
+    const baseWidth = state.fields.print_orientation === 'portrait' ? 794 : 1123;
+    const availableWidth = Math.max(320, (printArea.clientWidth || previewTab.clientWidth || baseWidth) - 16);
+    const scale = Math.min(1, availableWidth / baseWidth);
+
+    root.style.width = `${baseWidth}px`;
+    root.style.maxWidth = 'none';
+    root.style.transformOrigin = 'top center';
+    root.style.transform = scale < 1 ? `scale(${scale})` : 'none';
+    printArea.style.overflow = 'hidden';
+    printArea.style.height = `${Math.ceil(root.scrollHeight * scale)}px`;
 }
 
 function printSchedule() {
     updateAll();
-    updatePrintStyle();
     saveState(false);
+    document.body.classList.add('is-printing');
     window.print();
 }
 
@@ -1744,11 +2068,11 @@ function printOrExportPDF() {
         _enterPrintMode(targetWidth);
         autoFitPrint(targetWidth);
 
-        const el = byId('printArea');
+        const el = document.querySelector('.print-root') || byId('printArea');
         const school = (state.fields.school_name_input || 'jadwal').replace(/[^\u0600-\u06FF\w-]+/g, '-');
 
         const opt = {
-            margin: [4, 4, 4, 4], // Reduced margins for better fit
+            margin: [4, 4, 4, 4],
             filename: `${school}-${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: {
@@ -1769,11 +2093,14 @@ function printOrExportPDF() {
                 orientation: orientation,
                 compress: true
             },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            pagebreak: { mode: [] }
         };
 
         showToast('جاري تجهيز ملف PDF...');
-        setTimeout(() => {
+        const waitForFonts = document.fonts?.ready || Promise.resolve();
+        waitForFonts.then(() => setTimeout(() => {
+            const fitScale = fitPdfToOnePage(el, orientation, targetWidth);
+            opt.html2canvas.windowWidth = Math.ceil(targetWidth / fitScale);
             html2pdf().set(opt).from(el).save().then(() => {
                 _exitPrintMode();
                 showToast('تم تصدير ملف PDF بنجاح ✅');
@@ -1782,7 +2109,7 @@ function printOrExportPDF() {
                 _exitPrintMode();
                 window.print();
             });
-        }, 400);
+        }, 250));
     } else {
         window.print();
     }
@@ -1795,6 +2122,17 @@ function _enterPrintMode(targetWidth) {
         el.style.width = targetWidth + 'px';
         el.style.margin = '0';
         el.style.maxWidth = 'none';
+        el.style.minHeight = '0';
+        el.style.height = 'auto';
+    }
+    const root = document.querySelector('.print-root');
+    if (root) {
+        root.style.width = targetWidth ? `${targetWidth}px` : '100%';
+        root.style.maxWidth = 'none';
+        root.style.minHeight = '0';
+        root.style.height = 'auto';
+        root.style.transform = 'none';
+        root.style.zoom = '';
     }
 }
 
@@ -1806,12 +2144,16 @@ function _exitPrintMode() {
         root.style.transform = '';
         root.style.width = '';
         root.style.minHeight = '';
+        root.style.height = '';
+        root.style.zoom = '';
     }
     const el = byId('printArea');
     if (el) {
         el.style.width = '';
         el.style.margin = '';
         el.style.maxWidth = '';
+        el.style.minHeight = '';
+        el.style.height = '';
         el.style.border = '';
         el.style.boxShadow = '';
         el.style.borderRadius = '';
@@ -1894,20 +2236,34 @@ function boot() {
     }
 
     window.addEventListener('beforeprint', () => {
+        document.body.classList.add('is-printing');
         updateAll();
         updatePrintStyle();
         autoFitPrint();
     });
 
+    window.addEventListener('afterprint', () => {
+        document.body.classList.remove('is-printing');
+        fitPreviewToViewport();
+    });
+
     /* fallback للأندرويد و iOS */
     window.matchMedia("print").addEventListener("change", function (e) {
         if (e.matches) {
+            document.body.classList.add('is-printing');
             updateAll();
             updatePrintStyle();
             autoFitPrint();
+        } else {
+            document.body.classList.remove('is-printing');
+            fitPreviewToViewport();
         }
+    });
+
+    window.addEventListener('resize', () => {
+        if (previewFitTimer) window.clearTimeout(previewFitTimer);
+        previewFitTimer = window.setTimeout(fitPreviewToViewport, 100);
     });
 }
 
 boot();
-

@@ -117,17 +117,27 @@
 
 .list-mode-input {
     width: 100%;
-    border: none;
-    background: transparent;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
     text-align: center;
-    font-weight: bold;
+    font-weight: 900;
+    color: #0f172a;
     padding: 6px 4px;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .list-mode-input:focus {
-    background: rgba(255, 255, 255, 0.8);
+    background: #ffffff;
     outline: none;
+    border-color: #059669;
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.12);
+}
+
+.list-mode-input option,
+.subject-select option {
+    color: #0f172a;
+    background: #ffffff;
+    font-weight: 900;
 }
 
 .print-list-text {
@@ -306,6 +316,17 @@ body {
     box-shadow: 0 18px 50px rgba(15, 23, 42, 0.16);
     border: 1px solid #e2e8f0;
     border-radius: 6px;
+    overflow: hidden;
+}
+
+.tables-container {
+    display: block;
+}
+
+.print-root {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
 }
 
 .table-scroll {
@@ -313,33 +334,42 @@ body {
 }
 
 .schedule-table {
-    table-layout: auto;
+    table-layout: fixed;
     width: 100%;
 }
 
 .schedule-table th,
 .schedule-table td {
     white-space: normal;
-    overflow: visible;
+    overflow: hidden;
     word-break: break-word;
+    vertical-align: middle;
+    font-size: 13px;
+    line-height: 1.35;
 }
 
 .schedule-table th:first-child,
 .schedule-table td:first-child {
-    width: 70px;
-    min-width: 60px;
+    width: 9%;
+    min-width: 0;
     white-space: nowrap;
 }
 
 .schedule-table th:nth-child(2),
 .schedule-table td:nth-child(2) {
-    width: 170px;
-    min-width: 150px;
+    width: 15%;
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .schedule-table th:nth-child(n+3),
 .schedule-table td:nth-child(n+3) {
-    min-width: 90px;
+    min-width: 0;
+    width: auto;
+}
+
+.schedule-table tbody td {
+    padding: 7px 6px;
 }
 
 .header-line {
@@ -348,30 +378,58 @@ body {
 }
 
 .subject-select {
-    min-height: 28px;
+    width: 100%;
+    min-width: 0;
+    min-height: 26px;
     text-align-last: center;
-    font-size: 9px;
-    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 2px 3px;
+    color: #0f172a;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    border-color: #94a3b8;
+    font-weight: 900;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
 }
 
 .subject-stack {
     display: grid;
     gap: 4px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .subject-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 20px;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.central-subject-row {
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    padding: 2px 3px;
 }
 
 .subject-icon-slot {
-    width: 22px;
+    width: 20px;
     height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .material-icon {
@@ -381,30 +439,69 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.delete-subject-btn {
+    width: 18px;
+    height: 22px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #dc2626;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+}
+
+.delete-subject-btn:hover {
+    background: #fee2e2;
 }
 
 .print-material-icon {
-    width: 24px;
+    width: 22px;
     height: 20px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
 }
 
-.add-subject-btn {
+.subject-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
     width: 100%;
-    min-height: 24px;
-    border: 1px dashed #a7f3d0;
-    background: #ecfdf5;
-    color: #047857;
-    border-radius: 7px;
+}
+
+.add-subject-btn,
+.central-subject-btn {
+    width: 24px;
+    height: 22px;
+    border-radius: 6px;
     font-size: 11px;
     font-weight: 900;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+}
+
+.add-subject-btn {
+    border: 1px dashed #a7f3d0;
+    background: #ecfdf5;
+    color: #047857;
+}
+
+.central-subject-btn {
+    border: 1px solid #f59e0b;
+    background: #fffbeb;
+    color: #b45309;
 }
 
 .print-subject {
@@ -412,20 +509,42 @@ body {
 }
 
 .print-subject-line {
-    display: flex;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 6px 4px;
+    gap: 5px;
+    min-height: 24px;
+    padding: 3px 4px;
     white-space: nowrap;
+    text-align: center;
 }
 
 .print-subject-line > span:last-child {
     font-weight: 900;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .print-subject-line+.print-subject-line {
     border-top: 1px solid #111827;
+}
+
+.central-subject-print {
+    background: #fffbeb !important;
+    border: 1.5px solid #f59e0b !important;
+    color: #92400e !important;
+    font-weight: 900;
+    border-radius: 4px;
+    margin: 1px auto;
+}
+
+.central-ministerial-cell {
+    background: #fffbeb !important;
+    border-color: #f59e0b !important;
+    box-shadow: inset 0 0 0 2px #f59e0b;
 }
 
 .toast {
@@ -479,7 +598,7 @@ body {
 
     .schedule-table {
         /* Let app.js handle min-width via inline classes */
-        table-layout: auto;
+        table-layout: fixed;
     }
 
     .schedule-table th,
@@ -491,20 +610,20 @@ body {
 
     .schedule-table th:first-child,
     .schedule-table td:first-child {
-        width: 60px;
-        min-width: 60px;
+        width: 10%;
+        min-width: 0;
     }
 
     .schedule-table th:nth-child(2),
     .schedule-table td:nth-child(2) {
-        width: 90px;
-        min-width: 90px;
+        width: 18%;
+        min-width: 0;
     }
 
     .schedule-table th:nth-child(n+3),
     .schedule-table td:nth-child(n+3) {
-        width: 90px;
-        min-width: 90px;
+        width: auto;
+        min-width: 0;
     }
 
     /* تم إزالة كود إخفاء أسهم حقل الأرقام لتمكين المستخدم من الضغط عليها */
@@ -541,6 +660,7 @@ body {
     .cell-tools,
     .subject-select,
     .add-subject-btn,
+    .central-subject-btn,
     .delete-subject-btn,
     .class-delete-btn,
     .instruction-delete-btn,
@@ -575,6 +695,7 @@ body {
         width: 100% !important;
         max-width: 100% !important;
         min-height: 0 !important;
+        height: auto !important;
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
@@ -582,44 +703,56 @@ body {
         box-shadow: none !important;
         background: #fff !important;
         overflow: visible !important;
+        font-family: inherit !important;
     }
 
     /* ─── 6. الحاوية الداخلية (print-root) ─── */
     .print-root {
         width: 100% !important;
         min-height: auto !important;
-        padding: 2mm !important;
+        height: auto !important;
+        padding: 1.5mm !important;
         margin: 0 !important;
         box-sizing: border-box !important;
         transform-origin: top center;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: space-between !important; /* توزيع العناصر على كامل الصفحة */
-        gap: 10px !important;
+        display: block !important;
+        gap: 0 !important;
+        font-family: inherit !important;
     }
 
     /* ─── 7. الترويسة ─── */
     .print-header {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
-        margin-bottom: 6px !important;
+        margin-bottom: 2px !important;
     }
 
     .print-body {
-        flex: 1 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: flex-start !important;
+        display: block !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
-    .flex-1 { flex: 1 1 0% !important; }
+    .print-header,
+    .print-body,
+    .tables-container,
+    #tables_container {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .flex-1 { flex: 0 0 auto !important; }
 
     /* ─── 8. الجداول ─── */
     table {
         width: 100% !important;
         border-collapse: collapse !important;
-        table-layout: auto !important;
-        page-break-inside: auto !important;
+        table-layout: fixed !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     thead { display: table-header-group !important; }
@@ -631,19 +764,55 @@ body {
 
     th, td {
         border: 2px solid #000 !important;
-        padding: 14px 8px !important; /* Significantly increased padding */
+        padding: 3px 2px !important;
         text-align: center !important;
         word-break: break-word !important;
         overflow: visible !important;
-        font-size: 18px !important; /* Even larger font */
-        line-height: 1.4 !important;
+        font-size: 8.4px !important;
+        line-height: 1.1 !important;
     }
 
     /* موازنة عمود التاريخ لمنع التداخل */
     .schedule-table td:nth-child(2) {
-        font-size: 15px !important;
-        min-width: 170px !important;
+        font-size: 9px !important;
+        min-width: 94px !important;
         white-space: nowrap !important;
+    }
+
+    .date-print {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 2px !important;
+        unicode-bidi: isolate !important;
+        white-space: nowrap !important;
+        letter-spacing: 0 !important;
+        word-spacing: 0 !important;
+        font-size: 9px !important;
+        line-height: 1.1 !important;
+        font-weight: 900 !important;
+    }
+
+    .date-print--rtl {
+        direction: rtl !important;
+    }
+
+    .date-print--ltr {
+        direction: ltr !important;
+    }
+
+    .date-number {
+        unicode-bidi: isolate !important;
+        display: inline-block !important;
+        font-weight: 900 !important;
+    }
+
+    .date-suffix {
+        direction: rtl !important;
+        unicode-bidi: isolate !important;
+        display: inline-block !important;
+        font-weight: 900 !important;
     }
 
     /* ─── 9. إظهار النصوص الطباعية ─── */
@@ -654,11 +823,58 @@ body {
         text-align: center !important;
     }
 
+    .print-subject-line {
+        display: grid !important;
+        grid-template-columns: 14px minmax(0, 1fr) !important;
+        gap: 3px !important;
+        min-height: 18px !important;
+        padding: 2px 3px !important;
+        align-items: center !important;
+    }
+
+    .print-material-icon,
+    .print-material-icon svg {
+        width: 10px !important;
+        height: 10px !important;
+        margin: 0 auto !important;
+    }
+
     /* ─── 10. الشعار ─── */
     #logoImg {
-        max-height: 70px !important;
+        max-height: 46px !important;
         width: auto !important;
         object-fit: contain !important;
+    }
+
+    .table-scroll {
+        overflow: visible !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .print-body > .grid {
+        margin-top: 2mm !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-bottom: 0 !important;
+        gap: 4mm !important;
+        font-size: 8px !important;
+    }
+
+    .print-body > .grid .space-y-8 {
+        gap: 2mm !important;
+    }
+
+    .print-body > .grid .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+        margin-top: 2mm !important;
+    }
+
+    .print-body > .grid .w-24 {
+        width: 18mm !important;
+        height: 9mm !important;
+        font-size: 6px !important;
     }
 
     /* ─── 11. التذييل ─── */
@@ -674,19 +890,19 @@ body {
 
     /* ─── 13. نظام الضغط التدريجي ─── */
     .print-root.compact-mode {
-        gap: 3px !important;
+        gap: 2px !important;
         padding: 1mm !important;
     }
     .compact-mode .print-header { margin-bottom: 2px !important; }
     .compact-mode table { margin-top: 1px !important; margin-bottom: 1px !important; }
 
-    .print-root.dense-mode { font-size: 0.98em !important; }
+    .print-root.dense-mode { font-size: 0.9em !important; }
     .dense-mode th, .dense-mode td {
-        padding: 8px 6px !important;
-        font-size: 16px !important;
-        line-height: 1.2 !important;
+        padding: 3px 2px !important;
+        font-size: 8.4px !important;
+        line-height: 1.1 !important;
     }
-    .dense-mode h1 { font-size: 24px !important; }
+    .dense-mode h1 { font-size: 18px !important; }
 
     /* ─── 14. Safari / iOS ─── */
     * { -webkit-region-break-inside: avoid; }
@@ -703,12 +919,19 @@ body.is-printing .toast,
 body.is-printing .cell-tools,
 body.is-printing .subject-select,
 body.is-printing .add-subject-btn,
+body.is-printing .central-subject-btn,
 body.is-printing .delete-subject-btn,
 body.is-printing .list-mode-input,
 body.is-printing #header-tab,
 body.is-printing #table-tab,
 body.is-printing #preview-tab > .flex.flex-wrap {
     display: none !important;
+}
+
+body.is-printing .print-container,
+body.is-printing .print-root,
+body.is-printing .schedule-table {
+    overflow: visible !important;
 }
 
 body.is-printing .main-wrapper {
@@ -733,8 +956,9 @@ body.is-printing .print-container {
     box-shadow: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
-    padding: 10px !important;
+    padding: 0 !important;
     min-height: 0 !important;
+    height: auto !important;
 }
 
 body.is-printing .print-subject,

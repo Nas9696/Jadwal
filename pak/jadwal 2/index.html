@@ -15,33 +15,6 @@
 </head>
 
 <body>
-    <!-- Smart Table Hub Navigation (Global) -->
-    <nav class="bg-emerald-800 text-white py-2 px-4 no-print border-b-2 border-yellow-400 shadow-md relative z-[100]">
-        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
-                <div class="p-1 bg-white/20 rounded-lg">
-                    <i data-lucide="layout-grid" class="w-4 h-4 text-yellow-300"></i>
-                </div>
-                <h1 class="font-black text-sm tracking-tight leading-none">الجدول الذكي <span class="text-yellow-300">PRO</span></h1>
-            </div>
-            
-            <div class="flex flex-wrap justify-center gap-2">
-                <a href="home.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-black/10 text-slate-100 rounded-lg text-[10px] font-black transition-all hover:bg-black/20">
-                    الرئيسية
-                </a>
-                <a href="index.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-white rounded-lg text-[10px] font-black transition-all hover:bg-white/20">
-                    🏆 جداول الاختبارات
-                </a>
-                <a href="teacher/teacher.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-black/10 text-slate-100 rounded-lg text-[10px] font-black transition-all hover:bg-black/20">
-                    👨‍🏫 بوابة المعلم
-                </a>
-                <a href="student/student.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-black/10 text-slate-100 rounded-lg text-[10px] font-black transition-all hover:bg-black/20">
-                    🎓 بوابة الطالب
-                </a>
-            </div>
-        </div>
-    </nav>
-
     <!-- Navigation -->
     <nav class="sticky top-0 z-50 bg-white shadow-sm no-print border-b border-slate-200">
         <div class="max-w-5xl mx-auto flex">
@@ -119,15 +92,8 @@
                             </div>
                         </div>
 
-                        <div class="flex flex-col gap-1 mt-3">
-                            <label class="control-title">نوع المدرسة (بنين/بنات)</label>
-                            <select id="gender_mode" class="field font-black">
-                                <option value="male">بنين (مدير / طالب)</option>
-                                <option value="female">بنات (مديرة / طالبة)</option>
-                            </select>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <label class="control-title">اسم المدرسة</label>
+                        <div class="space-y-1 mt-3">
+                            <label class="compact-label">اسم المدرسة</label>
                             <input type="text" id="school_name_input" class="field font-bold">
                         </div>
 
@@ -215,21 +181,13 @@
                         </div>
 
                         <!-- مدير المدرسة -->
-                        <!-- مسمى القائد والاسم -->
-                        <h3 class="section-title mt-4"><i data-lucide="user" class="w-5 h-5"></i> توقيع القائد/ة</h3>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="space-y-1">
-                                <label class="compact-label">المسمى (مدير/مديرة)</label>
-                                <input type="text" id="principal_label_input" class="field font-black"
-                                    placeholder="مدير المدرسة">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="compact-label">اسم القائد/ة</label>
-                                <input type="text" id="principal_input" class="field font-black">
-                            </div>
+                        <h3 class="section-title mt-4"><i data-lucide="user" class="w-5 h-5"></i> مدير المدرسة</h3>
+                        <div class="space-y-1">
+                            <label class="compact-label">اسم مدير المدرسة</label>
+                            <input type="text" id="principal_input" class="field font-black">
                         </div>
-                        <div class="space-y-1 mt-2">
-                            <label class="compact-label">حجم خط التوقيع</label>
+                        <div class="space-y-1">
+                            <label class="compact-label">حجم خط المدير</label>
                             <input type="number" id="principal_size" min="10" max="28"
                                 class="field text-center font-bold w-24">
                         </div>
@@ -419,7 +377,7 @@
         <!-- ========== TAB 3: المعاينة ========== -->
         <div id="preview-tab" class="tab-content">
             <div id="printArea" class="print-container">
-                <div class="print-root dense-mode">
+                <div class="print-root dense">
                     <div class="print-header">
                         <!-- الترويسة -->
                         <div class="flex justify-between items-center mb-2 px-4 pt-2">

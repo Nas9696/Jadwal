@@ -1,0 +1,701 @@
+:root {
+    --brand: #4f46e5;
+    --brand-dark: #312e81;
+    --accent: #10b981;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #dbe4f0;
+    --paper: #ffffff;
+    --soft: #f8fafc;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: 'Cairo', sans-serif;
+    color: var(--ink);
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: white;
+    border-bottom: 1px solid var(--line);
+}
+
+.topbar-inner {
+    width: min(1360px, calc(100% - 24px));
+    min-height: 68px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.brand-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand);
+    color: white;
+}
+
+.brand strong,
+.brand small {
+    display: block;
+}
+
+.brand strong { font-size: 15px; font-weight: 900; }
+.brand small { font-size: 11px; color: var(--muted); font-weight: 800; }
+
+.top-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.top-links a {
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.top-links a.active {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    color: var(--brand);
+}
+
+.clock {
+    min-width: 76px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #111827;
+    color: #a7f3d0;
+    text-align: center;
+    font-weight: 900;
+    font-family: monospace;
+}
+
+.layout {
+    width: min(1360px, calc(100% - 24px));
+    margin: 16px auto 40px;
+    display: grid;
+    grid-template-columns: minmax(310px, 380px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.control-panel,
+.workspace {
+    display: grid;
+    gap: 14px;
+}
+
+.control-panel {
+    position: sticky;
+    top: 84px;
+}
+
+.panel,
+.status-card,
+.table-shell {
+    background: rgba(255, 255, 255, .97);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .07);
+}
+
+.panel {
+    padding: 16px;
+}
+
+.panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid #e2e8f0;
+    color: var(--brand-dark);
+}
+
+.panel-heading h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.panel-heading svg {
+    width: 19px;
+    height: 19px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+label.wide {
+    grid-column: 1 / -1;
+}
+
+label span {
+    display: block;
+    margin-bottom: 5px;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: white;
+    color: var(--ink);
+    padding: 8px 10px;
+    outline: none;
+    font: 800 12px 'Cairo', sans-serif;
+    resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, .15);
+}
+
+.action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.action-row.stack {
+    margin-top: 0;
+}
+
+.action-row.stack button {
+    flex: 1 1 145px;
+}
+
+button {
+    cursor: pointer;
+    border: 0;
+    font-family: 'Cairo', sans-serif;
+}
+
+.primary-btn,
+.soft-btn,
+.danger-btn {
+    min-height: 38px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.primary-btn {
+    background: var(--brand);
+    color: white;
+}
+
+.primary-btn.full {
+    width: 100%;
+    margin-top: 12px;
+}
+
+.soft-btn {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+}
+
+.danger-btn {
+    background: #fff1f2;
+    color: #be123c;
+    border: 1px solid #fecdd3;
+}
+
+button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.status-card {
+    padding: 18px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(260px, .9fr);
+    gap: 18px;
+    align-items: center;
+    background: #111827;
+    color: white;
+}
+
+.timer-wrap {
+    width: 128px;
+    height: 128px;
+    position: relative;
+    display: grid;
+    place-items: center;
+}
+
+.timer-wrap svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.timer-wrap circle {
+    fill: none;
+    stroke: rgba(255,255,255,.14);
+    stroke-width: 9;
+}
+
+.timer-wrap #timer-progress {
+    stroke: #10b981;
+    stroke-dasharray: 377;
+    stroke-dashoffset: 377;
+    transition: stroke-dashoffset .6s ease;
+}
+
+.timer-wrap strong {
+    position: relative;
+    font-size: 24px;
+    font-weight: 900;
+    font-family: monospace;
+}
+
+.status-card p {
+    margin: 0 0 6px;
+    color: #c7d2fe;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.status-card h1 {
+    margin: 0 0 8px;
+    font-size: clamp(24px, 4vw, 42px);
+    line-height: 1.25;
+    font-weight: 900;
+}
+
+.status-card span {
+    color: #e0e7ff;
+    font-weight: 800;
+    font-size: 13px;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.summary-grid div {
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .12);
+}
+
+.summary-grid span,
+.summary-grid strong {
+    display: block;
+}
+
+.summary-grid span {
+    color: #c7d2fe;
+    font-size: 10px;
+}
+
+.summary-grid strong {
+    color: white;
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 8px;
+    background: #e2e8f0;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    flex: 1;
+    min-width: 96px;
+    min-height: 38px;
+    border-radius: 8px;
+    background: transparent;
+    color: #475569;
+    font-weight: 900;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+}
+
+.tab-btn.active {
+    background: white;
+    color: var(--brand);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .08);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.dashboard-grid,
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.table-shell {
+    overflow: auto;
+    padding: 10px;
+}
+
+.schedule-table {
+    width: 100%;
+    min-width: 860px;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: center;
+}
+
+.schedule-table th {
+    background: #eef2ff;
+    color: #312e81;
+    border: 1px solid #c7d2fe;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.schedule-table th small {
+    display: block;
+    margin-top: 4px;
+    color: #4f46e5;
+    font-size: 10px;
+}
+
+.schedule-table td {
+    width: 120px;
+    min-height: 78px;
+    border: 1px solid #e2e8f0;
+    padding: 8px;
+    background: white;
+    vertical-align: top;
+}
+
+.lesson-card {
+    position: relative;
+    min-height: 72px;
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    padding: 9px 8px 8px;
+    border-radius: 8px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    text-align: right;
+}
+
+.lesson-card strong,
+.lesson-card span,
+.lesson-card small {
+    display: block;
+}
+
+.lesson-card strong {
+    color: #312e81;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.lesson-card span {
+    color: #475569;
+    font-size: 10px;
+}
+
+.lesson-card small {
+    color: #4f46e5;
+    font-size: 10px;
+    font-weight: 900;
+    font-family: monospace;
+}
+
+.lesson-card button {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 99px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.lesson-card button svg {
+    width: 12px;
+    height: 12px;
+}
+
+.empty-slot {
+    width: 100%;
+    min-height: 72px;
+    border-radius: 8px;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.card-list {
+    display: grid;
+    gap: 9px;
+}
+
+.mini-card,
+.teacher-card,
+.task-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+}
+
+.mini-card strong,
+.mini-card span,
+.teacher-card strong,
+.teacher-card span,
+.teacher-card small,
+.task-card strong,
+.task-card span,
+.task-card small {
+    display: block;
+}
+
+.mini-card strong,
+.teacher-card strong,
+.task-card strong {
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.mini-card span,
+.teacher-card span,
+.teacher-card small,
+.task-card small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    margin-top: 3px;
+}
+
+.task-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.task-card {
+    border-color: #dbeafe;
+}
+
+.task-card.exam {
+    border-color: #fecdd3;
+    background: #fff7f8;
+}
+
+.task-card.review {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+}
+
+.task-card span {
+    width: fit-content;
+    padding: 3px 8px;
+    border-radius: 99px;
+    color: white;
+    background: var(--brand);
+    font-size: 10px;
+    font-weight: 900;
+    margin-bottom: 5px;
+}
+
+.task-card.exam span { background: #e11d48; }
+.task-card.review span { background: #059669; }
+
+.teacher-card button,
+.task-card button {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #fff1f2;
+    color: #be123c;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+.period-grid,
+.subject-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.period-chip,
+.subject-list span {
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    background: #eff6ff;
+    padding: 8px 10px;
+}
+
+.period-chip strong,
+.period-chip span {
+    display: block;
+}
+
+.period-chip strong {
+    font-size: 11px;
+    font-weight: 900;
+    color: #1e40af;
+}
+
+.period-chip span {
+    color: #475569;
+    font: 900 11px monospace;
+    margin-top: 3px;
+}
+
+.subject-list span {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.empty-state {
+    padding: 28px;
+    text-align: center;
+    border: 1px dashed #cbd5e1;
+    background: white;
+    border-radius: 8px;
+    color: var(--muted);
+    font-weight: 900;
+}
+
+@media print {
+    .no-print,
+    .control-panel,
+    .tabs {
+        display: none !important;
+    }
+    .layout {
+        display: block;
+        width: 100%;
+        margin: 0;
+    }
+    .status-card {
+        color: #111827;
+        background: white;
+        border: 1px solid #111827;
+        box-shadow: none;
+    }
+    .table-shell,
+    .panel,
+    .status-card {
+        box-shadow: none;
+    }
+}
+
+@media (max-width: 980px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+    .control-panel {
+        position: static;
+    }
+    .status-card,
+    .dashboard-grid,
+    .details-grid,
+    .task-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .topbar-inner {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 10px 0;
+    }
+    .top-links {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    .clock {
+        width: 100%;
+    }
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
