@@ -30,8 +30,7 @@ const materialVisuals = {
     'دراسات أدبية': { emoji: '📚', icon: 'book-open', color: '#78350f' },
     'علم نفس': { emoji: '🧠', icon: 'smile', color: '#db2777' },
     'جغرافيا': { emoji: '🗺️', icon: 'navigation', color: '#0284c7' },
-    'إجازة': { emoji: '🎉', icon: 'party-popper', color: '#64748b' },
-    'راحة': { emoji: '☕', icon: 'coffee', color: '#78716c' }
+    'إجازة': { emoji: '🎉', icon: 'party-popper', color: '#64748b' }
 };
 const classTemplates = {
     elementary: {
@@ -116,7 +115,7 @@ const defaultState = {
         table_theme: 'purple',
         week_number: 'الأسبوع الرابع عشر',
         show_week_box: 'true',
-        font_family: 'Almarai',
+        font_family: 'Cairo',
         week2_enabled: 'false',
         merge_weeks: 'false',
         week2_number: 'الأسبوع الخامس عشر',
@@ -911,12 +910,6 @@ function buildMinisterialTable(rows, isWeek2) {
             o.selected = m === row.material;
             matSelect.appendChild(o);
         });
-        ['راحة', 'إجازة'].forEach(extra => {
-            const o = document.createElement('option');
-            o.value = extra; o.textContent = extra;
-            o.selected = extra === row.material;
-            matSelect.appendChild(o);
-        });
         const updateMatColor = () => {
             if (isEnabled('use_material_colors') && row.material) {
                 const mColor = state.materialColors[state.currentStage]?.[row.material];
@@ -1494,11 +1487,7 @@ function renderTableMultiColumn(head, body) {
                     const icon = createMaterialIcon(subjectName, 'print-material-icon');
                     const text = document.createElement('span');
                     const visual = getMaterialVisual(subjectName);
-                    if (isCentral) {
-                        text.innerHTML = (visual.short || subjectName) + '<br>- اختبار مركزي.';
-                    } else {
-                        text.textContent = (visual.short || subjectName);
-                    }
+                    text.textContent = (visual.short || subjectName) + (isCentral ? ' (مركزي)' : '');
                     line.appendChild(icon);
                     line.appendChild(text);
                     if (isEnabled('use_material_colors')) {
@@ -1637,13 +1626,6 @@ function createListMaterialCell(rowIndex) {
         opt.selected = material === state.tableRows[rowIndex].material;
         select.appendChild(opt);
     });
-    ['راحة', 'إجازة'].forEach(extra => {
-        const opt = document.createElement('option');
-        opt.value = extra;
-        opt.textContent = extra;
-        opt.selected = extra === state.tableRows[rowIndex].material;
-        select.appendChild(opt);
-    });
 
     select.addEventListener('change', () => {
         state.tableRows[rowIndex].material = select.value;
@@ -1709,13 +1691,11 @@ function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
         select.appendChild(option);
     });
 
-    ['راحة', 'إجازة'].forEach(extra => {
-        const opt = document.createElement('option');
-        opt.value = extra;
-        opt.textContent = extra;
-        opt.selected = extra === subjectName;
-        select.appendChild(opt);
-    });
+    const holiday = document.createElement('option');
+    holiday.value = 'إجازة';
+    holiday.textContent = 'إجازة';
+    holiday.selected = subjectName === 'إجازة';
+    select.appendChild(holiday);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
@@ -1729,7 +1709,7 @@ function createSubjectSelect(rowIndex, classIndex, subjectIndex, currentValue) {
     if (isCentral) {
         const badge = document.createElement('span');
         badge.className = 'text-[9px] font-black bg-amber-500 text-white px-1 py-0.5 rounded flex items-center justify-center h-5 flex-shrink-0';
-        badge.textContent = 'اختبار مركزي';
+        badge.textContent = 'مركزي';
         row.appendChild(badge);
     }
     row.appendChild(deleteBtn);
@@ -1874,8 +1854,6 @@ function restoreDefaults() {
 
 function updatePrintStyle() {
     const orientation = state.fields.print_orientation === 'portrait' ? 'portrait' : 'landscape';
-    document.body.classList.remove('print-landscape', 'print-portrait');
-    document.body.classList.add(`print-${orientation}`);
     const style = document.getElementById('dynamic_print_style') || document.createElement('style');
     style.id = 'dynamic_print_style';
     const pageSize = orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait';
@@ -1894,55 +1872,41 @@ function autoFitPrint(forcedWidth) {
     root.style.transform = 'none';
     root.style.width = forcedWidth ? (forcedWidth + 'px') : '100%';
 
-    // 2. حساب الأبعاد المتاحة لـ A4 (بعد خصم الهوامش)
+    // 2. حساب ارتفاع A4 المتاح (بعد خصم الهوامش)
     const MM_TO_PX = 3.7795275591; // 96 DPI
-    const pageW = (orientation === 'landscape' ? 297 : 210) * MM_TO_PX;
-    const pageH = (orientation === 'landscape' ? 210 : 297) * MM_TO_PX;
-    const marginPx = 10 * MM_TO_PX; 
-    const availableWidth = pageW - (marginPx * 2);
-    const availableHeight = pageH - (marginPx * 2);
+    const pageHeight = (orientation === 'portrait' ? 297 : 210) * MM_TO_PX;
+    const margins = 20 * MM_TO_PX; 
+    const availableHeight = pageHeight - margins;
 
-    // 3. قياس الأبعاد الحالية
+    // 3. قياس الارتفاع الحالي
     void root.offsetHeight;
     let h = root.scrollHeight;
-    let w = root.scrollWidth;
 
     // 4. المرحلة 1: تقليل المسافات
-    if (h > availableHeight || w > availableWidth) {
+    if (h > availableHeight) {
         root.classList.add('compact-mode');
         void root.offsetHeight;
         h = root.scrollHeight;
-        w = root.scrollWidth;
     }
 
     // 5. المرحلة 2: تصغير الخطوط
-    if (h > availableHeight || w > availableWidth) {
+    if (h > availableHeight) {
         root.classList.add('dense-mode');
         void root.offsetHeight;
         h = root.scrollHeight;
-        w = root.scrollWidth;
     }
 
-    // 6. المرحلة 3: تصغير هندسي عبر transform (للطول والعرض)
-    const scaleH = h > availableHeight ? (availableHeight / h) : 1;
-    const scaleW = w > availableWidth ? (availableWidth / w) : 1;
-    const scale = Math.min(scaleH, scaleW) * 0.98;
-
-    if (scale < 0.99) {
-        const finalScale = Math.max(0.4, scale);
-        root.style.transform = `scale(${finalScale})`;
-        root.style.transformOrigin = "top right"; // RTL origin
-        
-        // إزالة المساحة الفارغة من الأسفل لمنع الصفحة الإضافية
-        const emptySpace = h - (h * finalScale);
-        root.style.marginBottom = `-${emptySpace}px`;
+    // 6. المرحلة 3: تصغير هندسي (آخر حل)
+    if (h > availableHeight) {
+        const scale = Math.max(0.5, (availableHeight / h) * 0.98);
+        root.style.transform = `scale(${scale})`;
+        root.style.transformOrigin = "top center";
     }
 }
 
 function printSchedule() {
     updateAll();
     updatePrintStyle();
-    autoFitPrint();
     saveState(false);
     window.print();
 }
@@ -2024,8 +1988,6 @@ function _exitPrintMode() {
     if (root) {
         root.classList.remove('compact-mode', 'dense-mode');
         root.style.transform = '';
-        root.style.transformOrigin = '';
-        root.style.marginBottom = '';
         root.style.width = '';
         root.style.minHeight = '';
     }
@@ -2203,17 +2165,6 @@ function boot() {
         updateAll();
         updatePrintStyle();
         autoFitPrint();
-    });
-
-    window.addEventListener('afterprint', () => {
-        const root = document.querySelector('.print-root');
-        if (root) {
-            root.classList.remove('compact-mode', 'dense-mode');
-            root.style.transform = '';
-            root.style.transformOrigin = '';
-            root.style.marginBottom = '';
-            root.style.width = '';
-        }
     });
 
     /* fallback للأندرويد و iOS */
