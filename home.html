@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جداول الاختبارات Pro - المنصة الشاملة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --brand: #047857;
+            --brand-dark: #064e3b;
+            --ink: #0f172a;
+            --muted: #64748b;
+            --line: #dbe6e1;
+            --paper: #ffffff;
+            --soft: #f8fafc;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Cairo', sans-serif;
+            color: var(--ink);
+            background: #f6faf8;
+        }
+
+        .shell {
+            min-height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .topbar {
+            background: var(--paper);
+            border-bottom: 1px solid var(--line);
+            position: sticky;
+            top: 0;
+            z-index: 30;
+        }
+
+        .topbar-inner {
+            width: min(1180px, calc(100% - 28px));
+            margin: 0 auto;
+            min-height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            text-decoration: none;
+        }
+
+        .brand-icon,
+        .module-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: none;
+        }
+
+        .brand-icon {
+            color: white;
+            background: var(--brand);
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .nav-link,
+        .primary-link,
+        .module-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 38px;
+            border-radius: 8px;
+            font-weight: 900;
+            text-decoration: none;
+            transition: transform .18s ease, background .18s ease, border-color .18s ease;
+        }
+
+        .nav-link {
+            padding: 8px 12px;
+            color: #334155;
+            border: 1px solid #e2e8f0;
+            background: white;
+            font-size: 12px;
+        }
+
+        .nav-link:hover,
+        .primary-link:hover,
+        .module-link:hover {
+            transform: translateY(-1px);
+        }
+
+        .page {
+            width: min(1180px, calc(100% - 28px));
+            margin: 0 auto;
+            padding: 26px 0 36px;
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+            gap: 22px;
+            align-items: stretch;
+        }
+
+        .intro {
+            background: var(--brand-dark);
+            color: white;
+            border-radius: 8px;
+            padding: clamp(24px, 5vw, 46px);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 390px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
+            padding: 7px 10px;
+            border-radius: 8px;
+            background: rgba(255,255,255,.11);
+            color: #bbf7d0;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        h1 {
+            margin: 22px 0 12px;
+            font-size: clamp(32px, 6vw, 58px);
+            line-height: 1.14;
+            font-weight: 900;
+            letter-spacing: 0;
+        }
+
+        .lead {
+            max-width: 680px;
+            color: #d1fae5;
+            font-size: clamp(15px, 2vw, 19px);
+            line-height: 1.9;
+            font-weight: 700;
+        }
+
+        .primary-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 28px;
+        }
+
+        .primary-link {
+            padding: 10px 14px;
+            background: #facc15;
+            color: #1f2937;
+            font-size: 13px;
+        }
+
+        .primary-link.secondary {
+            background: rgba(255,255,255,.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,.22);
+        }
+
+        .quick-panel {
+            background: white;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 18px;
+            display: grid;
+            gap: 12px;
+            align-content: start;
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .panel-title h2,
+        .section-title {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 900;
+            color: #064e3b;
+        }
+
+        .module-card {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+            padding: 14px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fff;
+            text-decoration: none;
+            color: inherit;
+            transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        }
+
+        .module-card:hover {
+            border-color: #10b981;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, .09);
+            transform: translateY(-2px);
+        }
+
+        .module-icon {
+            background: #ecfdf5;
+            color: #047857;
+        }
+
+        .module-card.teacher .module-icon { background: #eff6ff; color: #2563eb; }
+        .module-card.student .module-icon { background: #f5f3ff; color: #7c3aed; }
+        .module-card.exam .module-icon { background: #fff7ed; color: #ea580c; }
+
+        .module-card h3 {
+            margin: 0 0 4px;
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .module-card p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.7;
+            font-weight: 700;
+        }
+
+        .features {
+            margin-top: 22px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .feature-group {
+            background: white;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 18px;
+        }
+
+        .feature-group h3 {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin: 0 0 12px;
+            color: #064e3b;
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .feature-list {
+            display: grid;
+            gap: 8px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .feature-list li {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            color: #334155;
+            font-size: 12px;
+            line-height: 1.7;
+            font-weight: 700;
+        }
+
+        .feature-list i {
+            width: 15px;
+            height: 15px;
+            margin-top: 4px;
+            color: #10b981;
+            flex: none;
+        }
+
+        .footer-note {
+            margin-top: 18px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            .topbar-inner {
+                align-items: flex-start;
+                flex-direction: column;
+                padding: 12px 0;
+            }
+
+            .nav-actions {
+                width: 100%;
+                justify-content: stretch;
+            }
+
+            .nav-link {
+                flex: 1 1 130px;
+            }
+
+            .hero,
+            .features {
+                grid-template-columns: 1fr;
+            }
+
+            .intro {
+                min-height: auto;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .page {
+                width: min(100% - 20px, 1180px);
+                padding-top: 14px;
+            }
+
+            .module-card {
+                grid-template-columns: auto 1fr;
+            }
+
+            .module-card > i {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <header class="topbar">
+            <div class="topbar-inner">
+                <a class="brand" href="home.html" aria-label="الرئيسية">
+                    <span class="brand-icon"><i data-lucide="layout-grid"></i></span>
+                    <span>
+                        <span class="block text-sm sm:text-base font-black text-slate-950">جداول الاختبارات <span class="text-emerald-700">Pro</span></span>
+                        <span class="block text-[11px] font-bold text-slate-500">نظام إدارة الجداول المدرسية</span>
+                    </span>
+                </a>
+                <nav class="nav-actions" aria-label="روابط سريعة">
+                    <a class="nav-link" href="index.html"><i data-lucide="clipboard-list" class="w-4 h-4"></i> جداول الاختبارات</a>
+                    <a class="nav-link" href="teacher/teacher.html"><i data-lucide="user-check" class="w-4 h-4"></i> بوابة المعلم</a>
+                    <a class="nav-link" href="student/student.html"><i data-lucide="graduation-cap" class="w-4 h-4"></i> بوابة الطالب</a>
+                </nav>
+            </div>
+        </header>
+
+        <main class="page">
+            <section class="hero" aria-labelledby="main-title">
+                <div class="intro">
+                    <div>
+                        <span class="eyebrow"><i data-lucide="sparkles" class="w-4 h-4"></i> النظام الشامل</span>
+                        <h1 id="main-title">إدارة جداول مدرستك بكل سهولة</h1>
+                        <p class="lead">
+                            نظام متكامل لإنشاء وإدارة جداول الاختبارات، وجداول المعلمين، وجداول الطلاب. تصميم عصري، طباعة ممتازة، وإدارة ذكية.
+                        </p>
+                    </div>
+                    <div class="primary-row">
+                        <a class="primary-link" href="index.html"><i data-lucide="table-2" class="w-4 h-4"></i> إنشاء جدول الاختبارات</a>
+                        <a class="primary-link secondary" href="teacher/teacher.html"><i data-lucide="timer" class="w-4 h-4"></i> جدول المعلم</a>
+                        <a class="primary-link secondary" href="student/student.html"><i data-lucide="calendar-days" class="w-4 h-4"></i> جدول الطالب</a>
+                    </div>
+                </div>
+
+                <aside class="quick-panel" aria-label="لوحة التحكم">
+                    <div class="panel-title">
+                        <h2>روابط سريعة</h2>
+                        <i data-lucide="arrow-down-right" class="w-5 h-5 text-emerald-700"></i>
+                    </div>
+
+                    <a class="module-card exam" href="index.html">
+                        <span class="module-icon"><i data-lucide="award"></i></span>
+                        <span>
+                            <h3>جداول الاختبارات</h3>
+                            <p>تصميم الجداول، إضافة اللجان، تخصيص الألوان، والطباعة.</p>
+                        </span>
+                        <i data-lucide="chevron-left" class="w-5 h-5 text-slate-400"></i>
+                    </a>
+
+                    <a class="module-card teacher" href="teacher/teacher.html">
+                        <span class="module-icon"><i data-lucide="user-check"></i></span>
+                        <span>
+                            <h3>بوابة المعلم</h3>
+                            <p>إدارة حصص المعلم، تتبع الوقت، والإشعارات.</p>
+                        </span>
+                        <i data-lucide="chevron-left" class="w-5 h-5 text-slate-400"></i>
+                    </a>
+
+                    <a class="module-card student" href="student/student.html">
+                        <span class="module-icon"><i data-lucide="graduation-cap"></i></span>
+                        <span>
+                            <h3>بوابة الطالب</h3>
+                            <p>جدول الحصص الأسبوعي للطالب مع تنبيهات ذكية.</p>
+                        </span>
+                        <i data-lucide="chevron-left" class="w-5 h-5 text-slate-400"></i>
+                    </a>
+                </aside>
+            </section>
+
+            <section class="features" aria-label="مميزات النظام">
+                <article class="feature-group">
+                    <h3><i data-lucide="school" class="w-5 h-5"></i> الإدارة</h3>
+                    <ul class="feature-list">
+                        <li><i data-lucide="check"></i><span>تحكم كامل: إدارة مركزية للجداول.</span></li>
+                        <li><i data-lucide="check"></i><span>طباعة ممتازة بجودة عالية.</span></li>
+                        <li><i data-lucide="check"></i><span>حفظ تلقائي للبيانات.</span></li>
+                    </ul>
+                </article>
+
+                <article class="feature-group">
+                    <h3><i data-lucide="user-round-check" class="w-5 h-5"></i> المعلمون</h3>
+                    <ul class="feature-list">
+                        <li><i data-lucide="check"></i><span>متابعة دقيقة للحصص.</span></li>
+                        <li><i data-lucide="check"></i><span>إعداد جدول الحصص بسهولة.</span></li>
+                        <li><i data-lucide="check"></i><span>تنبيهات قبل انتهاء الحصة.</span></li>
+                    </ul>
+                </article>
+
+                <article class="feature-group">
+                    <h3><i data-lucide="backpack" class="w-5 h-5"></i> الطلاب</h3>
+                    <ul class="feature-list">
+                        <li><i data-lucide="check"></i><span>عرض جدول الحصص الأسبوعي.</span></li>
+                        <li><i data-lucide="check"></i><span>واجهة بسيطة وواضحة.</span></li>
+                        <li><i data-lucide="check"></i><span>دعم للهواتف والأجهزة اللوحية.</span></li>
+                    </ul>
+                </article>
+            </section>
+
+            <p class="footer-note">نظام جداول الاختبارات Pro - تم التطوير لخدمة المنظومة التعليمية.</p>
+        </main>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

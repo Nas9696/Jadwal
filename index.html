@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>نظام جداول الاختبارات الذكي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Smart Table Hub Navigation (Global) -->
+    <nav class="bg-emerald-800 text-white py-2 px-4 no-print border-b-2 border-yellow-400 shadow-md relative z-[100]">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <div class="p-1 bg-white/20 rounded-lg">
+                    <i data-lucide="layout-grid" class="w-4 h-4 text-yellow-300"></i>
+                </div>
+                <h1 class="font-black text-sm tracking-tight leading-none">الجدول الذكي <span class="text-yellow-300">PRO</span></h1>
+            </div>
+            
+            <div class="flex flex-wrap justify-center gap-2">
+                <a href="home.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-black/10 text-slate-100 rounded-lg text-[10px] font-black transition-all hover:bg-black/20">
+                    الرئيسية
+                </a>
+                <a href="index.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 text-white rounded-lg text-[10px] font-black transition-all hover:bg-white/20">
+                    🏆 جداول الاختبارات
+                </a>
+                <a href="teacher/teacher.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-black/10 text-slate-100 rounded-lg text-[10px] font-black transition-all hover:bg-black/20">
+                    👨‍🏫 بوابة المعلم
+                </a>
+                <a href="student/student.html" class="flex items-center gap-1.5 px-3 py-1.5 bg-black/10 text-slate-100 rounded-lg text-[10px] font-black transition-all hover:bg-black/20">
+                    🎓 بوابة الطالب
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm no-print border-b border-slate-200">
+        <div class="max-w-5xl mx-auto flex">
+            <button onclick="switchTab('header')" id="btn-header"
+                class="tab-btn active flex-1 py-3 font-black text-sm flex items-center justify-center gap-1">
+                <i data-lucide="landmark" class="w-4 h-4"></i> الترويسة
+            </button>
+            <button onclick="switchTab('table')" id="btn-table"
+                class="tab-btn flex-1 py-3 font-black text-sm flex items-center justify-center gap-1">
+                <i data-lucide="table-2" class="w-4 h-4"></i> الجدول والفصول
+            </button>
+            <button onclick="switchTab('preview')" id="btn-preview"
+                class="tab-btn flex-1 py-3 font-black text-sm flex items-center justify-center gap-1">
+                <i data-lucide="eye" class="w-4 h-4"></i> المعاينة
+            </button>
+        </div>
+    </nav>
+
+    <div class="main-wrapper">
+
+        <!-- ========== TAB 1: الترويسة والإعدادات ========== -->
+        <div id="header-tab" class="tab-content active no-print">
+            <div class="panel control-panel rounded-xl p-5">
+                <!-- أزرار سريعة -->
+                <div class="flex flex-wrap gap-2 mb-5 pb-4 border-b border-slate-200">
+                    <button onclick="saveState(true)" class="action-btn bg-emerald-700 text-white">
+                        <i data-lucide="save" class="w-4 h-4"></i> حفظ
+                    </button>
+                    <button onclick="resetScheduleOnly()"
+                        class="action-btn bg-white text-slate-700 border border-slate-300">
+                        <i data-lucide="eraser" class="w-4 h-4"></i> تفريغ الجدول
+                    </button>
+                    <button onclick="restoreDefaults()" class="action-btn bg-white text-red-700 border border-red-200">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> استعادة
+                    </button>
+                    <button onclick="exportBackup()" class="action-btn bg-white text-blue-800 border border-blue-200">
+                        <i data-lucide="download" class="w-4 h-4"></i> تصدير
+                    </button>
+                    <button onclick="byId('backup_file_input').click()"
+                        class="action-btn bg-white text-violet-800 border border-violet-200">
+                        <i data-lucide="upload" class="w-4 h-4"></i> استيراد
+                    </button>
+                    <input type="file" id="backup_file_input" accept=".json" class="hidden">
+                </div>
+
+                <div class="settings-grid">
+                    <!-- القسم الأيسر: الترويسة -->
+                    <section class="settings-section">
+                        <h3 class="section-title"><i data-lucide="landmark" class="w-5 h-5"></i> بيانات الترويسة</h3>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">الشق الأيمن (١)</label>
+                                <input type="text" id="h_r1" class="field">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">الشق الأيسر (١)</label>
+                                <input type="text" id="h_l1" class="field">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">الشق الأيمن (٢)</label>
+                                <input type="text" id="h_r2" class="field">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">الشق الأيسر (٢)</label>
+                                <input type="text" id="h_l2" class="field">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">الشق الأيمن (٣)</label>
+                                <input type="text" id="h_r3" class="field">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">الشق الأيسر (٣)</label>
+                                <input type="text" id="h_l3" class="field">
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-1 mt-3">
+                            <label class="control-title">نوع المدرسة (بنين/بنات)</label>
+                            <select id="gender_mode" class="field font-black">
+                                <option value="male">بنين (مدير / طالب)</option>
+                                <option value="female">بنات (مديرة / طالبة)</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="control-title">اسم المدرسة</label>
+                            <input type="text" id="school_name_input" class="field font-bold">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-3">
+                            <div class="compact-box form-cluster">
+                                <label class="compact-label">محاذاة الأيمن</label>
+                                <select id="header_right_align" class="field font-bold">
+                                    <option value="right">يمين</option>
+                                    <option value="center">وسط</option>
+                                </select>
+                                <label class="compact-label mt-1">حجم خط الأيمن</label>
+                                <input type="number" id="header_right_size" min="8" max="22"
+                                    class="field text-center font-bold">
+                            </div>
+                            <div class="compact-box form-cluster">
+                                <label class="compact-label">محاذاة الأيسر</label>
+                                <select id="header_left_align" class="field font-bold">
+                                    <option value="left">يسار</option>
+                                    <option value="center">وسط</option>
+                                </select>
+                                <label class="compact-label mt-1">حجم خط الأيسر</label>
+                                <input type="number" id="header_left_size" min="8" max="22"
+                                    class="field text-center font-bold">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t">
+                            <div class="space-y-1">
+                                <label class="compact-label">شعار (رابط صورة)</label>
+                                <input type="url" id="logo_url_input" class="field" dir="ltr"
+                                    placeholder="الصق رابط الشعار هنا...">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">أو إرفاق من الجهاز</label>
+                                <input type="file" id="logo_file_input" accept="image/*" class="field bg-white">
+                            </div>
+                        </div>
+
+                        <div class="space-y-1 mt-3 pt-3 border-t">
+                            <label class="compact-label">نوع الخط</label>
+                            <select id="font_family" class="field font-bold">
+                                <option value="Cairo">Cairo (القاهرة)</option>
+                                <option value="Tajawal">Tajawal (تجول)</option>
+                                <option value="Almarai">Almarai (المراعي)</option>
+                                <option value="Arial">أريال (Arial)</option>
+                                <option value="Traditional Arabic">خط تقليدي (Traditional Arabic)</option>
+                            </select>
+                        </div>
+                    </section>
+
+                    <!-- القسم الأيمن: العنوان والمدير -->
+                    <section class="settings-section">
+                        <h3 class="section-title"><i data-lucide="heading" class="w-5 h-5"></i> العنوان والأسبوع</h3>
+
+                        <div class="space-y-1">
+                            <label class="compact-label">العنوان الرئيسي للجدول</label>
+                            <input type="text" id="main_title_input" class="field font-black">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">حجم خط العنوان</label>
+                                <input type="number" id="main_title_size" min="14" max="40"
+                                    class="field text-center font-bold">
+                            </div>
+                        </div>
+
+                        <div class="compact-box form-cluster bg-blue-50 border-blue-100 mt-3">
+                            <label class="compact-label text-blue-800">رقم الأسبوع الأول</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="week_number" class="field font-bold flex-1">
+                                <select
+                                    onchange="byId('week_number').value=this.value; byId('week_number').dispatchEvent(new Event('input'))"
+                                    class="field w-20 text-xs">
+                                    <option value="">سريع</option>
+                                    <option value="الأسبوع الأول">١</option>
+                                    <option value="الأسبوع الثاني">٢</option>
+                                    <option value="الأسبوع الخامس">٥</option>
+                                    <option value="الأسبوع العاشر">١٠</option>
+                                    <option value="الأسبوع الرابع عشر">١٤</option>
+                                    <option value="الأسبوع الخامس عشر">١٥</option>
+                                </select>
+                            </div>
+                            <label class="flex items-center gap-2 mt-2 text-xs font-black cursor-pointer">
+                                <input type="checkbox" id="show_week_box" class="accent-blue-700"> إظهار مربع الأسبوع
+                            </label>
+                        </div>
+
+                        <!-- مدير المدرسة -->
+                        <!-- مسمى القائد والاسم -->
+                        <h3 class="section-title mt-4"><i data-lucide="user" class="w-5 h-5"></i> توقيع القائد/ة</h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">المسمى (مدير/مديرة)</label>
+                                <input type="text" id="principal_label_input" class="field font-black"
+                                    placeholder="مدير المدرسة">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">اسم القائد/ة</label>
+                                <input type="text" id="principal_input" class="field font-black">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">حجم خط التوقيع</label>
+                                <input type="number" id="principal_size" min="10" max="28"
+                                    class="field text-center font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">موقع التوقيع</label>
+                                <select id="signature_position" class="field font-bold">
+                                    <option value="below">تحت الاسم</option>
+                                    <option value="above">أعلى الاسم</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center">
+                                    <label class="compact-label">إرفاق صورة التوقيع</label>
+                                    <button onclick="clearSignature()" class="text-[10px] text-red-500 hover:text-red-700 font-bold">حذف التوقيع</button>
+                                </div>
+                                <input type="file" id="signature_file_input" accept="image/*" class="field bg-white">
+                            </div>
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center">
+                                    <label class="compact-label">إرفاق صورة الختم</label>
+                                    <button onclick="clearStamp()" class="text-[10px] text-red-500 hover:text-red-700 font-bold">حذف الختم</button>
+                                </div>
+                                <input type="file" id="stamp_file_input" accept="image/*" class="field bg-white">
+                            </div>
+                        </div>
+                        <div class="stamp-live-preview mt-2">
+                            <span id="stampLivePlaceholder">معاينة الختم الحية</span>
+                            <img id="stampLivePreview" class="hidden" alt="معاينة الختم">
+                        </div>
+                        <div class="grid grid-cols-4 gap-2 mt-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">يمين الختم</label>
+                                <input type="number" id="stamp_x" min="0" max="1123" class="field text-center font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">أعلى الختم</label>
+                                <input type="number" id="stamp_y" min="0" max="794" class="field text-center font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">عرض الختم</label>
+                                <input type="number" id="stamp_w" min="20" max="500" class="field text-center font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">طول الختم</label>
+                                <input type="number" id="stamp_h" min="20" max="300" class="field text-center font-bold">
+                            </div>
+                        </div>
+
+                        <!-- الملاحظات -->
+                        <h3 class="section-title mt-4"><i data-lucide="list-checks" class="w-5 h-5"></i> الملاحظات</h3>
+                        <div class="flex items-center justify-between">
+                            <span class="compact-label">التعليمات السفلية</span>
+                            <button onclick="addInstruction()"
+                                class="action-btn bg-emerald-50 text-emerald-800 border border-emerald-100 text-xs">
+                                <i data-lucide="plus" class="w-3 h-3"></i> إضافة
+                            </button>
+                        </div>
+                        <div id="instructions_editor" class="space-y-2 mt-2"></div>
+
+                        <!-- الطباعة والألوان -->
+                        <h3 class="section-title mt-4"><i data-lucide="palette" class="w-5 h-5"></i> الطباعة والألوان
+                        </h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-1">
+                                <label class="compact-label">اتجاه الطباعة</label>
+                                <select id="print_orientation" class="field font-bold">
+                                    <option value="landscape">أفقي</option>
+                                    <option value="portrait">رأسي</option>
+                                </select>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="compact-label">قالب الألوان</label>
+                                <select id="table_theme" class="field font-bold">
+                                    <option value="emerald">الزمردي</option>
+                                    <option value="purple">الأرجواني (الوزاري)</option>
+                                    <option value="ocean">المحيط</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            <label class="flex items-center gap-1 text-[11px] font-black cursor-pointer compact-box">
+                                <input type="checkbox" id="use_arabic_numerals" class="accent-emerald-700"> أرقام عربية
+                            </label>
+                            <label class="flex items-center gap-1 text-[11px] font-black cursor-pointer compact-box">
+                                <input type="checkbox" id="use_class_colors" class="accent-emerald-700"> تلوين الأعمدة
+                            </label>
+                            <label class="flex items-center gap-1 text-[11px] font-black cursor-pointer compact-box">
+                                <input type="checkbox" id="use_row_colors" class="accent-emerald-700"> تلوين الصفوف
+                            </label>
+                            <label class="flex items-center gap-1 text-[11px] font-black cursor-pointer compact-box">
+                                <input type="checkbox" id="use_material_colors" class="accent-emerald-700"> تلوين المواد
+                            </label>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB 2: الجدول والفصول ========== -->
+        <div id="table-tab" class="tab-content no-print">
+            <div class="panel control-panel rounded-xl p-5">
+                <div class="settings-grid">
+                    <section class="settings-section">
+                        <h3 class="section-title"><i data-lucide="school" class="w-5 h-5"></i> المرحلة والقالب</h3>
+
+                        <div class="space-y-1">
+                            <label class="compact-label">المرحلة الدراسية</label>
+                            <select id="stageSelect" class="field font-black bg-emerald-50">
+                                <option value="early_childhood">الطفولة المبكرة (١-٣)</option>
+                                <option value="elementary">المرحلة الابتدائية (١-٦)</option>
+                                <option value="intermediate">المرحلة المتوسطة (١-٣)</option>
+                                <option value="secondary">المرحلة الثانوية</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="compact-label">نوع القالب</label>
+                            <select id="table_mode" class="field font-black">
+                                <option value="ministerial">وزاري (أسبوعين منفصلين)</option>
+                                <option value="traditional">تقليدي (جدول واحد شامل)</option>
+                            </select>
+                        </div>
+
+                        <!-- الأسبوع الأول -->
+                        <div class="compact-box form-cluster bg-emerald-50 border-emerald-100 mt-3">
+                            <p class="text-xs font-black text-emerald-900 mb-2">📅 الأسبوع الأول</p>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="space-y-1">
+                                    <label class="compact-label">عدد الأيام</label>
+                                    <input type="number" id="days_count" min="1" max="10"
+                                        class="field text-center font-bold">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="compact-label">يوم البداية</label>
+                                    <input type="number" id="start_day" min="1" max="30"
+                                        class="field text-center font-bold">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="compact-label">الشهر</label>
+                                    <input type="number" id="start_month" min="1" max="12"
+                                        class="field text-center font-bold">
+                                </div>
+                            </div>
+                            <div class="space-y-1 mt-2">
+                                <label class="compact-label">بداية من يوم</label>
+                                <select id="start_day_name" class="field font-bold">
+                                    <option value="الأحد">الأحد</option>
+                                    <option value="الاثنين">الاثنين</option>
+                                    <option value="الثلاثاء">الثلاثاء</option>
+                                    <option value="الأربعاء">الأربعاء</option>
+                                    <option value="الخميس">الخميس</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- الأسبوع الثاني -->
+                        <div class="compact-box form-cluster bg-violet-50 border-violet-100 mt-3">
+                            <label
+                                class="flex items-center gap-2 text-xs font-black text-violet-900 mb-2 cursor-pointer">
+                                <input type="checkbox" id="week2_enabled" class="accent-violet-700">
+                                📅 تفعيل الأسبوع الثاني
+                            </label>
+                            <div id="week2_settings" class="hidden">
+                                <label
+                                    class="flex items-center gap-2 text-xs font-black text-slate-800 mb-2 cursor-pointer bg-white p-2 rounded border border-violet-100">
+                                    <input type="checkbox" id="merge_weeks" class="accent-violet-700">
+                                    دمج الأسبوعين في جدول واحد (متصلين)
+                                </label>
+                                <div class="space-y-1 mb-2">
+                                    <label class="compact-label">رقم الأسبوع الثاني</label>
+                                    <input type="text" id="week2_number" class="field font-bold"
+                                        value="الأسبوع الخامس عشر">
+                                </div>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div class="space-y-1">
+                                        <label class="compact-label">عدد الأيام</label>
+                                        <input type="number" id="week2_days_count" min="1" max="10"
+                                            class="field text-center font-bold">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="compact-label">يوم البداية</label>
+                                        <input type="number" id="week2_start_day" min="1" max="30"
+                                            class="field text-center font-bold">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="compact-label">الشهر</label>
+                                        <input type="number" id="week2_start_month" min="1" max="12"
+                                            class="field text-center font-bold">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="settings-section">
+                        <h3 class="section-title"><i data-lucide="columns" class="w-5 h-5"></i> الفصول (للقالب التقليدي)
+                        </h3>
+
+                        <div class="space-y-1">
+                            <label class="compact-label">قالب الفصول</label>
+                            <select id="class_template_select" class="field font-bold bg-slate-50"></select>
+                        </div>
+
+                        <div class="flex gap-2 mt-2">
+                            <input type="text" id="new_class_name" class="field flex-1" placeholder="أضف فصل جديد...">
+                            <button onclick="addClassColumn()" class="action-btn bg-emerald-700 text-white">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <div id="class_names_editor" class="grid grid-cols-2 gap-2 mt-2"></div>
+
+                        <!-- بنك المواد -->
+                        <h3 class="section-title mt-4"><i data-lucide="book-open" class="w-5 h-5"></i> بنك المواد</h3>
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="new_material" class="field flex-1" placeholder="أضف مادة جديدة...">
+                            <button onclick="addMaterial()" class="action-btn bg-emerald-700 text-white">إضافة</button>
+                        </div>
+                        <div id="materials_tags" class="flex flex-wrap gap-2"></div>
+
+                        <!-- ألوان الصفوف -->
+                        <div class="mt-4">
+                            <label class="compact-label mb-2 block">ألوان أيام الجدول</label>
+                            <div id="row_colors_editor" class="grid grid-cols-2 gap-2"></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB 3: المعاينة ========== -->
+        <div id="preview-tab" class="tab-content">
+            <div id="printArea" class="print-container">
+                <div class="print-root dense-mode">
+                    <div class="print-header">
+                        <!-- الترويسة -->
+                        <div class="flex justify-between items-center mb-2 px-4 pt-2">
+                            <div id="header_right" class="flex-1 text-right font-bold leading-relaxed text-sm"></div>
+                            <div class="flex-shrink-0 px-4">
+                                <img id="logoImg" class="h-24 max-w-[180px] object-contain" alt="شعار"
+                                    crossorigin="anonymous">
+                            </div>
+                            <div id="header_left" class="flex-1 text-left font-bold leading-relaxed text-sm"></div>
+                        </div>
+
+                        <!-- العنوان الرئيسي -->
+                        <div class="text-center mb-4 px-2 sm:px-8" style="position: relative; z-index: 10;">
+                            <div id="main_title_wrapper"
+                                class="inline-block bg-[#fef08a] border-b-4 border-[#059669] px-4 sm:px-8 py-2 rounded-t-sm shadow-sm"
+                                style="transform: translateZ(0); -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                                <h1 id="main_title_display" class="font-black text-xl leading-relaxed pb-1 m-0"
+                                    style="color: #064e3b !important; font-size: 24px;"></h1>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="print-body">
+                        <!-- منطقة الجداول -->
+                        <div id="tables_container" class="px-8"></div>
+
+                        <!-- التذييل -->
+                        <div class="print-footer-grid grid grid-cols-3 gap-6 mt-10 px-8 pb-6 items-start">
+                            <div>
+                                <h4
+                                    class="font-black text-slate-800 border-b-2 border-emerald-500 w-fit pb-1 text-sm mb-3">
+                                    تعليمات هامة:</h4>
+                                <ul id="instructions_display"
+                                    class="text-[11px] space-y-1.5 font-bold text-slate-700 list-none"></ul>
+                            </div>
+                            <div id="stampDragZone" class="stamp-box-spacer">
+                                <div id="freeStamp" class="free-stamp">
+                                    <img id="freeStampImg" class="free-stamp-img hidden" alt="ختم المدرسة">
+                                    <span id="freeStampPlaceholder" class="free-stamp-placeholder">اسحب الختم هنا</span>
+                                </div>
+                            </div>
+                            <div class="text-center">
+                                <div class="signature-panel">
+                                    <p id="principal_label" class="font-black text-slate-900 text-sm">مدير المدرسة</p>
+                                    <p id="principal_display"
+                                        class="font-black text-emerald-900 text-sm border-b-2 border-dotted border-emerald-200 pb-1 w-4/5 mx-auto mt-1">
+                                    </p>
+                                    <img id="signatureImg" class="signature-img hidden" alt="توقيع المدير">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- أزرار المعاينة -->
+            <div class="flex flex-wrap justify-center gap-3 mt-6 no-print pb-20">
+                <button onclick="switchTab('header')"
+                    class="action-btn bg-white text-slate-700 border border-slate-300 px-6 py-3">
+                    <i data-lucide="settings" class="w-4 h-4"></i> الترويسة
+                </button>
+                <button onclick="switchTab('table')"
+                    class="action-btn bg-white text-blue-700 border border-blue-300 px-6 py-3">
+                    <i data-lucide="table-2" class="w-4 h-4"></i> الجدول
+                </button>
+                <button onclick="shareWhatsApp()" class="action-btn bg-green-600 text-white px-6 py-3">
+                    <i data-lucide="send" class="w-4 h-4"></i> واتساب
+                </button>
+                <button onclick="printSchedule()" class="action-btn bg-emerald-700 text-white px-10 py-3">
+                    <i data-lucide="printer" class="w-4 h-4"></i> طباعة
+                </button>
+                <button onclick="printOrExportPDF()" class="action-btn bg-blue-700 text-white px-10 py-3">
+                    <i data-lucide="download" class="w-4 h-4"></i> تحميل PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer
+        class="no-print bg-emerald-900 text-white text-center py-4 md:py-8 mt-6 md:mt-12 rounded-t-3xl md:rounded-t-[3rem] shadow-2xl border-t-4 border-yellow-400">
+        <div class="max-w-4xl mx-auto px-4">
+            <h2 class="text-base md:text-xl font-black mb-3 md:mb-4 flex items-center justify-center gap-2">
+                <i data-lucide="layout" class="w-5 h-5 md:w-6 md:h-6 text-yellow-400"></i>
+                نظام جداول الاختبارات الذكي
+            </h2>
+            <div class="flex flex-wrap justify-center items-center gap-2 md:gap-4 text-xs md:text-sm font-bold">
+                <div
+                    class="flex items-center gap-1.5 md:gap-2 bg-white/10 px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl border border-white/20 backdrop-blur-sm">
+                    <i data-lucide="user" class="w-4 h-4 md:w-5 md:h-5 text-yellow-400"></i>
+                    <span>تصميم أ. ناصر مسعود</span>
+                </div>
+                <a href="tel:0505723776"
+                    class="flex items-center gap-1.5 md:gap-2 bg-white/10 px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl border border-white/20 backdrop-blur-sm hover:bg-white/20 transition-all">
+                    <i data-lucide="phone" class="w-4 h-4 md:w-5 md:h-5 text-yellow-400"></i>
+                    <span>0505723776</span>
+                </a>
+                <a href="https://wa.me/966505723776" target="_blank"
+                    class="flex items-center gap-1.5 md:gap-2 bg-green-600 px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl border border-green-500 hover:bg-green-500 transition-all shadow-lg shadow-green-900/20">
+                    <i data-lucide="message-circle" class="w-4 h-4 md:w-5 md:h-5 text-white"></i>
+                    <span>تواصل واتساب</span>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <div id="toast" class="toast"></div>
+    <script src="app.js"></script>
+</body>
+
+</html>
