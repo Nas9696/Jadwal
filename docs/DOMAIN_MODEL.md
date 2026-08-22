@@ -14,7 +14,7 @@
 
 ## Time model
 - School Day
-- Week Pattern with a comparable zero-based cycle-week index (A/B/C...)
+- Week Pattern with a zero-based cycle-week index local to its school (A/B/C...). A project's global cycle is derived by bounded LCM normalization before solving.
 - Period Template owned by a school and one of that school's week patterns, with real start/end time
 - Period Instance
 - Break / prayer / activity block

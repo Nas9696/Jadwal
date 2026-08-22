@@ -48,14 +48,19 @@ def slot(
     period: int,
     start: int,
     end: int,
-    cycle_week: int = 0,
+    project_week: int = 0,
+    local_week: int = 0,
+    weekday: int = 0,
+    day_code: str | None = "sun",
 ) -> TimeSlot:
     return TimeSlot(
-        id=f"{school}-{period}-{cycle_week}",
+        id=f"{school}-{period}-{project_week}",
         school_id=school,
         week_pattern_id=f"{school}-week",
-        cycle_week_index=cycle_week,
-        day_code="sun",
+        local_cycle_week_index=local_week,
+        project_cycle_week_index=project_week,
+        weekday_index=weekday,
+        day_code=day_code,
         starts_at_minute=start,
         ends_at_minute=end,
         period=period,
@@ -75,8 +80,8 @@ def test_same_period_number_does_not_collide_without_time_overlap() -> None:
 
 
 def test_different_cycle_weeks_do_not_overlap() -> None:
-    week_a = slot("school-a", 2, 8 * 60, 8 * 60 + 45, cycle_week=0)
-    week_b = slot("school-b", 3, 8 * 60 + 20, 9 * 60 + 5, cycle_week=1)
+    week_a = slot("school-a", 2, 8 * 60, 8 * 60 + 45, project_week=0)
+    week_b = slot("school-b", 3, 8 * 60 + 20, 9 * 60 + 5, project_week=1)
     assert not slots_overlap(week_a, week_b)
 
 
@@ -91,3 +96,21 @@ def test_remote_slot_still_reserves_teacher_time() -> None:
 def test_invalid_slot_interval_is_rejected() -> None:
     with pytest.raises(ValidationError):
         slot("school-a", 1, 9 * 60, 8 * 60)
+
+
+def test_local_week_index_does_not_define_collision() -> None:
+    left = slot("school-a", 1, 8 * 60, 9 * 60, project_week=1, local_week=0)
+    right = slot("school-b", 2, 8 * 60, 9 * 60, project_week=1, local_week=1)
+    assert slots_overlap(left, right)
+
+
+def test_same_local_index_in_different_project_weeks_does_not_collide() -> None:
+    left = slot("school-a", 1, 8 * 60, 9 * 60, project_week=0, local_week=0)
+    right = slot("school-b", 1, 8 * 60, 9 * 60, project_week=1, local_week=0)
+    assert not slots_overlap(left, right)
+
+
+def test_localized_day_labels_do_not_affect_normalized_weekday_overlap() -> None:
+    arabic = slot("school-a", 1, 8 * 60, 9 * 60, day_code="الأحد", weekday=0)
+    english = slot("school-b", 2, 8 * 60, 9 * 60, day_code="Sunday", weekday=0)
+    assert slots_overlap(arabic, english)

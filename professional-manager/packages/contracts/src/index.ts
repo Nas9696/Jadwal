@@ -37,8 +37,10 @@ export interface SchedulerTimeSlot {
   id: string;
   school_id: string;
   week_pattern_id: string;
-  cycle_week_index: number;
-  day_code: string;
+  local_cycle_week_index: number;
+  project_cycle_week_index: number;
+  weekday_index: number;
+  day_code: string | null;
   starts_at_minute: number;
   ends_at_minute: number;
   period: number;

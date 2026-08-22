@@ -10,5 +10,5 @@ These invariants are mandatory for Smart Timetables.
 6. Every persisted schedulable period belongs to a school and a week/calendar pattern.
 7. A multi-school project resolves the academic term/calendar context for every included school separately.
 8. Solver contracts must contain enough normalized temporal data to evaluate cross-school overlap deterministically without querying UI state.
-9. Alternating week patterns must be comparable on a project cycle (for example cycle week index) so A/B/C schedules can be solved together when required.
+9. Alternating local week patterns are expanded into a bounded project-global cycle using the LCM of school cycle lengths; collision never compares local indexes directly.
 10. Remote/onsite is a placement attribute/policy and must not erase time collision for a teacher unless an explicit business rule permits simultaneous remote activity.

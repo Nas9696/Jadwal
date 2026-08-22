@@ -10,7 +10,7 @@ The engine API must be solver-agnostic enough to allow future experimentation (h
 
 ## Input model
 At minimum:
-- normalized time slots including school, comparable cycle-week index, day, real half-open time interval, and display-only period number
+- normalized time slots including school, local pattern traceability, project-global cycle-week index, normalized weekday index, real half-open time interval, and display-only period number
 - teachers and availability
 - sections/groups
 - subjects
@@ -26,7 +26,7 @@ At minimum:
 ## Core decision
 Assign each lesson occurrence to an allowed time slot and required resource set, subject to constraints.
 
-Cross-school teacher overlap is determined by the same cycle-week index and day plus intersecting real-time intervals (`max(start) < min(end)`). Slot IDs, school period numbers, and attendance mode do not define overlap.
+School cycles are normalized before solving. The project cycle length is the LCM of included school cycle lengths, bounded to 12 weeks by default. Local slots repeat into every applicable project-global week. Cross-school teacher overlap is determined only by the same `project_cycle_week_index`, the same `weekday_index` (0..6), and intersecting real-time intervals (`max(start) < min(end)`). Local cycle indexes, localized day labels, slot IDs, school period numbers, and attendance mode do not define overlap.
 
 ## Mandatory hard constraints
 - teacher cannot be in two incompatible lessons simultaneously
