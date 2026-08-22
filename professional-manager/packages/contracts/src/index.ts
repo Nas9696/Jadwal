@@ -29,6 +29,18 @@ export interface TimetableProject {
   tenant_id: string;
   name_ar: string;
   scope_type: "school" | "complex" | "schools";
-  school_ids: string[];
+  schools: Array<{ school_id: string; term_id: string }>;
   complex_id: string | null;
+}
+
+export interface SchedulerTimeSlot {
+  id: string;
+  school_id: string;
+  week_pattern_id: string;
+  cycle_week_index: number;
+  day_code: string;
+  starts_at_minute: number;
+  ends_at_minute: number;
+  period: number;
+  attendance_mode: "onsite" | "remote" | "hybrid";
 }

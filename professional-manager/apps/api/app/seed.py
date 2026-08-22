@@ -1,22 +1,25 @@
 import uuid
-from datetime import date
+from datetime import date, time
 
 from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import (
     AcademicYear,
+    PeriodTemplate,
     Resource,
     School,
     SchoolComplex,
     Subject,
     Teacher,
     TeacherSchoolMembership,
+    Term,
     Tenant,
     TenantMembership,
     User,
     TimetableProject,
     TimetableProjectSchool,
+    WeekPattern,
 )
 
 DEMO_TENANT_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
@@ -24,6 +27,10 @@ DEMO_SCHOOL_ID = uuid.UUID("00000000-0000-4000-8000-000000000101")
 DEMO_SECOND_SCHOOL_ID = uuid.UUID("00000000-0000-4000-8000-000000000102")
 DEMO_COMPLEX_ID = uuid.UUID("00000000-0000-4000-8000-000000000011")
 DEMO_USER_ID = uuid.UUID("00000000-0000-4000-8000-000000000201")
+DEMO_FIRST_YEAR_ID = uuid.UUID("00000000-0000-4000-8000-000000000301")
+DEMO_SECOND_YEAR_ID = uuid.UUID("00000000-0000-4000-8000-000000000302")
+DEMO_FIRST_TERM_ID = uuid.UUID("00000000-0000-4000-8000-000000000401")
+DEMO_SECOND_TERM_ID = uuid.UUID("00000000-0000-4000-8000-000000000402")
 
 def seed() -> None:
     with SessionLocal() as db:
@@ -31,11 +38,28 @@ def seed() -> None:
             return
         db.add(Tenant(id=DEMO_TENANT_ID, name_ar="مجموعة مدارس الآفاق", name_en="Al Afaq Schools", slug="al-afaq"))
         db.add(User(id=DEMO_USER_ID, email="manager@example.test", display_name_ar="خالد العتيبي"))
+        db.flush()
         db.add(TenantMembership(tenant_id=DEMO_TENANT_ID, user_id=DEMO_USER_ID, role="manager", permissions=["school:read", "timetable:manage"]))
         db.add(SchoolComplex(id=DEMO_COMPLEX_ID, tenant_id=DEMO_TENANT_ID, name_ar="مجمع الآفاق التعليمي", name_en="Al Afaq Educational Complex", code="AFAQ"))
+        db.flush()
         db.add(School(id=DEMO_SCHOOL_ID, tenant_id=DEMO_TENANT_ID, complex_id=DEMO_COMPLEX_ID, name_ar="مدارس الآفاق", name_en="Al Afaq Schools", code="AFAQ-01", school_type="school"))
         db.add(School(id=DEMO_SECOND_SCHOOL_ID, tenant_id=DEMO_TENANT_ID, complex_id=DEMO_COMPLEX_ID, name_ar="ثانوية الآفاق", name_en="Al Afaq Secondary", code="AFAQ-02", school_type="school"))
-        db.add(AcademicYear(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SCHOOL_ID, name="1448 هـ", starts_on=date(2026, 8, 23), ends_on=date(2027, 6, 30)))
+        db.flush()
+        for year_id, school_id in ((DEMO_FIRST_YEAR_ID, DEMO_SCHOOL_ID), (DEMO_SECOND_YEAR_ID, DEMO_SECOND_SCHOOL_ID)):
+            db.add(AcademicYear(id=year_id, tenant_id=DEMO_TENANT_ID, school_id=school_id, name="1448 هـ", starts_on=date(2026, 8, 23), ends_on=date(2027, 6, 30)))
+        db.flush()
+        db.add(Term(id=DEMO_FIRST_TERM_ID, tenant_id=DEMO_TENANT_ID, academic_year_id=DEMO_FIRST_YEAR_ID, name_ar="الفصل الأول", order=1))
+        db.add(Term(id=DEMO_SECOND_TERM_ID, tenant_id=DEMO_TENANT_ID, academic_year_id=DEMO_SECOND_YEAR_ID, name_ar="الفصل الأول", order=1))
+        db.flush()
+        patterns = []
+        for school_id in (DEMO_SCHOOL_ID, DEMO_SECOND_SCHOOL_ID):
+            for cycle_index, code in enumerate(("A", "B", "C")):
+                pattern = WeekPattern(tenant_id=DEMO_TENANT_ID, school_id=school_id, code=code, name_ar=f"الأسبوع {code}", cycle_week_index=cycle_index)
+                patterns.append(pattern)
+                db.add(pattern)
+        db.flush()
+        db.add(PeriodTemplate(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SCHOOL_ID, week_pattern_id=patterns[0].id, day_code="sun", period_number=2, starts_at=time(8, 0), ends_at=time(8, 45)))
+        db.add(PeriodTemplate(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SECOND_SCHOOL_ID, week_pattern_id=patterns[3].id, day_code="sun", period_number=3, starts_at=time(8, 20), ends_at=time(9, 5)))
         teachers = []
         for code, name, specialty in [("T001", "أحمد العتيبي", "الرياضيات"), ("T002", "سارة القحطاني", "العلوم"), ("T003", "محمد الغامدي", "اللغة العربية")]:
             teacher = Teacher(tenant_id=DEMO_TENANT_ID, canonical_code=code, name_ar=name, specialty_reference=specialty)
@@ -51,8 +75,8 @@ def seed() -> None:
         project = TimetableProject(tenant_id=DEMO_TENANT_ID, complex_id=DEMO_COMPLEX_ID, scope_type="complex", name_ar="جدول مجمع الآفاق")
         db.add(project)
         db.flush()
-        for school_id in (DEMO_SCHOOL_ID, DEMO_SECOND_SCHOOL_ID):
-            db.add(TimetableProjectSchool(tenant_id=DEMO_TENANT_ID, timetable_project_id=project.id, school_id=school_id))
+        for school_id, term_id in ((DEMO_SCHOOL_ID, DEMO_FIRST_TERM_ID), (DEMO_SECOND_SCHOOL_ID, DEMO_SECOND_TERM_ID)):
+            db.add(TimetableProjectSchool(tenant_id=DEMO_TENANT_ID, timetable_project_id=project.id, school_id=school_id, term_id=term_id))
         db.commit()
 
 if __name__ == "__main__":

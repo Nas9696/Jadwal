@@ -1,7 +1,15 @@
 import pytest
 from pydantic import ValidationError
 
-from pm_scheduler.contracts import Assignment, Constraint, SchedulingProblem, Severity, SolveOptions
+from pm_scheduler.contracts import (
+    Assignment,
+    Constraint,
+    SchedulingProblem,
+    Severity,
+    SolveOptions,
+    TimeSlot,
+    slots_overlap,
+)
 from pm_scheduler.solver import Scheduler, SolverNotImplementedError
 
 def test_soft_constraint_requires_weight() -> None:
@@ -33,3 +41,53 @@ def test_shared_teacher_identity_is_preserved_across_school_assignments() -> Non
     )
     assert problem.assignments[0].teacher_ids == problem.assignments[1].teacher_ids
     assert len(problem.school_ids) == 2
+
+
+def slot(
+    school: str,
+    period: int,
+    start: int,
+    end: int,
+    cycle_week: int = 0,
+) -> TimeSlot:
+    return TimeSlot(
+        id=f"{school}-{period}-{cycle_week}",
+        school_id=school,
+        week_pattern_id=f"{school}-week",
+        cycle_week_index=cycle_week,
+        day_code="sun",
+        starts_at_minute=start,
+        ends_at_minute=end,
+        period=period,
+    )
+
+
+def test_different_period_numbers_overlap_by_real_time() -> None:
+    school_a_period_2 = slot("school-a", 2, 8 * 60, 8 * 60 + 45)
+    school_b_period_3 = slot("school-b", 3, 8 * 60 + 20, 9 * 60 + 5)
+    assert slots_overlap(school_a_period_2, school_b_period_3)
+
+
+def test_same_period_number_does_not_collide_without_time_overlap() -> None:
+    school_a_period_2 = slot("school-a", 2, 8 * 60, 8 * 60 + 45)
+    school_b_period_2 = slot("school-b", 2, 9 * 60, 9 * 60 + 45)
+    assert not slots_overlap(school_a_period_2, school_b_period_2)
+
+
+def test_different_cycle_weeks_do_not_overlap() -> None:
+    week_a = slot("school-a", 2, 8 * 60, 8 * 60 + 45, cycle_week=0)
+    week_b = slot("school-b", 3, 8 * 60 + 20, 9 * 60 + 5, cycle_week=1)
+    assert not slots_overlap(week_a, week_b)
+
+
+def test_remote_slot_still_reserves_teacher_time() -> None:
+    onsite = slot("school-a", 2, 8 * 60, 8 * 60 + 45)
+    remote = slot("school-b", 3, 8 * 60 + 20, 9 * 60 + 5).model_copy(
+        update={"attendance_mode": "remote"}
+    )
+    assert slots_overlap(onsite, remote)
+
+
+def test_invalid_slot_interval_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        slot("school-a", 1, 9 * 60, 8 * 60)

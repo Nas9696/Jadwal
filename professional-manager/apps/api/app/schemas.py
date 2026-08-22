@@ -41,12 +41,20 @@ class TeacherSchoolMembershipRead(TeacherSchoolMembershipCreate):
     is_active: bool
 
 
+class ProjectSchoolCalendarCreate(BaseModel):
+    school_id: uuid.UUID
+    term_id: uuid.UUID
+
+
 class TimetableProjectCreate(BaseModel):
     name_ar: str
     scope_type: str
-    school_ids: list[uuid.UUID]
+    schools: list[ProjectSchoolCalendarCreate]
     complex_id: uuid.UUID | None = None
-    term_id: uuid.UUID | None = None
+
+
+class ProjectSchoolCalendarRead(ProjectSchoolCalendarCreate):
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TimetableProjectRead(BaseModel):
@@ -54,5 +62,5 @@ class TimetableProjectRead(BaseModel):
     tenant_id: uuid.UUID
     name_ar: str
     scope_type: str
-    school_ids: list[uuid.UUID]
+    schools: list[ProjectSchoolCalendarRead]
     complex_id: uuid.UUID | None

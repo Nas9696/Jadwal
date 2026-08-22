@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Time, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -140,16 +140,35 @@ class WeekPattern(IdMixin, TenantScoped, Base):
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
     code: Mapped[str] = mapped_column(String(20))
     name_ar: Mapped[str] = mapped_column(String(100))
+    cycle_week_index: Mapped[int] = mapped_column(Integer)
+    __table_args__ = (
+        UniqueConstraint("id", "school_id", "tenant_id"),
+        UniqueConstraint("tenant_id", "school_id", "code"),
+        UniqueConstraint("tenant_id", "school_id", "cycle_week_index"),
+        CheckConstraint("cycle_week_index >= 0"),
+    )
 
 class PeriodTemplate(IdMixin, TenantScoped, Base):
     __tablename__ = "period_templates"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    week_pattern_id: Mapped[uuid.UUID] = mapped_column(index=True)
     day_code: Mapped[str] = mapped_column(String(20))
     period_number: Mapped[int] = mapped_column(Integer)
     starts_at: Mapped[time] = mapped_column(Time)
     ends_at: Mapped[time] = mapped_column(Time)
     block_type: Mapped[str] = mapped_column(String(30), default="lesson")
     attendance_mode: Mapped[str] = mapped_column(String(20), default="onsite")
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["week_pattern_id", "school_id", "tenant_id"],
+            ["week_patterns.id", "week_patterns.school_id", "week_patterns.tenant_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "tenant_id", "school_id", "week_pattern_id", "day_code", "period_number"
+        ),
+        CheckConstraint("starts_at < ends_at"),
+    )
 
 class TeachingAssignment(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teaching_assignments"
@@ -192,7 +211,6 @@ class TimetableProject(IdMixin, TenantScoped, Timestamped, Base):
     complex_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("school_complexes.id", ondelete="RESTRICT"), index=True
     )
-    term_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("terms.id"))
     name_ar: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(30), default="draft")
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -205,6 +223,9 @@ class TimetableProjectSchool(IdMixin, TenantScoped, Base):
     )
     school_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("schools.id", ondelete="RESTRICT"), index=True
+    )
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("terms.id", ondelete="RESTRICT"), index=True
     )
     __table_args__ = (
         UniqueConstraint("tenant_id", "timetable_project_id", "school_id"),

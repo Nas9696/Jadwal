@@ -14,7 +14,8 @@
 
 ## Time model
 - School Day
-- Period Template
+- Week Pattern with a comparable zero-based cycle-week index (A/B/C...)
+- Period Template owned by a school and one of that school's week patterns, with real start/end time
 - Period Instance
 - Break / prayer / activity block
 - Attendance mode: onsite / remote / hybrid
@@ -79,7 +80,7 @@ Targets can reference explicit IDs and/or reusable groups for teachers, subjects
 
 ## Timetable lifecycle
 ### Timetable Project
-Workspace with a relational school scope. It may cover one school, a complex, or an explicit set of schools. All included schools belong to the same tenant; complex-scoped projects include only schools in that complex.
+Workspace with a relational school scope. It may cover one school, a complex, or an explicit set of schools. All included schools belong to the same tenant; complex-scoped projects include only schools in that complex. Each project-school relationship selects the term belonging to that specific school; there is no ambiguous project-wide term for multi-school projects.
 
 ### Solver Run
 Immutable record of one solve attempt, settings, seed, limits and diagnostics.

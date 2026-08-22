@@ -15,7 +15,11 @@ from app.models import (
     TimetableProject,
     TimetableProjectSchool,
 )
-from app.schemas import TeacherSchoolMembershipCreate, TimetableProjectCreate
+from app.schemas import (
+    ProjectSchoolCalendarCreate,
+    TeacherSchoolMembershipCreate,
+    TimetableProjectCreate,
+)
 
 TenantEntity = TypeVar(
     "TenantEntity", AcademicYear, School, SchoolComplex, Teacher, Term
@@ -52,8 +56,13 @@ def create_teacher_school_membership(
 def create_timetable_project(
     db: Session, tenant_id: uuid.UUID, payload: TimetableProjectCreate
 ) -> tuple[TimetableProject, list[uuid.UUID]]:
-    school_ids = list(dict.fromkeys(payload.school_ids))
-    if not school_ids:
+    calendar_by_school: dict[uuid.UUID, ProjectSchoolCalendarCreate] = {}
+    for calendar in payload.schools:
+        if calendar.school_id in calendar_by_school:
+            raise HTTPException(status_code=422, detail="Each school may appear only once")
+        calendar_by_school[calendar.school_id] = calendar
+    school_ids = list(calendar_by_school)
+    if not calendar_by_school:
         raise HTTPException(status_code=422, detail="At least one school is required")
     if payload.scope_type not in {"school", "complex", "schools"}:
         raise HTTPException(status_code=422, detail="Invalid project scope type")
@@ -68,28 +77,30 @@ def create_timetable_project(
             raise HTTPException(status_code=422, detail="Complex scope requires complex_id")
         if any(school.complex_id != complex_entity.id for school in schools):
             raise HTTPException(status_code=422, detail="All schools must belong to project complex")
-    if payload.term_id:
-        term = _tenant_entity(db, Term, payload.term_id, tenant_id)
+    for calendar in calendar_by_school.values():
+        term = _tenant_entity(db, Term, calendar.term_id, tenant_id)
         academic_year = _tenant_entity(
             db, AcademicYear, term.academic_year_id, tenant_id
         )
-        if academic_year.school_id not in school_ids:
+        if academic_year.school_id != calendar.school_id:
             raise HTTPException(
                 status_code=422,
-                detail="Term school must be included in project scope",
+                detail="Term must belong to its project school",
             )
     project = TimetableProject(
         tenant_id=tenant_id,
         name_ar=payload.name_ar,
         scope_type=payload.scope_type,
         complex_id=payload.complex_id,
-        term_id=payload.term_id,
     )
     db.add(project)
     db.flush()
     db.add_all(
         TimetableProjectSchool(
-            tenant_id=tenant_id, timetable_project_id=project.id, school_id=school_id
+            tenant_id=tenant_id,
+            timetable_project_id=project.id,
+            school_id=school_id,
+            term_id=calendar_by_school[school_id].term_id,
         )
         for school_id in school_ids
     )

@@ -1,5 +1,11 @@
-from pm_scheduler.contracts import SchedulingProblem, SolveResult
+from pm_scheduler.contracts import SchedulingProblem, SolveResult, TimeSlot, slots_overlap
 from pm_scheduler.solver import Scheduler, SolverNotImplementedError
 
-__all__ = ["Scheduler", "SchedulingProblem", "SolveResult", "SolverNotImplementedError"]
-
+__all__ = [
+    "Scheduler",
+    "SchedulingProblem",
+    "SolveResult",
+    "SolverNotImplementedError",
+    "TimeSlot",
+    "slots_overlap",
+]

@@ -2,12 +2,16 @@ from fastapi.testclient import TestClient
 
 from conftest import (
     FIRST_SCHOOL,
+    FIRST_TERM,
     OTHER_SCHOOL,
     OTHER_TEACHER,
+    OTHER_TERM,
     OTHER_TENANT,
     SECOND_SCHOOL,
+    SECOND_TERM,
     SHARED_TEACHER,
     TEST_TENANT,
+    TEST_COMPLEX,
 )
 
 def test_tenant_header_is_required(client: TestClient) -> None:
@@ -45,11 +49,38 @@ def test_multi_school_timetable_project_has_relational_scope(client: TestClient)
         json={
             "name_ar": "جدول المدارس المشتركة",
             "scope_type": "schools",
-            "school_ids": [FIRST_SCHOOL, SECOND_SCHOOL],
+            "schools": [
+                {"school_id": FIRST_SCHOOL, "term_id": FIRST_TERM},
+                {"school_id": SECOND_SCHOOL, "term_id": SECOND_TERM},
+            ],
         },
     )
     assert response.status_code == 201
-    assert set(response.json()["school_ids"]) == {FIRST_SCHOOL, SECOND_SCHOOL}
+    assert {scope["school_id"] for scope in response.json()["schools"]} == {
+        FIRST_SCHOOL,
+        SECOND_SCHOOL,
+    }
+
+
+def test_complex_project_uses_per_school_terms(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/timetable-projects",
+        headers={"X-Tenant-ID": TEST_TENANT},
+        json={
+            "name_ar": "جدول المجمع",
+            "scope_type": "complex",
+            "complex_id": TEST_COMPLEX,
+            "schools": [
+                {"school_id": FIRST_SCHOOL, "term_id": FIRST_TERM},
+                {"school_id": SECOND_SCHOOL, "term_id": SECOND_TERM},
+            ],
+        },
+    )
+    assert response.status_code == 201
+    assert {scope["term_id"] for scope in response.json()["schools"]} == {
+        FIRST_TERM,
+        SECOND_TERM,
+    }
 
 
 def test_dashboard_counts_only_selected_school(client: TestClient) -> None:
@@ -87,7 +118,39 @@ def test_cross_tenant_project_school_is_rejected(client: TestClient) -> None:
         json={
             "name_ar": "نطاق غير صالح",
             "scope_type": "schools",
-            "school_ids": [FIRST_SCHOOL, OTHER_SCHOOL],
+            "schools": [
+                {"school_id": FIRST_SCHOOL, "term_id": FIRST_TERM},
+                {"school_id": OTHER_SCHOOL, "term_id": OTHER_TERM},
+            ],
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_wrong_school_term_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/timetable-projects",
+        headers={"X-Tenant-ID": TEST_TENANT},
+        json={
+            "name_ar": "تقويم غير مطابق",
+            "scope_type": "schools",
+            "schools": [
+                {"school_id": FIRST_SCHOOL, "term_id": SECOND_TERM},
+                {"school_id": SECOND_SCHOOL, "term_id": FIRST_TERM},
+            ],
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_cross_tenant_term_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/timetable-projects",
+        headers={"X-Tenant-ID": TEST_TENANT},
+        json={
+            "name_ar": "فصل من مستأجر آخر",
+            "scope_type": "school",
+            "schools": [{"school_id": FIRST_SCHOOL, "term_id": OTHER_TERM}],
         },
     )
     assert response.status_code == 422

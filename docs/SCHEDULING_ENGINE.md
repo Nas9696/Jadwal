@@ -10,7 +10,7 @@ The engine API must be solver-agnostic enough to allow future experimentation (h
 
 ## Input model
 At minimum:
-- normalized time slots including week pattern/day/period
+- normalized time slots including school, comparable cycle-week index, day, real half-open time interval, and display-only period number
 - teachers and availability
 - sections/groups
 - subjects
@@ -25,6 +25,8 @@ At minimum:
 
 ## Core decision
 Assign each lesson occurrence to an allowed time slot and required resource set, subject to constraints.
+
+Cross-school teacher overlap is determined by the same cycle-week index and day plus intersecting real-time intervals (`max(start) < min(end)`). Slot IDs, school period numbers, and attendance mode do not define overlap.
 
 ## Mandatory hard constraints
 - teacher cannot be in two incompatible lessons simultaneously

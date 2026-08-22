@@ -2,6 +2,7 @@
 
 Includes canonical tenant teachers, relational teacher-school memberships,
 relational teaching-assignment teachers, and multi-school project scopes.
+Calendar slots are school/week-pattern scoped and project terms are selected per school.
 
 Revision ID: 0001_foundation
 """

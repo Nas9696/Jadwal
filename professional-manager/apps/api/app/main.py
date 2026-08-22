@@ -128,11 +128,12 @@ def add_timetable_project(
     db: Annotated[Session, Depends(get_db)],
 ) -> TimetableProjectRead:
     project, school_ids = create_timetable_project(db, tenant_id, payload)
+    calendars_by_school = {calendar.school_id: calendar for calendar in payload.schools}
     return TimetableProjectRead(
         id=project.id,
         tenant_id=project.tenant_id,
         name_ar=project.name_ar,
         scope_type=project.scope_type,
-        school_ids=school_ids,
+        schools=[calendars_by_school[school_id] for school_id in school_ids],
         complex_id=project.complex_id,
     )

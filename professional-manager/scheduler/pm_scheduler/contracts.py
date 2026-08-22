@@ -15,9 +15,33 @@ class SolveStatus(StrEnum):
 
 class TimeSlot(BaseModel):
     id: str
+    school_id: str
     week_pattern_id: str
+    cycle_week_index: Annotated[int, Field(ge=0)]
     day_code: str
+    starts_at_minute: Annotated[int, Field(ge=0, lt=24 * 60)]
+    ends_at_minute: Annotated[int, Field(gt=0, le=24 * 60)]
     period: Annotated[int, Field(ge=1)]
+    attendance_mode: str = "onsite"
+
+    @model_validator(mode="after")
+    def interval_is_valid(self) -> "TimeSlot":
+        if self.starts_at_minute >= self.ends_at_minute:
+            raise ValueError("slot start must be before slot end")
+        return self
+
+
+def slots_overlap(left: TimeSlot, right: TimeSlot) -> bool:
+    """Compare half-open intervals in the same project cycle week and day.
+
+    School, period number, slot ID and attendance mode do not alter temporal overlap.
+    """
+    return (
+        left.cycle_week_index == right.cycle_week_index
+        and left.day_code == right.day_code
+        and max(left.starts_at_minute, right.starts_at_minute)
+        < min(left.ends_at_minute, right.ends_at_minute)
+    )
 
 class Entity(BaseModel):
     id: str
