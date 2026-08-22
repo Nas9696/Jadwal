@@ -1,8 +1,12 @@
-"""Create corrected PM-001 foundation schema.
+"""Create the PM-001 foundation and PM-002A school-setup schema.
 
 Includes canonical tenant teachers, relational teacher-school memberships,
 relational teaching-assignment teachers, and multi-school project scopes.
 Calendar slots are school/week-pattern scoped and project terms are selected per school.
+PM-002A adds academic date bounds, shifts, school days, flexible academic hierarchy,
+and ordered teaching/non-teaching day blocks. Metadata is intentionally evaluated at
+migration time while the foundation branch remains unreleased, so a clean upgrade
+creates the complete reviewed baseline without a lossy transitional migration.
 
 Revision ID: 0001_foundation
 """

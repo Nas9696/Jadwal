@@ -46,3 +46,39 @@ export interface SchedulerTimeSlot {
   period: number;
   attendance_mode: "onsite" | "remote" | "hybrid";
 }
+
+export interface SchoolShift {
+  id: string;
+  school_id: string;
+  code: string;
+  name_ar: string;
+  name_en: string | null;
+  order: number;
+  is_active: boolean;
+}
+
+export interface SchoolDay {
+  id: string;
+  school_id: string;
+  shift_id: string;
+  week_pattern_id: string;
+  weekday_index: number;
+  enabled: boolean;
+  label_ar: string | null;
+}
+
+export interface DayBlock {
+  id: string;
+  school_id: string;
+  school_day_id: string;
+  week_pattern_id: string;
+  weekday_index: number;
+  block_order: number;
+  block_type: "lesson" | "break" | "prayer" | "assembly" | "activity" | "custom";
+  label_ar: string | null;
+  starts_at: string;
+  ends_at: string;
+  period_number: number | null;
+  attendance_mode: "onsite" | "remote" | "hybrid";
+  schedulable: boolean;
+}

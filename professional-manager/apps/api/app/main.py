@@ -31,9 +31,11 @@ from app.schemas import (
 )
 from app.services import create_teacher_school_membership, create_timetable_project
 from app.tenant import tenant_context
+from app.setup_router import router as setup_router
 
 app = FastAPI(title=settings.app_name, version="0.1.0", openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs")
 app.add_middleware(CORSMiddleware, allow_origins=settings.api_cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(setup_router)
 
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["system"])
 def health() -> HealthResponse:

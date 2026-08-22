@@ -10,6 +10,8 @@ from app.models import (
     Resource,
     School,
     SchoolComplex,
+    SchoolDay,
+    SchoolShift,
     Subject,
     Teacher,
     TeacherSchoolMembership,
@@ -48,9 +50,11 @@ def seed() -> None:
         for year_id, school_id in ((DEMO_FIRST_YEAR_ID, DEMO_SCHOOL_ID), (DEMO_SECOND_YEAR_ID, DEMO_SECOND_SCHOOL_ID)):
             db.add(AcademicYear(id=year_id, tenant_id=DEMO_TENANT_ID, school_id=school_id, name="1448 هـ", starts_on=date(2026, 8, 23), ends_on=date(2027, 6, 30)))
         db.flush()
-        db.add(Term(id=DEMO_FIRST_TERM_ID, tenant_id=DEMO_TENANT_ID, academic_year_id=DEMO_FIRST_YEAR_ID, name_ar="الفصل الأول", order=1))
-        db.add(Term(id=DEMO_SECOND_TERM_ID, tenant_id=DEMO_TENANT_ID, academic_year_id=DEMO_SECOND_YEAR_ID, name_ar="الفصل الأول", order=1))
+        db.add(Term(id=DEMO_FIRST_TERM_ID, tenant_id=DEMO_TENANT_ID, academic_year_id=DEMO_FIRST_YEAR_ID, name_ar="الفصل الأول", order=1, starts_on=date(2026, 8, 23), ends_on=date(2026, 12, 31)))
+        db.add(Term(id=DEMO_SECOND_TERM_ID, tenant_id=DEMO_TENANT_ID, academic_year_id=DEMO_SECOND_YEAR_ID, name_ar="الفصل الأول", order=1, starts_on=date(2026, 8, 23), ends_on=date(2026, 12, 31)))
         db.flush()
+        shift = SchoolShift(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SCHOOL_ID, code="AM", name_ar="صباحي", order=0)
+        db.add(shift)
         patterns = []
         for school_id in (DEMO_SCHOOL_ID, DEMO_SECOND_SCHOOL_ID):
             for cycle_index, code in enumerate(("A", "B", "C")):
@@ -58,8 +62,10 @@ def seed() -> None:
                 patterns.append(pattern)
                 db.add(pattern)
         db.flush()
-        db.add(PeriodTemplate(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SCHOOL_ID, week_pattern_id=patterns[0].id, day_code="sun", period_number=2, starts_at=time(8, 0), ends_at=time(8, 45)))
-        db.add(PeriodTemplate(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SECOND_SCHOOL_ID, week_pattern_id=patterns[3].id, day_code="sun", period_number=3, starts_at=time(8, 20), ends_at=time(9, 5)))
+        day = SchoolDay(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SCHOOL_ID, shift_id=shift.id, week_pattern_id=patterns[0].id, weekday_index=0, label_ar="الأحد")
+        db.add(day)
+        db.flush()
+        db.add(PeriodTemplate(tenant_id=DEMO_TENANT_ID, school_id=DEMO_SCHOOL_ID, shift_id=shift.id, school_day_id=day.id, week_pattern_id=patterns[0].id, weekday_index=0, block_order=0, period_number=1, label_ar="الحصة الأولى", starts_at=time(8, 0), ends_at=time(8, 45), block_type="lesson", schedulable=True))
         teachers = []
         for code, name, specialty in [("T001", "أحمد العتيبي", "الرياضيات"), ("T002", "سارة القحطاني", "العلوم"), ("T003", "محمد الغامدي", "اللغة العربية")]:
             teacher = Teacher(tenant_id=DEMO_TENANT_ID, canonical_code=code, name_ar=name, specialty_reference=specialty)

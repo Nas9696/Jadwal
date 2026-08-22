@@ -60,9 +60,9 @@ def session() -> Session:
         db.add_all(years)
         db.flush()
         db.add_all([
-            Term(id=uuid.UUID(FIRST_TERM), tenant_id=uuid.UUID(TEST_TENANT), academic_year_id=years[0].id, name_ar="الأول", order=1),
-            Term(id=uuid.UUID(SECOND_TERM), tenant_id=uuid.UUID(TEST_TENANT), academic_year_id=years[1].id, name_ar="الأول", order=1),
-            Term(id=uuid.UUID(OTHER_TERM), tenant_id=uuid.UUID(OTHER_TENANT), academic_year_id=years[2].id, name_ar="الأول", order=1),
+            Term(id=uuid.UUID(FIRST_TERM), tenant_id=uuid.UUID(TEST_TENANT), academic_year_id=years[0].id, name_ar="الأول", order=1, starts_on=date(2026, 8, 1), ends_on=date(2026, 12, 1)),
+            Term(id=uuid.UUID(SECOND_TERM), tenant_id=uuid.UUID(TEST_TENANT), academic_year_id=years[1].id, name_ar="الأول", order=1, starts_on=date(2026, 8, 1), ends_on=date(2026, 12, 1)),
+            Term(id=uuid.UUID(OTHER_TERM), tenant_id=uuid.UUID(OTHER_TENANT), academic_year_id=years[2].id, name_ar="الأول", order=1, starts_on=date(2026, 8, 1), ends_on=date(2026, 12, 1)),
         ])
         db.add_all([
             Teacher(id=uuid.UUID(SHARED_TEACHER), tenant_id=uuid.UUID(TEST_TENANT), canonical_code="T1", name_ar="معلم مشترك"),
