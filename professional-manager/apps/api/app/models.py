@@ -1,0 +1,167 @@
+import uuid
+from datetime import date, datetime, time, timezone
+from typing import Any
+
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Time, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import Base
+
+def new_uuid() -> uuid.UUID:
+    return uuid.uuid4()
+
+class IdMixin:
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+
+class TenantScoped:
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+
+class Timestamped:
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class Tenant(IdMixin, Timestamped, Base):
+    __tablename__ = "tenants"
+    name_ar: Mapped[str] = mapped_column(String(200))
+    name_en: Mapped[str | None] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(String(100), unique=True)
+
+
+class User(IdMixin, Timestamped, Base):
+    __tablename__ = "users"
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    display_name_ar: Mapped[str] = mapped_column(String(200))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class TenantMembership(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "tenant_memberships"
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(40))
+    permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    __table_args__ = (UniqueConstraint("tenant_id", "user_id"),)
+
+
+class SchoolComplex(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "school_complexes"
+    name_ar: Mapped[str] = mapped_column(String(200))
+    name_en: Mapped[str | None] = mapped_column(String(200))
+    code: Mapped[str] = mapped_column(String(50))
+    __table_args__ = (UniqueConstraint("tenant_id", "code"),)
+
+
+class School(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "schools"
+    name_ar: Mapped[str] = mapped_column(String(200))
+    name_en: Mapped[str | None] = mapped_column(String(200))
+    complex_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("school_complexes.id", ondelete="SET NULL"), index=True
+    )
+    code: Mapped[str] = mapped_column(String(50))
+    school_type: Mapped[str] = mapped_column(String(40), default="school")
+    __table_args__ = (UniqueConstraint("tenant_id", "code"),)
+
+class AcademicYear(IdMixin, TenantScoped, Base):
+    __tablename__ = "academic_years"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    starts_on: Mapped[date] = mapped_column(Date)
+    ends_on: Mapped[date] = mapped_column(Date)
+
+class Term(IdMixin, TenantScoped, Base):
+    __tablename__ = "terms"
+    academic_year_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("academic_years.id", ondelete="CASCADE"))
+    name_ar: Mapped[str] = mapped_column(String(100))
+    order: Mapped[int] = mapped_column(Integer)
+
+class Teacher(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "teachers"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), index=True)
+    employee_code: Mapped[str] = mapped_column(String(50))
+    name_ar: Mapped[str] = mapped_column(String(200))
+    specialty_reference: Mapped[str | None] = mapped_column(String(150))
+    base_workload: Mapped[int] = mapped_column(Integer, default=0)
+    teaching_workload_limit: Mapped[int] = mapped_column(Integer, default=24)
+    __table_args__ = (UniqueConstraint("tenant_id", "school_id", "employee_code"),)
+
+class Subject(IdMixin, TenantScoped, Base):
+    __tablename__ = "subjects"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(50))
+    name_ar: Mapped[str] = mapped_column(String(150))
+    name_en: Mapped[str | None] = mapped_column(String(150))
+
+class Stage(IdMixin, TenantScoped, Base):
+    __tablename__ = "stages"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(50))
+    name_ar: Mapped[str] = mapped_column(String(100))
+
+class Grade(IdMixin, TenantScoped, Base):
+    __tablename__ = "grades"
+    stage_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"))
+    name_ar: Mapped[str] = mapped_column(String(100))
+    order: Mapped[int] = mapped_column(Integer)
+
+class Section(IdMixin, TenantScoped, Base):
+    __tablename__ = "sections"
+    grade_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("grades.id", ondelete="CASCADE"))
+    name_ar: Mapped[str] = mapped_column(String(100))
+    capacity: Mapped[int | None] = mapped_column(Integer)
+
+class Resource(IdMixin, TenantScoped, Base):
+    __tablename__ = "resources"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    name_ar: Mapped[str] = mapped_column(String(150))
+    resource_type: Mapped[str] = mapped_column(String(40), default="room")
+    capacity: Mapped[int | None] = mapped_column(Integer)
+    exclusive: Mapped[bool] = mapped_column(Boolean, default=True)
+
+class WeekPattern(IdMixin, TenantScoped, Base):
+    __tablename__ = "week_patterns"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(20))
+    name_ar: Mapped[str] = mapped_column(String(100))
+
+class PeriodTemplate(IdMixin, TenantScoped, Base):
+    __tablename__ = "period_templates"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    day_code: Mapped[str] = mapped_column(String(20))
+    period_number: Mapped[int] = mapped_column(Integer)
+    starts_at: Mapped[time] = mapped_column(Time)
+    ends_at: Mapped[time] = mapped_column(Time)
+    block_type: Mapped[str] = mapped_column(String(30), default="lesson")
+    attendance_mode: Mapped[str] = mapped_column(String(20), default="onsite")
+
+class TeachingAssignment(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "teaching_assignments"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    subject_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("subjects.id"))
+    teacher_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    section_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    resource_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    weekly_occurrences: Mapped[int] = mapped_column(Integer)
+    distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+class Rule(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "rules"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    name_ar: Mapped[str] = mapped_column(String(200))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    severity: Mapped[str] = mapped_column(String(10))
+    weight: Mapped[int | None] = mapped_column(Integer)
+    rule_type: Mapped[str] = mapped_column(String(80))
+    target_selectors: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    time_selectors: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    source: Mapped[str] = mapped_column(String(20), default="manual")
+
+class TimetableProject(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_projects"
+    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    term_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("terms.id"))
+    name_ar: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(30), default="draft")
+    settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
