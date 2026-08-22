@@ -24,7 +24,10 @@
 Authentication identity and permissions.
 
 ### Teacher
-School-scoped educator profile. Contains contractual workload limits, exemptions and preferences, but subject eligibility is not a hard restriction.
+Tenant-scoped canonical educator identity. A teacher is linked to one or more schools through Teacher School Membership, which holds school-local metadata such as employee code, home-school status and active status. The same identity is reused across schools so the scheduler can detect shared-teacher collisions. Subject eligibility is not a hard restriction.
+
+### Teacher School Membership
+Relational teacher ↔ school association within one tenant. A teacher must never be duplicated merely because they teach in multiple schools.
 
 ### Teacher Group
 Reusable set for rules, meetings, departments or custom grouping.
@@ -76,7 +79,7 @@ Targets can reference explicit IDs and/or reusable groups for teachers, subjects
 
 ## Timetable lifecycle
 ### Timetable Project
-Workspace for a school/term/shift/week-pattern scope.
+Workspace with a relational school scope. It may cover one school, a complex, or an explicit set of schools. All included schools belong to the same tenant; complex-scoped projects include only schools in that complex.
 
 ### Solver Run
 Immutable record of one solve attempt, settings, seed, limits and diagnostics.

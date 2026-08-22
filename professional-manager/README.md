@@ -61,7 +61,11 @@ python -m pytest
 
 ## مخطط البيانات في PM-001
 
-المهاجرة الأولى تنشئ: tenant، user، tenant_membership، school_complex، school، academic_year، term، teacher، subject، stage، grade، section، resource (غرفة/معمل/مورد)، week_pattern، period_template، teaching_assignment، rule، timetable_project. كل سجل متغير في النطاق يحمل `tenant_id`، وتتحقق استعلامات API منه على الخادم. عضوية المستخدم تفصل الهوية العالمية عن دوره وصلاحياته داخل كل مستأجر.
+المهاجرة الأولى تنشئ: tenant، user، tenant_membership، school_complex، school، academic_year، term، teacher، teacher_school_membership، subject، stage، grade، section، resource (غرفة/معمل/مورد)، week_pattern، period_template، teaching_assignment، teaching_assignment_teacher، rule، timetable_project، timetable_project_school. كل سجل متغير في النطاق يحمل `tenant_id`، وتتحقق استعلامات API منه على الخادم. عضوية المستخدم تفصل الهوية العالمية عن دوره وصلاحياته داخل كل مستأجر.
+
+المعلم هو هوية canonical على مستوى المستأجر، وتربطه عضويات relational بأي عدد من المدارس دون تكرار الشخص. مشروع الجدول يملك نطاق مدارس relational ويمكن أن يغطي مدرسة واحدة أو مجمعًا أو مجموعة مدارس؛ لذلك تصل هوية المعلم المشتركة نفسها إلى عقود المحرك عبر إسنادات المدارس المختلفة، بما يمهد لكشف التعارض بينها.
+
+مسارات الكتابة التأسيسية لعضوية المعلم ونطاق مشروع الجدول تتحقق من انتماء جميع المراجع للمستأجر النشط. هيدر `X-Tenant-ID` سياق تطوير فقط وليس مصادقة أو حدًا أمنيًا.
 
 `teacher.specialty_reference` مرجع وصفي فقط، ولا يدخل كقيد إسناد. قواعد الجدولة مخزنة بنموذج عام (`severity`, `rule_type`, selectors, parameters) وليست أعمدة منطقية متفرقة.
 

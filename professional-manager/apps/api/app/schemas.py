@@ -26,3 +26,33 @@ class DashboardSummary(BaseModel):
     resources: int
     active_project_name: str | None
 
+
+class TeacherSchoolMembershipCreate(BaseModel):
+    teacher_id: uuid.UUID
+    school_id: uuid.UUID
+    local_employee_code: str | None = None
+    is_home_school: bool = False
+
+
+class TeacherSchoolMembershipRead(TeacherSchoolMembershipCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    is_active: bool
+
+
+class TimetableProjectCreate(BaseModel):
+    name_ar: str
+    scope_type: str
+    school_ids: list[uuid.UUID]
+    complex_id: uuid.UUID | None = None
+    term_id: uuid.UUID | None = None
+
+
+class TimetableProjectRead(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    name_ar: str
+    scope_type: str
+    school_ids: list[uuid.UUID]
+    complex_id: uuid.UUID | None

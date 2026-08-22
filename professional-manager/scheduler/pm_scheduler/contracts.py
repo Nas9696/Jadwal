@@ -25,6 +25,7 @@ class Entity(BaseModel):
 
 class Assignment(BaseModel):
     id: str
+    school_id: str
     teacher_ids: list[str]
     section_ids: list[str]
     subject_id: str
@@ -67,6 +68,7 @@ class SolveOptions(BaseModel):
 
 class SchedulingProblem(BaseModel):
     problem_id: str
+    school_ids: list[str] = []
     slots: list[TimeSlot]
     teachers: list[Entity]
     sections: list[Entity]
@@ -112,4 +114,3 @@ class SolveResult(BaseModel):
     diagnostics: list[Diagnostic]
     solver_name: str
     solver_version: str
-

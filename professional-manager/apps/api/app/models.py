@@ -78,13 +78,29 @@ class Term(IdMixin, TenantScoped, Base):
 
 class Teacher(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teachers"
-    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), index=True)
-    employee_code: Mapped[str] = mapped_column(String(50))
+    canonical_code: Mapped[str] = mapped_column(String(50))
     name_ar: Mapped[str] = mapped_column(String(200))
     specialty_reference: Mapped[str | None] = mapped_column(String(150))
     base_workload: Mapped[int] = mapped_column(Integer, default=0)
     teaching_workload_limit: Mapped[int] = mapped_column(Integer, default=24)
-    __table_args__ = (UniqueConstraint("tenant_id", "school_id", "employee_code"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "canonical_code"),)
+
+
+class TeacherSchoolMembership(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "teacher_school_memberships"
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="CASCADE"), index=True
+    )
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="CASCADE"), index=True
+    )
+    local_employee_code: Mapped[str | None] = mapped_column(String(50))
+    is_home_school: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "teacher_id", "school_id"),
+        UniqueConstraint("tenant_id", "school_id", "local_employee_code"),
+    )
 
 class Subject(IdMixin, TenantScoped, Base):
     __tablename__ = "subjects"
@@ -139,11 +155,23 @@ class TeachingAssignment(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teaching_assignments"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
     subject_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("subjects.id"))
-    teacher_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     section_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     resource_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     weekly_occurrences: Mapped[int] = mapped_column(Integer)
     distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class TeachingAssignmentTeacher(IdMixin, TenantScoped, Base):
+    __tablename__ = "teaching_assignment_teachers"
+    teaching_assignment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teaching_assignments.id", ondelete="CASCADE"), index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="CASCADE"), index=True
+    )
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "teaching_assignment_id", "teacher_id"),
+    )
 
 class Rule(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "rules"
@@ -160,8 +188,24 @@ class Rule(IdMixin, TenantScoped, Timestamped, Base):
 
 class TimetableProject(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "timetable_projects"
-    school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
-    term_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("terms.id"))
+    scope_type: Mapped[str] = mapped_column(String(20))
+    complex_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("school_complexes.id", ondelete="RESTRICT"), index=True
+    )
+    term_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("terms.id"))
     name_ar: Mapped[str] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(30), default="draft")
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class TimetableProjectSchool(IdMixin, TenantScoped, Base):
+    __tablename__ = "timetable_project_schools"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "timetable_project_id", "school_id"),
+    )

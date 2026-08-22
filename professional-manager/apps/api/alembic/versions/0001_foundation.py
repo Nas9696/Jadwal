@@ -1,4 +1,7 @@
-"""Create PM-001 foundation schema.
+"""Create corrected PM-001 foundation schema.
+
+Includes canonical tenant teachers, relational teacher-school memberships,
+relational teaching-assignment teachers, and multi-school project scopes.
 
 Revision ID: 0001_foundation
 """
@@ -17,4 +20,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     Base.metadata.drop_all(bind=op.get_bind())
-
