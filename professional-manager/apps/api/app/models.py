@@ -713,6 +713,156 @@ class WorkingTimetableEntryResource(IdMixin, TenantScoped, Base):
     )
 
 
+class WaitingPolicy(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "waiting_policies"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    combined_workload_limit: Mapped[int | None] = mapped_column(Integer)
+    daily_waiting_limit: Mapped[int | None] = mapped_column(Integer)
+    weekly_waiting_limit: Mapped[int | None] = mapped_column(Integer)
+    fairness_weight: Mapped[int] = mapped_column(Integer, default=5)
+    specialty_preference_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    specialty_preference_weight: Mapped[int] = mapped_column(Integer, default=3)
+    same_school_preference_weight: Mapped[int] = mapped_column(Integer, default=0)
+    exclude_exempt_teachers: Mapped[bool] = mapped_column(Boolean, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "timetable_project_id"),
+        CheckConstraint("combined_workload_limit IS NULL OR combined_workload_limit >= 0"),
+        CheckConstraint("daily_waiting_limit IS NULL OR daily_waiting_limit >= 0"),
+        CheckConstraint("weekly_waiting_limit IS NULL OR weekly_waiting_limit >= 0"),
+        CheckConstraint("fairness_weight >= 0"),
+        CheckConstraint("specialty_preference_weight >= 0"),
+        CheckConstraint("same_school_preference_weight >= 0"),
+    )
+
+
+class TeacherWaitingProfile(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "teacher_waiting_profiles"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="CASCADE"), index=True
+    )
+    exempt: Mapped[bool] = mapped_column(Boolean, default=False)
+    custom_combined_limit: Mapped[int | None] = mapped_column(Integer)
+    custom_daily_limit: Mapped[int | None] = mapped_column(Integer)
+    custom_weekly_limit: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(String(500))
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "timetable_project_id", "teacher_id"),
+        CheckConstraint("custom_combined_limit IS NULL OR custom_combined_limit >= 0"),
+        CheckConstraint("custom_daily_limit IS NULL OR custom_daily_limit >= 0"),
+        CheckConstraint("custom_weekly_limit IS NULL OR custom_weekly_limit >= 0"),
+    )
+
+
+class TeacherAbsence(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "teacher_absences"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="RESTRICT"), index=True
+    )
+    working_timetable_revision: Mapped[int] = mapped_column(Integer)
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="RESTRICT"), index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="RESTRICT"), index=True
+    )
+    absence_date: Mapped[date] = mapped_column(Date, index=True)
+    project_cycle_week_index: Mapped[int] = mapped_column(Integer)
+    weekday_index: Mapped[int] = mapped_column(Integer)
+    full_day: Mapped[bool] = mapped_column(Boolean, default=True)
+    starts_at_minute: Mapped[int | None] = mapped_column(Integer)
+    ends_at_minute: Mapped[int | None] = mapped_column(Integer)
+    reason_code: Mapped[str | None] = mapped_column(String(50))
+    reason_text: Mapped[str | None] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(30), default="open", index=True)
+    __table_args__ = (
+        CheckConstraint("working_timetable_revision > 0"),
+        CheckConstraint("project_cycle_week_index >= 0"),
+        CheckConstraint("weekday_index >= 0 AND weekday_index <= 6"),
+        CheckConstraint(
+            "(full_day = TRUE AND starts_at_minute IS NULL AND ends_at_minute IS NULL) OR "
+            "(full_day = FALSE AND starts_at_minute IS NOT NULL AND ends_at_minute IS NOT NULL AND starts_at_minute < ends_at_minute)"
+        ),
+        CheckConstraint("status IN ('open','covered','partially_covered','cancelled')"),
+    )
+
+
+class SubstitutionNeed(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "substitution_needs"
+    absence_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teacher_absences.id", ondelete="CASCADE"), index=True
+    )
+    working_timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetable_entries.id", ondelete="RESTRICT"), index=True
+    )
+    occurrence_id: Mapped[str] = mapped_column(String(220), index=True)
+    absent_teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="RESTRICT"), index=True
+    )
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="RESTRICT"), index=True
+    )
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("subjects.id", ondelete="RESTRICT"), index=True
+    )
+    project_cycle_week_index: Mapped[int] = mapped_column(Integer)
+    weekday_index: Mapped[int] = mapped_column(Integer)
+    starts_at_minute: Mapped[int] = mapped_column(Integer)
+    ends_at_minute: Mapped[int] = mapped_column(Integer)
+    source_working_revision: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="unassigned", index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    __table_args__ = (
+        CheckConstraint("project_cycle_week_index >= 0"),
+        CheckConstraint("weekday_index >= 0 AND weekday_index <= 6"),
+        CheckConstraint("starts_at_minute < ends_at_minute"),
+        CheckConstraint("source_working_revision > 0"),
+        CheckConstraint("version > 0"),
+        CheckConstraint("status IN ('unassigned','assigned','uncovered','cancelled')"),
+    )
+
+
+class SubstitutionAssignment(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "substitution_assignments"
+    need_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("substitution_needs.id", ondelete="RESTRICT"), index=True
+    )
+    substitute_teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    recommendation_rank: Mapped[int | None] = mapped_column(Integer)
+    score: Mapped[int] = mapped_column(Integer)
+    score_breakdown: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    eligibility_facts: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    manual_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    assigned_by: Mapped[str | None] = mapped_column(String(200))
+    __table_args__ = (
+        CheckConstraint("status IN ('active','cancelled')"),
+        CheckConstraint("score >= 0"),
+        Index(
+            "uq_active_substitution_per_need",
+            "tenant_id",
+            "need_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
+
+
 class TimetableEditLock(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "timetable_edit_locks"
     working_timetable_id: Mapped[uuid.UUID] = mapped_column(

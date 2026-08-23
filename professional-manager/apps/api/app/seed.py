@@ -30,6 +30,7 @@ from app.models import (
     User,
     TimetableProject,
     TimetableProjectSchool,
+    WaitingPolicy,
     WeekPattern,
 )
 
@@ -324,6 +325,21 @@ def seed() -> None:
                     term_id=term_id,
                 )
             )
+        db.add(
+            WaitingPolicy(
+                tenant_id=DEMO_TENANT_ID,
+                timetable_project_id=project.id,
+                combined_workload_limit=24,
+                daily_waiting_limit=2,
+                weekly_waiting_limit=5,
+                fairness_weight=5,
+                specialty_preference_enabled=True,
+                specialty_preference_weight=2,
+                same_school_preference_weight=1,
+                exclude_exempt_teachers=True,
+                enabled=True,
+            )
+        )
         db.commit()
 
 

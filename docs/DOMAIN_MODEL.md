@@ -101,17 +101,17 @@ Explicitly protects entry/entity/range during generation or repair.
 Structured list of moves/swaps/add/remove produced by manual editing or repair.
 
 ## Waiting and substitution
-### Duty Policy
-Defines workload target, exclusions, fairness and limits.
+### Waiting Policy / Teacher Waiting Profile
+Project-scoped policy defining the combined teaching-plus-waiting cap, daily and weekly waiting limits, fairness weights, optional specialty/same-school preferences, and exemption behavior. A teacher profile can explicitly override nullable limits or mark that canonical teacher exempt; zero is a valid limit and is never treated as missing.
 
-### Waiting Assignment
-Teacher assigned to an available duty slot.
+### Teacher Absence
+An immutable dated full-day or real-time interval anchored to a project-global cycle week, normalized weekday, current Working Timetable id/revision, school, and canonical teacher. A stale revision is surfaced and still-unassigned needs are rebuilt only by an explicit refresh.
 
-### Absence
-Teacher absence window.
+### Substitution Need
+One teacher replacement position for one affected Working Timetable occurrence. It snapshots the absent teacher, school, subject, project-global week/day, real half-open interval, source revision, coverage status, and optimistic version. A co-taught lesson therefore creates a need only for each teacher actually absent.
 
-### Substitute Recommendation
-Ranked candidate with score, reasons and conflicts.
+### Substitution Assignment
+The authoritative active/cancelled relation between a need and a canonical substitute teacher. It retains recommendation rank, score breakdown, eligibility facts, manual-override marker, actor placeholder, and timestamps. The active relation is unique per need; assignment rechecks the current timetable, cross-school real-time collisions, absences, existing substitutions, hard unavailability, exemptions, and workload caps atomically.
 
 ## Imports
 - Import Job
