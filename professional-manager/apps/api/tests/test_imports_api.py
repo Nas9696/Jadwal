@@ -7,7 +7,19 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import ImportJob, Subject, Teacher, TeacherSchoolMembership
+from app.models import (
+    CurriculumRequirement,
+    Grade,
+    ImportJob,
+    Resource,
+    Section,
+    SectionOffering,
+    Stage,
+    Subject,
+    Teacher,
+    TeacherSchoolMembership,
+    TeachingAssignment,
+)
 from conftest import FIRST_SCHOOL, FIRST_TERM, SECOND_SCHOOL, SHARED_TEACHER, TEST_TENANT
 
 HEADERS = {"X-Tenant-ID": TEST_TENANT}
@@ -318,6 +330,11 @@ def test_explicit_assignment_group_key_creates_combined_coteaching_group(client:
         },
     )
     assert preview["status"] == "ready"
+    aggregate_preview = preview["rows"][0]["after_values"]["assignment_preview"]
+    assert len(aggregate_preview["coverage"]) == 2
+    assert len(aggregate_preview["teacher_workloads"]) == 2
+    assert all(item["delta"] == 2 for item in aggregate_preview["coverage"])
+    assert all(item["delta"] == 2 for item in aggregate_preview["teacher_workloads"])
     committed = client.post(
         base_url(f"/{job['id']}/commit"), headers=HEADERS, json={"acknowledge_warnings": True}
     )
@@ -328,3 +345,121 @@ def test_explicit_assignment_group_key_creates_combined_coteaching_group(client:
     assert len(snapshot["assignments"]) == 1
     assert len(snapshot["assignments"][0]["teacher_ids"]) == 2
     assert len(snapshot["assignments"][0]["section_offering_ids"]) == 2
+
+
+def test_multisheet_staged_dependencies_preview_zero_writes_then_atomic_commit(
+    client: TestClient, session: Session
+) -> None:
+    shift = client.post(
+        f"/api/v1/schools/{FIRST_SCHOOL}/setup/shifts",
+        headers=HEADERS,
+        json={"code": "STAGED-AM", "name_ar": "صباحي مرحلي", "order": 7, "is_active": True},
+    ).json()
+    workbook = Workbook()
+    sheets = {
+        "Structure": (["stage", "stage code", "grade", "section", "capacity"], ["متوسطة جديدة", "NEW-ST", "أول متوسط جديد", "أ", "25"]),
+        "Teachers": (["teacher code", "teacher name", "specialty"], ["STAGED-T", "معلم مرحلي", "رياضيات"]),
+        "Subjects": (["subject code", "subject name"], ["STAGED-S", "رياضيات مرحلية"]),
+        "Resources": (["resource code", "resource", "resource type", "capacity"], ["STAGED-R", "معمل مرحلي", "science_lab", "25"]),
+        "Curriculum": (["stage", "grade", "subject", "weekly lessons"], ["متوسطة جديدة", "أول متوسط جديد", "رياضيات مرحلية", "2"]),
+        "Offerings": (["stage", "grade", "section", "shift"], ["متوسطة جديدة", "أول متوسط جديد", "أ", "صباحي مرحلي"]),
+        "Assignments": (["group key", "teacher code", "subject", "stage", "grade", "section", "weekly lessons", "resource code"], ["SG1", "STAGED-T", "رياضيات مرحلية", "متوسطة جديدة", "أول متوسط جديد", "أ", "2", "STAGED-R"]),
+    }
+    workbook.remove(workbook.active)
+    for name, (headers, values) in sheets.items():
+        sheet = workbook.create_sheet(name)
+        sheet.append(headers)
+        sheet.append(values)
+    stream = io.BytesIO()
+    workbook.save(stream)
+    upload = client.post(
+        base_url("/upload"), headers=HEADERS, data={"term_id": FIRST_TERM},
+        files={"file": ("staged.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert upload.status_code == 201, upload.text
+    job = upload.json()
+    mapping = {
+        name: {"entity_type": entity, "columns": detected["suggested_mapping"]}
+        for name, entity in (("Structure", "structure"), ("Teachers", "teachers"), ("Subjects", "subjects"), ("Resources", "resources"), ("Curriculum", "curriculum"), ("Offerings", "offerings"), ("Assignments", "assignments"))
+        for detected in job["detected_sheets"] if detected["name"] == name
+    }
+    assert client.put(base_url(f"/{job['id']}/mapping"), headers=HEADERS, json={"sheets": mapping}).status_code == 200
+    models = (Stage, Grade, Section, Teacher, Subject, Resource, CurriculumRequirement, SectionOffering, TeachingAssignment)
+    before = {model: session.scalar(select(func.count()).select_from(model)) for model in models}
+    preview = client.post(base_url(f"/{job['id']}/validate"), headers=HEADERS)
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["status"] == "ready", body["rows"]
+    assert {model: session.scalar(select(func.count()).select_from(model)) for model in models} == before
+    assignment_row = next(row for row in body["rows"] if row["entity_type"] == "assignments")
+    projection = assignment_row["after_values"]["assignment_preview"]
+    assert projection["coverage"][0]["required"] == 2
+    assert projection["coverage"][0]["projected_assigned"] == 2
+    committed = client.post(base_url(f"/{job['id']}/commit"), headers=HEADERS, json={"acknowledge_warnings": True})
+    assert committed.status_code == 200, committed.text
+    assert all(session.scalar(select(func.count()).select_from(model)) > before[model] for model in models)
+    assert shift["id"]
+
+
+def test_safe_mode_surfaces_differences_and_explicit_updates_show_before_after(
+    client: TestClient, session: Session
+) -> None:
+    assert client.post(
+        f"/api/v1/schools/{FIRST_SCHOOL}/teacher-memberships", headers=HEADERS,
+        json={"teacher_id": SHARED_TEACHER, "is_active": True, "is_home_school": False},
+    ).status_code == 201
+    cases = [
+        ("subjects", "رمز المادة,اسم المادة\nM1,رياضيات مطورة\n", {"رمز المادة": "subject_code", "اسم المادة": "subject_name"}),
+        ("resources", "رمز المورد,المورد,نوع المورد,السعة\nLAB-1,معمل مطور,room,30\n", {"رمز المورد": "resource_code", "المورد": "resource_name", "نوع المورد": "resource_type", "السعة": "capacity"}),
+        ("teachers", "كود المعلم,اسم المعلم,التخصص\nT1,معلم مطور,رياضيات\n", {"كود المعلم": "teacher_code", "اسم المعلم": "teacher_name", "التخصص": "specialty"}),
+    ]
+    for entity, text_content, columns in cases:
+        safe_job = upload_csv(client, text_content.encode())
+        safe = map_and_validate(client, safe_job, entity, columns)
+        row = safe["rows"][0]
+        assert row["proposed_action"] == "warning"
+        assert row["before_values"] != row["after_values"]
+        assert any(item["code"] == "existing_data_difference" for item in row["diagnostics"])
+        update_job = upload_csv(client, text_content.encode(), name=f"{entity}-update.csv")
+        update = map_and_validate(client, update_job, entity, columns, allow_updates=True)
+        update_row = update["rows"][0]
+        assert update_row["proposed_action"] == "update"
+        assert update_row["before_values"] != update_row["after_values"]
+        assert client.post(base_url(f"/{update_job['id']}/commit"), headers=HEADERS, json={}).status_code == 200
+    assert session.scalar(select(Subject.name_ar).where(Subject.code == "M1")) == "رياضيات مطورة"
+    assert session.scalar(select(Resource.name_ar).where(Resource.code == "LAB-1")) == "معمل مطور"
+    assert session.get(Teacher, uuid.UUID(SHARED_TEACHER)).name_ar == "معلم مطور"
+
+
+def test_same_group_key_rejects_subject_or_weekly_count_mismatch(client: TestClient) -> None:
+    base = "مفتاح المجموعة,عدد الحصص,الشعبة,الصف,المرحلة,المادة,كود المعلم\n"
+    for second in ("G1,5,أ,الأول,ابتدائي,علوم,T1\n", "G1,3,أ,الأول,ابتدائي,رياضيات,T1\n"):
+        job = upload_csv(client, (base + "G1,5,أ,الأول,ابتدائي,رياضيات,T1\n" + second).encode(), FIRST_TERM)
+        preview = map_and_validate(client, job, "assignments", {
+            "مفتاح المجموعة": "group_key", "عدد الحصص": "weekly_occurrences", "الشعبة": "section_name",
+            "الصف": "grade_name", "المرحلة": "stage_name", "المادة": "subject_name", "كود المعلم": "teacher_code",
+        })
+        assert preview["status"] == "validated"
+        assert all(row["proposed_action"] == "conflict" for row in preview["rows"])
+        assert all(any(item["code"] == "group_scalar_mismatch" for item in row["diagnostics"]) for row in preview["rows"])
+
+
+def test_ambiguous_staged_reference_is_a_conflict(client: TestClient) -> None:
+    workbook = Workbook()
+    subjects = workbook.active
+    subjects.title = "Subjects"
+    subjects.append(["subject code", "subject name"])
+    subjects.append(["AMB-1", "مادة ملتبسة"])
+    subjects.append(["AMB-2", "مادة ملتبسة"])
+    curriculum = workbook.create_sheet("Curriculum")
+    curriculum.append(["stage", "grade", "subject", "weekly lessons"])
+    curriculum.append(["ابتدائي", "الأول", "مادة ملتبسة", "3"])
+    stream = io.BytesIO()
+    workbook.save(stream)
+    uploaded = client.post(base_url("/upload"), headers=HEADERS, files={"file": ("ambiguous.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}).json()
+    mappings = {item["name"]: {"entity_type": "subjects" if item["name"] == "Subjects" else "curriculum", "columns": item["suggested_mapping"]} for item in uploaded["detected_sheets"]}
+    assert client.put(base_url(f"/{uploaded['id']}/mapping"), headers=HEADERS, json={"sheets": mappings}).status_code == 200
+    preview = client.post(base_url(f"/{uploaded['id']}/validate"), headers=HEADERS).json()
+    curriculum_row = next(row for row in preview["rows"] if row["entity_type"] == "curriculum")
+    assert curriculum_row["proposed_action"] == "conflict"
+    assert any(item["code"] == "staged_reference_ambiguous" for item in curriculum_row["diagnostics"])

@@ -250,6 +250,8 @@ def update_teacher(
     school_id: uuid.UUID,
     teacher_id: uuid.UUID,
     payload: dict[str, Any],
+    *,
+    commit_changes: bool = True,
 ) -> Teacher:
     school(db, tenant_id, school_id)
     teacher = _teacher(db, tenant_id, teacher_id)
@@ -272,7 +274,10 @@ def update_teacher(
         fail("teacher_has_active_memberships", 409)
     for key, value in data.model_dump().items():
         setattr(teacher, key, value)
-    commit(db)
+    if commit_changes:
+        commit(db)
+    else:
+        db.flush()
     db.refresh(teacher)
     return teacher
 

@@ -18,7 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.assignment_services import preview_assignment, save_assignment, save_offerings
 from app.config import settings
-from app.master_services import create_teacher, link_teacher, save_catalog, school
+from app.master_services import create_teacher, link_teacher, save_catalog, school, update_teacher
 from app.models import (
     CurriculumRequirement,
     AcademicYear,
@@ -357,7 +357,10 @@ def _diag(row: ImportRow, severity: str, code: str, field: str | None = None) ->
         "membership_inactive": "ارتباط المعلم بهذه المدرسة غير نشط.",
         "reference_not_found": "تعذر العثور على مرجع مطابق داخل المدرسة.",
         "existing_data_conflict": "توجد بيانات حالية ولن تُستبدل في الوضع الآمن.",
+        "existing_data_difference": "تختلف القيم الواردة عن البيانات الحالية ولن تُستبدل في الوضع الآمن.",
         "invalid_weekly_count": "عدد الحصص الأسبوعية غير صالح.",
+        "staged_reference_ambiguous": "يوجد أكثر من مرجع مرحلي مطابق داخل الملف.",
+        "group_scalar_mismatch": "صفوف مجموعة التدريس لا تتفق على القيم الأساسية.",
     }
     return {"sheet": row.sheet_name, "row": row.source_row_number, "field": field, "severity": severity, "code": code, "message_ar": messages.get(code, code), "resolution_ar": "راجع المطابقة أو قيمة الخلية."}
 
@@ -369,15 +372,105 @@ def _resolve_structure(db: Session, job: ImportJob, values: dict[str, Any]) -> t
     return stage, grade, section
 
 
+def _key(*values: object) -> tuple[str, ...]:
+    return tuple(normalize_text(_plain(value)) for value in values)
+
+
+def _staged_indexes(rows: list[ImportRow]) -> dict[str, dict[tuple[str, ...], list[ImportRow]]]:
+    indexes: dict[str, dict[tuple[str, ...], list[ImportRow]]] = {
+        name: defaultdict(list) for name in ("stage", "grade", "section", "teacher", "subject_code", "subject_name", "resource_code", "resource_name", "offering", "curriculum")
+    }
+    for row in rows:
+        if row.excluded:
+            continue
+        values = row.normalized_values
+        if row.entity_type == "structure":
+            indexes["stage"][_key(values.get("stage_name"))].append(row)
+            indexes["grade"][_key(values.get("stage_name"), values.get("grade_name"))].append(row)
+            indexes["section"][_key(values.get("stage_name"), values.get("grade_name"), values.get("section_name"))].append(row)
+        elif row.entity_type == "teachers":
+            indexes["teacher"][_key(values.get("teacher_code"))].append(row)
+        elif row.entity_type == "subjects":
+            indexes["subject_code"][_key(values.get("subject_code"))].append(row)
+            indexes["subject_name"][_key(values.get("subject_name"))].append(row)
+        elif row.entity_type == "resources":
+            indexes["resource_code"][_key(values.get("resource_code"))].append(row)
+            indexes["resource_name"][_key(values.get("resource_name"))].append(row)
+        elif row.entity_type == "offerings":
+            indexes["offering"][_key(values.get("stage_name"), values.get("grade_name"), values.get("section_name"))].append(row)
+        elif row.entity_type == "curriculum":
+            indexes["curriculum"][_key(values.get("stage_name"), values.get("grade_name"), values.get("subject_name"))].append(row)
+    return indexes
+
+
+def _one_staged(index: dict[tuple[str, ...], list[ImportRow]], key: tuple[str, ...]) -> ImportRow | None:
+    matches = index.get(key, [])
+    return matches[0] if len(matches) == 1 else None
+
+
+def _add_difference(row: ImportRow, before: dict[str, Any], after: dict[str, Any], allow_updates: bool) -> str:
+    differences = {field: value for field, value in after.items() if before.get(field) != value}
+    row.before_values = before
+    row.after_values = {**before, **differences}
+    if not differences:
+        return "skip_unchanged"
+    if allow_updates:
+        return "update"
+    row.diagnostics.append(_diag(row, "warning", "existing_data_difference"))
+    return "warning"
+
+
+def _staged_assignment_projection(
+    overlay: dict[str, dict[tuple[str, ...], list[ImportRow]]],
+    section_keys: set[tuple[str, ...]],
+    teacher_codes: set[str],
+    subject_name: object,
+    count: int,
+) -> dict[str, Any]:
+    coverage: list[dict[str, Any]] = []
+    for section_key in sorted(section_keys):
+        curriculum_key = (section_key[0], section_key[1], normalize_text(subject_name))
+        required = next(
+            (
+                int(_plain(item.normalized_values.get("weekly_occurrences")))
+                for item in overlay["curriculum"].get(curriculum_key, [])
+                if _plain(item.normalized_values.get("weekly_occurrences"))
+            ),
+            0,
+        )
+        coverage.append(
+            {
+                "section": list(section_key),
+                "required": required,
+                "current_assigned": 0,
+                "delta": count,
+                "projected_assigned": count,
+                "projected_status": "over" if required and count > required else "complete" if required == count else "partial",
+            }
+        )
+    return {
+        "coverage": coverage,
+        "teacher_workloads": [
+            {"teacher_code": code, "current_workload": 0, "delta": count, "projected_workload": count, "limit": 24, "exceeds_limit": count > 24}
+            for code in sorted(teacher_codes)
+        ],
+        "warnings": [],
+    }
+
+
 def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: uuid.UUID) -> ImportJob:
     job = _job(db, tenant_id, school_id, job_id)
     if job.status == "committed":
         fail("import_already_committed", 409)
     if not job.mapping:
         fail("mapping_required")
+    rows = job_rows(db, job)
+    overlay = _staged_indexes(rows)
+    allow_updates = bool(job.mapping.get("allow_updates"))
     seen: set[tuple[str, str]] = set()
     counts: Counter[str] = Counter()
-    for row in job_rows(db, job):
+    assignment_groups: dict[str, list[ImportRow]] = defaultdict(list)
+    for row in rows:
         row.diagnostics = []
         row.before_values = {}
         row.after_values = dict(row.normalized_values)
@@ -399,6 +492,9 @@ def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id
         action = "create"
         if row.entity_type == "teachers":
             code = _plain(values.get("teacher_code"))
+            staged_matches = overlay["teacher"].get(_key(code), [])
+            if len(staged_matches) > 1:
+                row.diagnostics.append(_diag(row, "error", "staged_reference_ambiguous", "teacher_code"))
             teacher = db.scalar(select(Teacher).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code == code))
             if teacher:
                 membership = db.scalar(select(TeacherSchoolMembership).where(TeacherSchoolMembership.tenant_id == tenant_id, TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.teacher_id == teacher.id))
@@ -406,25 +502,42 @@ def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id
                     row.diagnostics.append(_diag(row, "error", "teacher_archived", "teacher_code"))
                 elif membership and not membership.is_active:
                     row.diagnostics.append(_diag(row, "error", "membership_inactive", "teacher_code"))
-                action = "skip_unchanged" if membership else "link_existing"
-                row.before_values = {"teacher_id": str(teacher.id), "name_ar": teacher.name_ar}
+                if membership:
+                    action = _add_difference(row, {"name_ar": teacher.name_ar, "specialty": teacher.specialty_reference or ""}, {"name_ar": _plain(values.get("teacher_name")), "specialty": _plain(values.get("specialty"))}, allow_updates)
+                    row.before_values["teacher_id"] = str(teacher.id)
+                else:
+                    action = "link_existing"
+                    row.before_values = {"teacher_id": str(teacher.id), "name_ar": teacher.name_ar}
             elif not code:
                 matches = list(db.scalars(select(Teacher).where(Teacher.tenant_id == tenant_id, func.lower(Teacher.name_ar) == _plain(values.get("teacher_name")).lower())))
                 if len(matches) != 1:
                     row.diagnostics.append(_diag(row, "error", "teacher_ambiguous", "teacher_name"))
         elif row.entity_type == "subjects":
             subject_existing = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, Subject.code == _plain(values.get("subject_code"))))
-            action = "skip_unchanged" if subject_existing else "create"
+            if len(overlay["subject_code"].get(_key(values.get("subject_code")), [])) > 1:
+                row.diagnostics.append(_diag(row, "error", "staged_reference_ambiguous", "subject_code"))
+            if subject_existing:
+                action = _add_difference(row, {"name_ar": subject_existing.name_ar}, {"name_ar": _plain(values.get("subject_name"))}, allow_updates)
         elif row.entity_type == "resources":
             resource_existing = db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == _plain(values.get("resource_code"))))
-            action = "skip_unchanged" if resource_existing else "create"
+            if len(overlay["resource_code"].get(_key(values.get("resource_code")), [])) > 1:
+                row.diagnostics.append(_diag(row, "error", "staged_reference_ambiguous", "resource_code"))
+            if resource_existing:
+                action = _add_difference(row, {"name_ar": resource_existing.name_ar, "resource_type": resource_existing.resource_type, "capacity": resource_existing.capacity}, {"name_ar": _plain(values.get("resource_name")), "resource_type": _plain(values.get("resource_type")) or "room", "capacity": int(_plain(values.get("capacity")) or 30)}, allow_updates)
         elif row.entity_type == "structure":
             _, _, section = _resolve_structure(db, job, values)
             action = "skip_unchanged" if section else "create"
         elif row.entity_type in {"curriculum", "offerings", "assignments"}:
             _, grade, section = _resolve_structure(db, job, values)
             subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower())) if row.entity_type != "offerings" else None
-            if not grade or (row.entity_type != "curriculum" and not section) or (row.entity_type != "offerings" and not subject):
+            grade_matches = overlay["grade"].get(_key(values.get("stage_name"), values.get("grade_name")), [])
+            grade_staged = grade_matches[0] if grade_matches else None
+            section_staged = _one_staged(overlay["section"], _key(values.get("stage_name"), values.get("grade_name"), values.get("section_name")))
+            subject_staged = _one_staged(overlay["subject_name"], _key(values.get("subject_name")))
+            ambiguous = ((row.entity_type != "curriculum" and not section and len(overlay["section"].get(_key(values.get("stage_name"), values.get("grade_name"), values.get("section_name")), [])) > 1) or (row.entity_type != "offerings" and not subject and len(overlay["subject_name"].get(_key(values.get("subject_name")), [])) > 1))
+            if ambiguous:
+                row.diagnostics.append(_diag(row, "error", "staged_reference_ambiguous"))
+            elif (not grade and not grade_staged) or (row.entity_type != "curriculum" and not section and not section_staged) or (row.entity_type != "offerings" and not subject and not subject_staged):
                 row.diagnostics.append(_diag(row, "error", "reference_not_found"))
             try:
                 count = int(_plain(values.get("weekly_occurrences"))) if row.entity_type != "offerings" else 1
@@ -436,30 +549,16 @@ def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id
                 requirement_existing = db.scalar(select(CurriculumRequirement).where(CurriculumRequirement.tenant_id == tenant_id, CurriculumRequirement.school_id == school_id, CurriculumRequirement.grade_id == grade.id, CurriculumRequirement.subject_id == subject.id))
                 if requirement_existing:
                     row.before_values = {"weekly_occurrences": requirement_existing.weekly_occurrences}
-                    if job.mapping.get("allow_updates"):
+                    row.after_values = {"weekly_occurrences": count}
+                    if allow_updates:
                         action = "update"
                     else:
                         action = "conflict"
                         row.diagnostics.append(_diag(row, "error", "existing_data_conflict"))
             if row.entity_type == "offerings" and not job.term_id:
                 row.diagnostics.append(_diag(row, "error", "reference_not_found", "term"))
-            if row.entity_type == "assignments" and grade and section and subject and job.term_id:
-                teacher_codes = [item.strip() for item in _plain(values.get("teacher_code")).split("|") if item.strip()]
-                teachers = list(db.scalars(select(Teacher).join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code.in_(teacher_codes), Teacher.is_active.is_(True), TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.is_active.is_(True))))
-                offering = db.scalar(select(SectionOffering).where(SectionOffering.tenant_id == tenant_id, SectionOffering.school_id == school_id, SectionOffering.term_id == job.term_id, SectionOffering.section_id == section.id, SectionOffering.is_active.is_(True)))
-                resource_ids: list[uuid.UUID] = []
-                resource_code = _plain(values.get("resource_code"))
-                if resource_code:
-                    resource = db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == resource_code, Resource.is_active.is_(True)))
-                    if resource:
-                        resource_ids.append(resource.id)
-                    else:
-                        row.diagnostics.append(_diag(row, "error", "reference_not_found", "resource_code"))
-                if len(teachers) != len(set(teacher_codes)) or not offering:
-                    row.diagnostics.append(_diag(row, "error", "reference_not_found"))
-                elif not any(item["severity"] == "error" for item in row.diagnostics):
-                    preview = preview_assignment(db, tenant_id, school_id, {"term_id": job.term_id, "subject_id": subject.id, "weekly_occurrences": count, "teacher_ids": [teacher.id for teacher in teachers], "section_offering_ids": [offering.id], "resource_ids": resource_ids})
-                    row.diagnostics.extend({"sheet": row.sheet_name, "row": row.source_row_number, "field": None, "severity": "warning", "code": warning["code"], "message_ar": warning["code"], "resolution_ar": "راجع أثر الإسناد."} for warning in preview.warnings)
+            if row.entity_type == "assignments":
+                assignment_groups[row.group_key or str(row.id)].append(row)
         if any(item["severity"] == "error" for item in row.diagnostics):
             action = "conflict"
             counts["errors"] += 1
@@ -467,6 +566,82 @@ def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id
         counts[action] += 1
         row.proposed_action = action
         # JSON mutations must be reassigned so SQLAlchemy persists row diagnostics.
+        row.diagnostics = [dict(item) for item in row.diagnostics]
+        flag_modified(row, "diagnostics")
+    for group_key, grouped in assignment_groups.items():
+        scalars = {(_key(row.normalized_values.get("subject_name")), _plain(row.normalized_values.get("weekly_occurrences")), str(job.term_id)) for row in grouped}
+        if len(scalars) != 1:
+            for row in grouped:
+                row.diagnostics.append(_diag(row, "error", "group_scalar_mismatch", "group_key"))
+                row.proposed_action = "conflict"
+            continue
+        teacher_ids: set[uuid.UUID] = set()
+        offering_ids: set[uuid.UUID] = set()
+        resource_ids: set[uuid.UUID] = set()
+        staged_teachers: set[str] = set()
+        staged_sections: set[tuple[str, ...]] = set()
+        staged_resources: set[str] = set()
+        subject_obj: Subject | None = None
+        failed_group = False
+        for row in grouped:
+            values = row.normalized_values
+            subject_obj = subject_obj or db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower()))
+            for code in {item.strip() for item in _plain(values.get("teacher_code")).split("|") if item.strip()}:
+                teacher = db.scalar(select(Teacher).join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code == code, Teacher.is_active.is_(True), TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.is_active.is_(True)))
+                staged = _one_staged(overlay["teacher"], _key(code))
+                if teacher:
+                    teacher_ids.add(teacher.id)
+                elif staged:
+                    staged_teachers.add(code)
+                else:
+                    row.diagnostics.append(_diag(row, "error", "reference_not_found", "teacher_code"))
+                    failed_group = True
+            _, _, section = _resolve_structure(db, job, values)
+            section_key = _key(values.get("stage_name"), values.get("grade_name"), values.get("section_name"))
+            offering = db.scalar(select(SectionOffering).where(SectionOffering.tenant_id == tenant_id, SectionOffering.school_id == school_id, SectionOffering.term_id == job.term_id, SectionOffering.section_id == section.id, SectionOffering.is_active.is_(True))) if section and job.term_id else None
+            if offering:
+                offering_ids.add(offering.id)
+            elif _one_staged(overlay["offering"], section_key):
+                staged_sections.add(section_key)
+            else:
+                row.diagnostics.append(_diag(row, "error", "reference_not_found", "section_name"))
+                failed_group = True
+            resource_code = _plain(values.get("resource_code"))
+            if resource_code:
+                resource = db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == resource_code, Resource.is_active.is_(True)))
+                if resource:
+                    resource_ids.add(resource.id)
+                elif _one_staged(overlay["resource_code"], _key(resource_code)):
+                    staged_resources.add(resource_code)
+                else:
+                    row.diagnostics.append(_diag(row, "error", "reference_not_found", "resource_code"))
+                    failed_group = True
+        if not subject_obj and not _one_staged(overlay["subject_name"], next(iter(scalars))[0]):
+            failed_group = True
+        if failed_group:
+            for row in grouped:
+                row.proposed_action = "conflict"
+            continue
+        count = int(next(iter(scalars))[1])
+        if subject_obj and not staged_teachers and not staged_sections and not staged_resources:
+            preview = preview_assignment(db, tenant_id, school_id, {"term_id": job.term_id, "subject_id": subject_obj.id, "weekly_occurrences": count, "teacher_ids": list(teacher_ids), "section_offering_ids": list(offering_ids), "resource_ids": list(resource_ids)})
+            preview_data = preview.model_dump(mode="json")
+        else:
+            preview_data = _staged_assignment_projection(overlay, staged_sections, staged_teachers, grouped[0].normalized_values.get("subject_name"), count)
+        for row in grouped:
+            row.after_values = {**row.after_values, "assignment_preview": preview_data, "aggregate_group_key": group_key}
+            flag_modified(row, "after_values")
+            flag_modified(row, "diagnostics")
+    counts = Counter()
+    for row in rows:
+        if row.excluded or row.entity_type == "skip":
+            counts["skipped"] += 1
+        else:
+            if any(item["severity"] == "error" for item in row.diagnostics):
+                row.proposed_action = "conflict"
+                counts["errors"] += 1
+            counts["warnings"] += sum(item["severity"] == "warning" for item in row.diagnostics)
+            counts[row.proposed_action] += 1
         row.diagnostics = [dict(item) for item in row.diagnostics]
         flag_modified(row, "diagnostics")
     total = len(job_rows(db, job))
@@ -504,7 +679,7 @@ def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: 
         fail("import_not_ready", 409)
     if job.validation_summary.get("warnings") and not acknowledge_warnings:
         fail("warnings_acknowledgement_required", 409)
-    rows = [row for row in job_rows(db, job) if not row.excluded and row.proposed_action not in {"skip_unchanged", "conflict"}]
+    rows = [row for row in job_rows(db, job) if not row.excluded and row.proposed_action in {"create", "link_existing", "update"}]
     counts: Counter[str] = Counter()
     try:
         for row in [item for item in rows if item.entity_type == "structure"]:
@@ -521,8 +696,13 @@ def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: 
             values = row.normalized_values
             teacher = db.scalar(select(Teacher).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code == _plain(values.get("teacher_code"))))
             if teacher:
-                link_teacher(db, tenant_id, school_id, {"teacher_id": teacher.id, "local_employee_code": _plain(values.get("teacher_code")), "is_home_school": False, "is_active": True}, commit_changes=False)
-                counts["linked"] += 1
+                membership = db.scalar(select(TeacherSchoolMembership).where(TeacherSchoolMembership.tenant_id == tenant_id, TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.teacher_id == teacher.id))
+                if row.proposed_action == "update" and membership:
+                    update_teacher(db, tenant_id, school_id, teacher.id, {"canonical_code": teacher.canonical_code, "name_ar": _plain(values.get("teacher_name")), "name_en": teacher.name_en, "specialty_reference": _plain(values.get("specialty")) or None, "base_workload": teacher.base_workload, "teaching_workload_limit": teacher.teaching_workload_limit, "is_active": teacher.is_active}, commit_changes=False)
+                    counts["updated"] += 1
+                elif not membership:
+                    link_teacher(db, tenant_id, school_id, {"teacher_id": teacher.id, "local_employee_code": _plain(values.get("teacher_code")), "is_home_school": False, "is_active": True}, commit_changes=False)
+                    counts["linked"] += 1
             else:
                 create_teacher(db, tenant_id, school_id, {"canonical_code": _plain(values.get("teacher_code")), "name_ar": _plain(values.get("teacher_name")), "specialty_reference": _plain(values.get("specialty")) or None, "base_workload": 0, "teaching_workload_limit": 24, "is_active": True, "local_employee_code": _plain(values.get("teacher_code")), "is_home_school": False}, commit_changes=False)
                 counts["created"] += 1
@@ -530,8 +710,13 @@ def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: 
             for row in [item for item in rows if item.entity_type == entity]:
                 values = row.normalized_values
                 payload: dict[str, Any] = ({"code": _plain(values.get("subject_code")), "name_ar": _plain(values.get("subject_name")), "name_en": None, "is_active": True} if entity == "subjects" else {"code": _plain(values.get("resource_code")), "name_ar": _plain(values.get("resource_name")), "resource_type": _plain(values.get("resource_type")) or "room", "capacity": int(_plain(values.get("capacity")) or 30), "exclusive": True, "is_active": True})
-                save_catalog(db, tenant_id, school_id, kind, payload, commit_changes=False)
-                counts["created"] += 1
+                existing_entity = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, Subject.code == _plain(values.get("subject_code")))) if entity == "subjects" else db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == _plain(values.get("resource_code"))))
+                if isinstance(existing_entity, Subject):
+                    payload.update(name_en=existing_entity.name_en, is_active=existing_entity.is_active)
+                elif isinstance(existing_entity, Resource):
+                    payload.update(exclusive=existing_entity.exclusive, is_active=existing_entity.is_active)
+                save_catalog(db, tenant_id, school_id, kind, payload, existing_entity.id if row.proposed_action == "update" and existing_entity else None, commit_changes=False)
+                counts["updated" if existing_entity else "created"] += 1
         for row in [item for item in rows if item.entity_type == "curriculum"]:
             values = row.normalized_values
             _, grade, _ = _resolve_structure(db, job, values)
