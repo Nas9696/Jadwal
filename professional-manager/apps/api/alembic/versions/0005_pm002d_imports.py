@@ -14,6 +14,15 @@ depends_on = None
 
 
 def upgrade() -> None:
+    tables = set(sa.inspect(op.get_bind()).get_table_names())
+    existing = {"import_jobs", "import_rows"} & tables
+    # Revision 0001 intentionally evaluates the current reviewed metadata on a
+    # clean installation. In that path PM-002D tables already exist when the
+    # revision chain reaches 0005, while older deployed databases need both.
+    if existing == {"import_jobs", "import_rows"}:
+        return
+    if existing:
+        raise RuntimeError("Incomplete PM-002D import staging schema")
     op.create_table(
         "import_jobs",
         sa.Column("id", sa.Uuid(), nullable=False),
