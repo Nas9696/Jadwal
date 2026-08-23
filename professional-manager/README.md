@@ -85,6 +85,15 @@
 
 ## التشغيل السريع عبر Docker
 
+على Windows، مسار UAT الموصى به هو أمر واحد (يشغّل PostgreSQL 16 والمهاجرات وDemo Seed وAPI وWeb ويفتح المتصفح):
+
+```powershell
+cd D:\myapp\jadwal\professional-manager
+.\scripts\demo.ps1
+```
+
+راجع `docs/UAT_LOCAL_DEMO.md` لأمري reset والإيقاف وترتيب الشاشات المقترح.
+
 ```bash
 cp .env.example .env
 docker compose up --build
