@@ -58,12 +58,14 @@ def project_cycle_length(
 def expand_project_slots(
     local_slots: Iterable[LocalTimeSlot],
     school_cycle_lengths: Mapping[str, int],
+    school_cycle_phase_offsets: Mapping[str, int] | None = None,
     maximum_cycle_length: int = DEFAULT_MAX_PROJECT_CYCLE_WEEKS,
 ) -> tuple[int, list[TimeSlot]]:
     normalized_length = project_cycle_length(
         school_cycle_lengths.values(), maximum_cycle_length
     )
     expanded: list[TimeSlot] = []
+    offsets = school_cycle_phase_offsets or {}
     for local_slot in sorted(
         local_slots,
         key=lambda slot: (
@@ -82,11 +84,12 @@ def expand_project_slots(
             ) from exc
         if local_slot.local_cycle_week_index >= local_cycle_length:
             raise ValueError("local slot week index is outside its school cycle")
-        for project_week in range(
-            local_slot.local_cycle_week_index,
-            normalized_length,
-            local_cycle_length,
-        ):
+        offset = offsets.get(local_slot.school_id, 0)
+        if offset < 0 or offset >= local_cycle_length:
+            raise ValueError("school cycle phase offset is outside its local cycle")
+        for project_week in range(normalized_length):
+            if (project_week + offset) % local_cycle_length != local_slot.local_cycle_week_index:
+                continue
             expanded.append(
                 TimeSlot(
                     **local_slot.model_dump(exclude={"id"}),

@@ -22,6 +22,31 @@ def local_slot(school: str, local_week: int, suffix: str) -> LocalTimeSlot:
     )
 
 
+def test_explicit_phase_offset_aligns_local_week_to_project_week() -> None:
+    slots = [local_slot("A", 0, "a"), local_slot("B", 0, "b0"), local_slot("B", 1, "b1")]
+    length, phase_zero = expand_project_slots(slots, {"A": 1, "B": 2}, {"A": 0, "B": 0})
+    assert length == 2
+    assert [
+        (x.local_cycle_week_index, x.project_cycle_week_index)
+        for x in phase_zero
+        if x.school_id == "B"
+    ] == [(0, 0), (1, 1)]
+    _, phase_one = expand_project_slots(slots, {"A": 1, "B": 2}, {"A": 0, "B": 1})
+    assert [
+        (x.local_cycle_week_index, x.project_cycle_week_index)
+        for x in phase_one
+        if x.school_id == "B"
+    ] == [(0, 1), (1, 0)]
+
+
+def test_phase_two_vs_three_has_global_cycle_six_and_rejects_invalid_phase() -> None:
+    slots = [local_slot("A", 0, "a"), local_slot("B", 0, "b")]
+    length, _ = expand_project_slots(slots, {"A": 2, "B": 3}, {"A": 1, "B": 2})
+    assert length == 6
+    with pytest.raises(ValueError, match="phase offset"):
+        expand_project_slots(slots, {"A": 2, "B": 3}, {"A": 2, "B": 0})
+
+
 def test_one_week_cycle_repeats_across_two_week_project() -> None:
     length, slots = expand_project_slots(
         [local_slot("school-a", 0, "a"), local_slot("school-b", 0, "a")],
@@ -39,9 +64,7 @@ def test_shared_teacher_can_collide_in_project_week_different_from_local_index()
         [local_slot("school-a", 0, "a"), local_slot("school-b", 1, "b")],
         {"school-a": 1, "school-b": 2},
     )
-    project_week_one = [
-        slot for slot in slots if slot.project_cycle_week_index == 1
-    ]
+    project_week_one = [slot for slot in slots if slot.project_cycle_week_index == 1]
     assert {slot.local_cycle_week_index for slot in project_week_one} == {0, 1}
     assert len(project_week_one) == 2
     assert slots_overlap(project_week_one[0], project_week_one[1])

@@ -1,1 +1,1 @@
-import { ComingSoon } from "@/components/coming-soon"; export default function Page(){ return <ComingSoon title="الجداول الذكية"/>; }
+import "../timetables.css";import {TimetableWorkspace} from "@/components/timetable-workspace";export default function Page(){return <TimetableWorkspace/>}

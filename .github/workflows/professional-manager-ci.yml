@@ -52,7 +52,7 @@ jobs:
       - name: Seed PostgreSQL with foreign keys enforced
         run: python -m app.seed
       - name: Assert seeded PostgreSQL integrity
-        run: python -c "from sqlalchemy import create_engine,text; from app.config import settings; e=create_engine(settings.database_url); c=e.connect(); assert c.scalar(text('select count(*) from tenants')) >= 1; assert c.scalar(text('select count(*) from schools')) >= 1; assert c.scalar(text('select count(*) from terms')) >= 1; assert c.scalar(text('select count(*) from alembic_version where version_num = :v'), {'v':'0005_pm002d_imports'}) == 1; c.close()"
+        run: python -c "from sqlalchemy import create_engine,text; from app.config import settings; e=create_engine(settings.database_url); c=e.connect(); assert c.scalar(text('select count(*) from tenants')) >= 1; assert c.scalar(text('select count(*) from schools')) >= 1; assert c.scalar(text('select count(*) from terms')) >= 1; assert c.scalar(text('select count(*) from alembic_version where version_num = :v'), {'v':'0006_pm003a_projects_rules'}) == 1; c.close()"
       - run: ruff check apps/api scheduler
       - run: mypy apps/api/app scheduler/pm_scheduler
       - run: pytest

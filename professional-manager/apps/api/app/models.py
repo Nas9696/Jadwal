@@ -446,6 +446,7 @@ class TimetableProject(IdMixin, TenantScoped, Timestamped, Base):
         ForeignKey("school_complexes.id", ondelete="RESTRICT"), index=True
     )
     name_ar: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(30), default="draft")
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
@@ -461,4 +462,24 @@ class TimetableProjectSchool(IdMixin, TenantScoped, Base):
     term_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("terms.id", ondelete="RESTRICT"), index=True
     )
+    cycle_phase_offset: Mapped[int] = mapped_column(Integer, default=0)
     __table_args__ = (UniqueConstraint("tenant_id", "timetable_project_id", "school_id"),)
+
+
+class SchedulingRule(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "scheduling_rules"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    label: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(String(500))
+    rule_type: Mapped[str] = mapped_column(String(80), index=True)
+    severity: Mapped[str] = mapped_column(String(10))
+    weight: Mapped[int | None] = mapped_column(Integer)
+    selector: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    parameters: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (
+        CheckConstraint("severity IN ('hard','soft')"),
+        CheckConstraint("weight IS NULL OR weight > 0"),
+    )

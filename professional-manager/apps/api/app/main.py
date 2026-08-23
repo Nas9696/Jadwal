@@ -26,15 +26,14 @@ from app.schemas import (
     SchoolRead,
     TeacherSchoolMembershipCreate,
     TeacherSchoolMembershipRead,
-    TimetableProjectCreate,
-    TimetableProjectRead,
 )
-from app.services import create_teacher_school_membership, create_timetable_project
+from app.services import create_teacher_school_membership
 from app.tenant import tenant_context
 from app.setup_router import router as setup_router
 from app.master_router import router as master_router
 from app.assignment_router import router as assignment_router
 from app.import_router import router as import_router
+from app.project_router import router as project_router
 
 app = FastAPI(
     title=settings.app_name,
@@ -53,6 +52,7 @@ app.include_router(setup_router)
 app.include_router(master_router)
 app.include_router(assignment_router)
 app.include_router(import_router)
+app.include_router(project_router)
 
 
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["system"])
@@ -157,26 +157,3 @@ def add_teacher_to_school(
     db: Annotated[Session, Depends(get_db)],
 ) -> TeacherSchoolMembership:
     return create_teacher_school_membership(db, tenant_id, payload)
-
-
-@app.post(
-    "/api/v1/timetable-projects",
-    response_model=TimetableProjectRead,
-    status_code=201,
-    tags=["timetables"],
-)
-def add_timetable_project(
-    payload: TimetableProjectCreate,
-    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
-    db: Annotated[Session, Depends(get_db)],
-) -> TimetableProjectRead:
-    project, school_ids = create_timetable_project(db, tenant_id, payload)
-    calendars_by_school = {calendar.school_id: calendar for calendar in payload.schools}
-    return TimetableProjectRead(
-        id=project.id,
-        tenant_id=project.tenant_id,
-        name_ar=project.name_ar,
-        scope_type=project.scope_type,
-        schools=[calendars_by_school[school_id] for school_id in school_ids],
-        complex_id=project.complex_id,
-    )
