@@ -193,4 +193,14 @@ Relevant versioned endpoints:
 - `GET /api/v1/timetable-projects/{project}/candidates/{candidate}/explanations?occurrence_id=...`
 - `GET /api/v1/timetable-projects/{project}/working-timetable/quality`
 - `GET /api/v1/timetable-projects/{project}/working-timetable/quality/compare/{candidate}`
+
+## PM-004B — مساعد قواعد الجدولة العربي
+
+تتضمن صفحة `/timetables` محللًا عربيًا حتميًا يعمل دون خدمة خارجية. يحل المراجع داخل نطاق
+المستأجر والمشروع، ويعيد خيارات توضيح عند الغموض بدون تخمين. تخزن المعاينة في `AssistantRuleDraft`
+مؤقت محدود العمر، ولا تنشئ أي `SchedulingRule`. التأكيد الصريح فقط يعيد التحقق من `RULE_REGISTRY` والنطاق،
+ثم يحفظ القواعد المحددة ذريًا لتدخل مباشرة في preflight وCP-SAT والجودة والتفسيرات.
+
+- `POST /api/v1/timetable-projects/{project}/assistant/parse`
+- `POST /api/v1/timetable-projects/{project}/assistant/confirm`
 - `GET /api/v1/timetable-projects/{project}/working-timetable/explanations?occurrence_id=...`

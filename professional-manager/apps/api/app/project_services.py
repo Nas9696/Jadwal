@@ -212,6 +212,8 @@ def save_rule(
     project_id: uuid.UUID,
     data: RuleInput,
     rule_id: uuid.UUID | None = None,
+    *,
+    commit: bool = True,
 ) -> SchedulingRule:
     project = _project(db, tenant, project_id)
     validate_rule(db, tenant, project, data)
@@ -231,8 +233,11 @@ def save_rule(
     for k, v in data.model_dump().items():
         setattr(rule, k, v)
     db.add(rule)
-    db.commit()
-    db.refresh(rule)
+    if commit:
+        db.commit()
+        db.refresh(rule)
+    else:
+        db.flush()
     return rule
 
 
@@ -257,7 +262,9 @@ def _matches(slot: TimeSlot, params: dict[str, Any]) -> bool:
     return all(
         params.get(k) is None or getattr(slot, k) == params[k]
         for k in ("project_cycle_week_index", "weekday_index", "starts_at_minute", "ends_at_minute")
-    ) and (not params.get("slot_id") or slot.id == params["slot_id"])
+    ) and (not params.get("slot_id") or slot.id == params["slot_id"]) and (
+        not params.get("period_numbers") or slot.period in params["period_numbers"]
+    )
 
 
 def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> SchedulingProblem:

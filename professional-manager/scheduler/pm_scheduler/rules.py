@@ -16,6 +16,7 @@ class TimeParameters(BaseModel):
     starts_at_minute: int | None = Field(default=None, ge=0, lt=1440)
     ends_at_minute: int | None = Field(default=None, gt=0, le=1440)
     slot_id: str | None = None
+    period_numbers: list[int] | None = Field(default=None, min_length=1, max_length=20)
 
     @model_validator(mode="after")
     def valid_interval(self) -> "TimeParameters":
@@ -25,6 +26,10 @@ class TimeParameters(BaseModel):
             and self.starts_at_minute >= self.ends_at_minute
         ):
             raise ValueError("invalid_time_interval")
+        if self.period_numbers is not None and any(value < 1 or value > 30 for value in self.period_numbers):
+            raise ValueError("invalid_period_number")
+        if self.period_numbers is not None and len(set(self.period_numbers)) != len(self.period_numbers):
+            raise ValueError("duplicate_period_number")
         return self
 
 

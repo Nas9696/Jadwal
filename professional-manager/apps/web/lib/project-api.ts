@@ -37,6 +37,9 @@ export type SnapshotComparison = { snapshot_id: string; source_revision: number;
 export type ProjectSlot = { id: string; school_id: string; project_cycle_week_index: number; weekday_index: number; starts_at_minute: number; ends_at_minute: number; attendance_mode: string };
 export type QualityReport = { hard_violations: Array<Record<string, unknown>>; total_weighted_penalty: number; penalty_breakdown: Penalty[]; teacher_gaps: Record<string, number>; teacher_gap_total: number; first_period_distribution: Record<string, number>; last_period_distribution: Record<string, number>; consecutive_streaks: Array<{teacher_id:string;maximum_streak:number}>; distribution_violations: Array<Record<string, unknown>>; source: Record<string, unknown> };
 export type PlacementExplanation = { occurrence_id:string; chosen_slot:ProjectSlot; mandatory_rule_facts:Array<Record<string,unknown>>; preference_rule_facts:Array<Record<string,unknown>>; entity_facts:Record<string,string[]>; alternatives:Array<{slot:ProjectSlot;status:"blocked"|"valid"|"valid_but_worse";blocking_facts:Array<Record<string,unknown>>;penalty_delta:number}> };
+export type AssistantProposal = { id:string; rule_type:string; severity:"hard"|"soft"; weight:number|null; selector:Record<string,unknown>; parameters:Record<string,unknown>; resolved_labels:Record<string,unknown>; arabic_summary:string; evidence:string[] };
+export type AssistantClarification = { key:string; reference_type:string; mention:string; question:string; choices:Array<{id:string;label:string;context?:string|null}> };
+export type AssistantPreview = { source_text:string; status:"ready"|"needs_clarification"|"unsupported"|"invalid"; parser_type:string; preview_token:string; expires_at:string; proposals:AssistantProposal[]; clarifications:AssistantClarification[]; warnings:Array<{code:string;message?:string}> };
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { ...options, headers: { "Content-Type": "application/json", "X-Tenant-ID": TENANT_ID, ...options?.headers } });
@@ -58,6 +61,8 @@ export const projectApi = {
   updateRule: (id: string, ruleId: string, payload: object) => req<Rule>(`/timetable-projects/${id}/rules/${ruleId}`, { method: "PUT", body: JSON.stringify(payload) }),
   duplicateRule: (id: string, ruleId: string) => req<Rule>(`/timetable-projects/${id}/rules/${ruleId}/duplicate`, { method: "POST" }),
   removeRule: (id: string, ruleId: string) => req<void>(`/timetable-projects/${id}/rules/${ruleId}`, { method: "DELETE" }),
+  assistantParse: (id:string,payload:{text:string;resolutions?:Record<string,string>}) => req<AssistantPreview>(`/timetable-projects/${id}/assistant/parse`, {method:"POST",body:JSON.stringify(payload)}),
+  assistantConfirm: (id:string,payload:{preview_token:string;proposal_ids:string[]}) => req<{created_rules:Rule[];consumed:boolean}>(`/timetable-projects/${id}/assistant/confirm`, {method:"POST",body:JSON.stringify(payload)}),
   preflight: (id: string) => req<Preflight>(`/timetable-projects/${id}/preflight`, { method: "POST" }),
   solve: (id: string, payload: object = { candidate_count: 3, time_limit_seconds: 10, seed: 0, optimization_profile: "balanced" }) => req<SolveRun>(`/timetable-projects/${id}/solve`, { method: "POST", body: JSON.stringify(payload) }),
   solveRun: (projectId: string, runId: string) => req<SolveRun>(`/timetable-projects/${projectId}/solve-runs/${runId}`),

@@ -119,7 +119,7 @@ def _targets(rule: SchedulingRule, occurrence: Any) -> bool:
 
 
 def _slot_matches(slot: TimeSlot, params: dict[str, Any]) -> bool:
-    return all(params.get(key) is None or getattr(slot, key) == params[key] for key in ("project_cycle_week_index", "weekday_index", "starts_at_minute", "ends_at_minute")) and (not params.get("slot_id") or slot.id == params["slot_id"])
+    return all(params.get(key) is None or getattr(slot, key) == params[key] for key in ("project_cycle_week_index", "weekday_index", "starts_at_minute", "ends_at_minute")) and (not params.get("slot_id") or slot.id == params["slot_id"]) and (not params.get("period_numbers") or slot.period in params["period_numbers"])
 
 
 def _rule_violations(rule: SchedulingRule, values: list[tuple[Any, TimeSlot]]) -> tuple[int, list[dict[str, Any]]]:

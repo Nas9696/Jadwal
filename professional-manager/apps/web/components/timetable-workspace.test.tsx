@@ -5,7 +5,7 @@ import { projectApi } from "@/lib/project-api";
 import { TimetableWorkspace } from "./timetable-workspace";
 
 vi.mock("@/lib/setup-api", () => ({ setupApi: { schools: vi.fn(), snapshot: vi.fn() } }));
-vi.mock("@/lib/project-api", () => ({ projectApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), rules: vi.fn(), saveRule: vi.fn(), updateRule: vi.fn(), duplicateRule: vi.fn(), removeRule: vi.fn(), preflight: vi.fn(), solve: vi.fn(), solveRun: vi.fn(), candidate: vi.fn(), candidateQuality:vi.fn(), candidateExplanation:vi.fn() } }));
+vi.mock("@/lib/project-api", () => ({ projectApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), rules: vi.fn(), saveRule: vi.fn(), updateRule: vi.fn(), duplicateRule: vi.fn(), removeRule: vi.fn(), assistantParse:vi.fn(), assistantConfirm:vi.fn(), preflight: vi.fn(), solve: vi.fn(), solveRun: vi.fn(), candidate: vi.fn(), candidateQuality:vi.fn(), candidateExplanation:vi.fn() } }));
 
 const school = { id: "s1", name_ar: "مدرسة النور", code: "S1" };
 const setup = { school, years: [], terms: [{ id: "t1", name_ar: "الأول" }], shifts: [], patterns: [{ id: "w1", name_ar: "A" }, { id: "w2", name_ar: "B" }], days: [], blocks: [], stages: [], grades: [], sections: [] };
@@ -21,6 +21,8 @@ describe("timetable workspace", () => {
     vi.mocked(projectApi.create).mockResolvedValue(project);
     vi.mocked(projectApi.update).mockResolvedValue(project);
     vi.mocked(projectApi.rules).mockResolvedValue([]);
+    vi.mocked(projectApi.assistantParse).mockResolvedValue({source_text:"لا تضع",status:"ready",parser_type:"deterministic_ar_v1",preview_token:"secure-preview-token-123456789",expires_at:"2026-08-23T12:00:00Z",clarifications:[],warnings:[],proposals:[{id:"proposal-1",rule_type:"teacher_unavailable",severity:"hard",weight:null,selector:{teacher_id:"t1"},parameters:{weekday_index:0,period_numbers:[1]},resolved_labels:{teacher:"أحمد"},arabic_summary:"لا توضع حصص أحمد في الحصة 1 يوم الأحد.",evidence:["hard:no-placement"]}]});
+    vi.mocked(projectApi.assistantConfirm).mockResolvedValue({created_rules:[],consumed:true});
     vi.mocked(projectApi.preflight).mockResolvedValue({ readiness: "توجد أخطاء تمنع التوليد", errors: 1, warnings: 0, diagnostics: [{ code: "no_lesson_slots", message: "لا توجد حصص قابلة للجدولة" }] });
     vi.mocked(projectApi.solve).mockResolvedValue(completed);
     vi.mocked(projectApi.candidate).mockImplementation(async (_projectId, id) => id === "c2" ? detail("c2", 2, "العلوم") : detail("c1", 1, "الرياضيات"));
@@ -90,5 +92,14 @@ describe("timetable workspace", () => {
 
   it("renders factual quality and placement explanation panels",async()=>{
     vi.mocked(projectApi.preflight).mockResolvedValue({readiness:"جاهز للتوليد",errors:0,warnings:0,diagnostics:[]});render(<TimetableWorkspace/>);fireEvent.click(await screen.findByRole("button",{name:/مشروع الفصل/}));fireEvent.click(screen.getByRole("button",{name:"تشغيل فحص الجاهزية"}));await screen.findByText("جاهز للتوليد");fireEvent.click(screen.getByRole("button",{name:"توليد الجدول"}));await screen.findByText("الرياضيات");fireEvent.click(screen.getByRole("button",{name:"جودة الجدول"}));expect(await screen.findByText("مجموع الجزاء الموزون: 12")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"لماذا هنا؟"}));expect(await screen.findByText(/بديل صالح لكنه أسوأ/)).toHaveTextContent("فرق الجزاء 25");
+  });
+
+  it("previews Arabic proposals without auto-saving and confirms explicitly",async()=>{
+    render(<TimetableWorkspace/>);fireEvent.click(await screen.findByRole("button",{name:/مشروع الفصل/}));
+    fireEvent.change(screen.getByLabelText("طلب قاعدة الجدولة"),{target:{value:"لا تضع للأستاذ أحمد الحصة الأولى يوم الأحد"}});
+    fireEvent.click(screen.getByRole("button",{name:"معاينة القاعدة"}));
+    expect(await screen.findByText(/لا توضع حصص أحمد/)).toBeInTheDocument();expect(projectApi.saveRule).not.toHaveBeenCalled();expect(projectApi.assistantConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"اعتماد القواعد المحددة"}));
+    await waitFor(()=>expect(projectApi.assistantConfirm).toHaveBeenCalledWith("p1",{preview_token:"secure-preview-token-123456789",proposal_ids:["proposal-1"]}));
   });
 });

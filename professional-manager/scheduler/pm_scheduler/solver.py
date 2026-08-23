@@ -317,6 +317,9 @@ def _slot_matches(slot: TimeSlot, parameters: dict[str, object]) -> bool:
         if value is not None and getattr(slot, field) != value:
             return False
     slot_id = parameters.get("slot_id")
+    period_numbers = parameters.get("period_numbers")
+    if isinstance(period_numbers, list) and slot.period not in period_numbers:
+        return False
     return slot_id is None or slot.id == slot_id
 
 

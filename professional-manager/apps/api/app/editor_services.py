@@ -1322,7 +1322,9 @@ def _slot_matches(slot: TimeSlot, parameters: dict[str, Any]) -> bool:
             "starts_at_minute",
             "ends_at_minute",
         )
-    ) and (parameters.get("slot_id") is None or slot.id == parameters["slot_id"])
+    ) and (parameters.get("slot_id") is None or slot.id == parameters["slot_id"]) and (
+        not parameters.get("period_numbers") or slot.period in parameters["period_numbers"]
+    )
 
 
 def _rule_targets(selector: dict[str, Any], occurrence: Any) -> bool:
@@ -1331,5 +1333,8 @@ def _rule_targets(selector: dict[str, Any], occurrence: Any) -> bool:
         "section_id": occurrence.section_ids,
         "resource_id": occurrence.resource_ids,
         "assignment_id": [occurrence.assignment_id],
+        "subject_id": [occurrence.subject_id],
     }
+    if "assignment_ids" in selector:
+        return occurrence.assignment_id in {str(value) for value in selector["assignment_ids"]}
     return any(str(selector.get(key)) in ids for key, ids in values.items())

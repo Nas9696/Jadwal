@@ -485,6 +485,24 @@ class SchedulingRule(IdMixin, TenantScoped, Timestamped, Base):
     )
 
 
+class AssistantRuleDraft(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "assistant_rule_drafts"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    source_text: Mapped[str] = mapped_column(String(2000))
+    parser_type: Mapped[str] = mapped_column(String(60))
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    proposals: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    clarifications: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    warnings: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_rule_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+
 class TimetableSolveRun(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "timetable_solve_runs"
     timetable_project_id: Mapped[uuid.UUID] = mapped_column(
