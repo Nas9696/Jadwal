@@ -32,12 +32,12 @@
 - Repair with minimal changes.
 - Version comparison and rollback.
 
-## Phase 4 — Explainability and assistant
-- Why was this lesson placed here?
-- Why can't I move it?
-- Suggested alternatives.
-- Arabic natural-language rule commands with confirmation preview.
-- Infeasibility remediation suggestions.
+## Phase 4 — Advanced rules, quality and explainability
+- Complete the high-value school scheduling rules still missing from the first solver: distribution, consecutive lessons, day spread, assignment relationships, resource preferences and fairness objectives.
+- Produce a factual quality report with penalty/category breakdowns and no invented score.
+- Explain why a lesson was placed in a slot, why alternatives were rejected or worse, and why a move is blocked.
+- Suggest factual alternative slots and safe relaxations without applying them automatically.
+- Add Arabic natural-language rule commands only after typed rule coverage and explanation facts are stable.
 
 ## Phase 5 — Waiting, absence and substitutions
 - Waiting-duty policies and workload balancing.
