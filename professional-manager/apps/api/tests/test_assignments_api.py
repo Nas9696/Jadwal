@@ -551,3 +551,170 @@ def test_bulk_teacher_change_and_delete_are_term_scoped(client: TestClient) -> N
         json={"term_id": FIRST_TERM, "assignment_ids": [created["assignment_id"]]},
     )
     assert deleted.status_code == 200 and deleted.json()["deleted"] == 1
+
+
+def test_bulk_fill_uses_remaining_demand_and_skips_complete_and_over(
+    client: TestClient,
+) -> None:
+    data = prepare_school(client, FIRST_SCHOOL, FIRST_TERM)
+    activate_teacher(client, FIRST_SCHOOL)
+    create_requirement(client, data["section"]["grade_id"], data["subject"]["id"], 6)
+    payload = {
+        "term_id": FIRST_TERM,
+        "subject_id": data["subject"]["id"],
+        "section_offering_ids": [data["offering"]["id"]],
+        "teacher_ids": [SHARED_TEACHER],
+        "resource_ids": [],
+        "fill_from_curriculum": True,
+        "weekly_occurrences": None,
+    }
+    missing = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/preview"), headers=HEADERS, json=payload
+    ).json()
+    assert missing["coverage"][0] == {
+        "offering_id": data["offering"]["id"],
+        "required": 6,
+        "current_assigned": 0,
+        "delta": 6,
+        "projected_assigned": 6,
+        "projected_status": "complete",
+        "action": "apply",
+    }
+    assert assign(
+        client,
+        FIRST_TERM,
+        data["subject"]["id"],
+        [data["offering"]["id"]],
+        [SHARED_TEACHER],
+        4,
+    ).status_code == 201
+    partial = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/preview"), headers=HEADERS, json=payload
+    ).json()
+    assert partial["coverage"][0]["current_assigned"] == 4
+    assert partial["coverage"][0]["delta"] == 2
+    assert partial["coverage"][0]["projected_assigned"] == 6
+    applied = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/apply"), headers=HEADERS, json=payload
+    )
+    assert applied.status_code == 201
+    snapshot = client.get(assignment_url() + f"?term_id={FIRST_TERM}", headers=HEADERS).json()
+    assert [item["weekly_occurrences"] for item in snapshot["assignments"]] == [4, 2]
+    complete = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/preview"), headers=HEADERS, json=payload
+    ).json()
+    assert not complete["can_apply"]
+    assert complete["coverage"][0]["action"] == "skip_complete"
+    assert client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/apply"), headers=HEADERS, json=payload
+    ).json() == []
+    assert assign(
+        client,
+        FIRST_TERM,
+        data["subject"]["id"],
+        [data["offering"]["id"]],
+        [SHARED_TEACHER],
+        1,
+    ).status_code == 201
+    over = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/preview"), headers=HEADERS, json=payload
+    ).json()
+    assert not over["can_apply"]
+    assert over["coverage"][0]["action"] == "skip_over"
+    assert over["coverage"][0]["delta"] == 0
+
+
+def test_individual_preview_projects_combined_coverage_and_coteacher_workload(
+    client: TestClient,
+) -> None:
+    data = prepare_school(client, FIRST_SCHOOL, FIRST_TERM)
+    activate_teacher(client, FIRST_SCHOOL)
+    second_teacher = create_teacher(client, "PREVIEW", limit=1)
+    create_requirement(client, data["section"]["grade_id"], data["subject"]["id"], 2)
+    response = client.post(
+        assignment_url(FIRST_SCHOOL, "/preview"),
+        headers=HEADERS,
+        json={
+            "term_id": FIRST_TERM,
+            "subject_id": data["subject"]["id"],
+            "weekly_occurrences": 2,
+            "teacher_ids": [SHARED_TEACHER, second_teacher],
+            "section_offering_ids": [data["offering"]["id"]],
+            "resource_ids": [],
+        },
+    )
+    assert response.status_code == 200
+    preview = response.json()
+    assert preview["coverage"][0]["projected_assigned"] == 2
+    assert [item["delta"] for item in preview["teacher_workloads"]] == [2, 2]
+    overloaded = next(
+        item for item in preview["teacher_workloads"] if item["teacher_id"] == second_teacher
+    )
+    assert overloaded["projected_workload"] == 2 and overloaded["exceeds_limit"]
+
+
+def test_resource_with_assignment_cannot_be_deactivated(client: TestClient) -> None:
+    data = prepare_school(client, FIRST_SCHOOL, FIRST_TERM)
+    activate_teacher(client, FIRST_SCHOOL)
+    resource = client.get(f"/api/v1/schools/{FIRST_SCHOOL}/catalog", headers=HEADERS).json()[
+        "resources"
+    ][0]
+    assert assign(
+        client,
+        FIRST_TERM,
+        data["subject"]["id"],
+        [data["offering"]["id"]],
+        [SHARED_TEACHER],
+        2,
+        [resource["id"]],
+    ).status_code == 201
+    response = client.put(
+        f"/api/v1/schools/{FIRST_SCHOOL}/catalog/resources/{resource['id']}",
+        headers=HEADERS,
+        json={
+            "code": resource["code"],
+            "name_ar": resource["name_ar"],
+            "resource_type": resource["resource_type"],
+            "capacity": resource["capacity"],
+            "exclusive": resource["exclusive"],
+            "is_active": False,
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "resource_has_assignments"
+    catalog = client.get(
+        f"/api/v1/schools/{FIRST_SCHOOL}/catalog", headers=HEADERS
+    ).json()
+    kept = next(item for item in catalog["resources"] if item["id"] == resource["id"])
+    assert kept["is_active"] is True
+
+
+def test_duplicate_bulk_relation_ids_are_rejected(client: TestClient) -> None:
+    data = prepare_school(client, FIRST_SCHOOL, FIRST_TERM)
+    activate_teacher(client, FIRST_SCHOOL)
+    payload = {
+        "term_id": FIRST_TERM,
+        "subject_id": data["subject"]["id"],
+        "section_offering_ids": [data["offering"]["id"], data["offering"]["id"]],
+        "teacher_ids": [SHARED_TEACHER],
+        "resource_ids": [],
+        "fill_from_curriculum": False,
+        "weekly_occurrences": 1,
+    }
+    duplicate_offering = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/apply"), headers=HEADERS, json=payload
+    )
+    assert duplicate_offering.status_code == 422
+    assert duplicate_offering.json()["detail"]["code"] == "validation_error"
+    payload["section_offering_ids"] = [data["offering"]["id"]]
+    payload["teacher_ids"] = [SHARED_TEACHER, SHARED_TEACHER]
+    duplicate_teacher = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/apply"), headers=HEADERS, json=payload
+    )
+    assert duplicate_teacher.status_code == 422
+    duplicate_delete = client.post(
+        assignment_url(FIRST_SCHOOL, "/bulk/delete"),
+        headers=HEADERS,
+        json={"term_id": FIRST_TERM, "assignment_ids": [SHARED_TEACHER, SHARED_TEACHER]},
+    )
+    assert duplicate_delete.status_code == 422

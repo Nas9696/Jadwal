@@ -31,6 +31,10 @@ class AssignmentInput(BaseModel):
         return self
 
 
+class AssignmentPreviewInput(AssignmentInput):
+    assignment_id: uuid.UUID | None = None
+
+
 class BulkAssignmentInput(BaseModel):
     term_id: uuid.UUID
     subject_id: uuid.UUID
@@ -44,6 +48,9 @@ class BulkAssignmentInput(BaseModel):
     def has_count(self) -> "BulkAssignmentInput":
         if not self.fill_from_curriculum and self.weekly_occurrences is None:
             raise ValueError("weekly_occurrences_required")
+        for values in (self.section_offering_ids, self.teacher_ids, self.resource_ids):
+            if len(values) != len(set(values)):
+                raise ValueError("duplicate_relation")
         return self
 
 
@@ -52,7 +59,47 @@ class BulkTeacherInput(BaseModel):
     assignment_ids: list[uuid.UUID] = Field(min_length=1)
     teacher_ids: list[uuid.UUID] = Field(min_length=1)
 
+    @model_validator(mode="after")
+    def unique_relations(self) -> "BulkTeacherInput":
+        if len(self.assignment_ids) != len(set(self.assignment_ids)):
+            raise ValueError("duplicate_assignment_id")
+        if len(self.teacher_ids) != len(set(self.teacher_ids)):
+            raise ValueError("duplicate_teacher_id")
+        return self
+
 
 class BulkDeleteInput(BaseModel):
     term_id: uuid.UUID
     assignment_ids: list[uuid.UUID] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_assignments(self) -> "BulkDeleteInput":
+        if len(self.assignment_ids) != len(set(self.assignment_ids)):
+            raise ValueError("duplicate_assignment_id")
+        return self
+
+
+class CoverageProjection(BaseModel):
+    offering_id: uuid.UUID
+    required: int | None
+    current_assigned: int
+    delta: int
+    projected_assigned: int
+    projected_status: str
+    action: str = "apply"
+
+
+class WorkloadProjection(BaseModel):
+    teacher_id: uuid.UUID
+    current_workload: int
+    delta: int
+    projected_workload: int
+    teaching_workload_limit: int
+    exceeds_limit: bool
+
+
+class AssignmentPreview(BaseModel):
+    can_apply: bool
+    coverage: list[CoverageProjection]
+    teacher_workloads: list[WorkloadProjection]
+    warnings: list[dict[str, object]]

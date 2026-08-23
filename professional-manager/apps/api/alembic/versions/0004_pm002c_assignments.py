@@ -189,7 +189,24 @@ def _backfill_legacy_relations(bind: sa.Connection) -> None:
         for section_id in section_ids:
             if not shift_id:
                 continue
-            offering_id = uuid.uuid4()
+            valid_section = bind.execute(
+                sa.text(
+                    "SELECT s.id FROM sections s "
+                    "JOIN grades g ON g.id=s.grade_id "
+                    "JOIN stages st ON st.id=g.stage_id "
+                    "WHERE s.id=:section AND s.tenant_id=:tenant "
+                    "AND g.tenant_id=:tenant AND st.tenant_id=:tenant "
+                    "AND st.school_id=:school"
+                ),
+                {
+                    "section": section_id,
+                    "tenant": row["tenant_id"],
+                    "school": row["school_id"],
+                },
+            ).scalar_one_or_none()
+            if not valid_section:
+                continue
+            offering_id = str(uuid.uuid4())
             bind.execute(
                 sa.text(
                     "INSERT INTO section_offerings "
@@ -225,13 +242,26 @@ def _backfill_legacy_relations(bind: sa.Connection) -> None:
                     "VALUES (:id,:tenant,:assignment,:offering)"
                 ),
                 {
-                    "id": uuid.uuid4(),
+                    "id": str(uuid.uuid4()),
                     "tenant": row["tenant_id"],
                     "assignment": row["id"],
                     "offering": actual,
                 },
             )
         for resource_id in resource_ids:
+            valid_resource = bind.execute(
+                sa.text(
+                    "SELECT id FROM resources WHERE id=:resource "
+                    "AND tenant_id=:tenant AND school_id=:school"
+                ),
+                {
+                    "resource": resource_id,
+                    "tenant": row["tenant_id"],
+                    "school": row["school_id"],
+                },
+            ).scalar_one_or_none()
+            if not valid_resource:
+                continue
             bind.execute(
                 sa.text(
                     "INSERT INTO teaching_assignment_resources "
@@ -239,7 +269,7 @@ def _backfill_legacy_relations(bind: sa.Connection) -> None:
                     "VALUES (:id,:tenant,:assignment,:resource)"
                 ),
                 {
-                    "id": uuid.uuid4(),
+                    "id": str(uuid.uuid4()),
                     "tenant": row["tenant_id"],
                     "assignment": row["id"],
                     "resource": resource_id,

@@ -13,6 +13,12 @@ export type AssignmentSnapshot = {
   teachers: Array<{id:string;name_ar:string;base_workload:number;teaching_workload_limit:number;assigned_workload:number;other_school_overlapping_workload?:number}>;
   assignments: Assignment[]; cells: AssignmentCell[];
 };
+export type AssignmentPreview = {
+  can_apply: boolean;
+  coverage: Array<{offering_id:string;required:number|null;current_assigned:number;delta:number;projected_assigned:number;projected_status:AssignmentCell["status"];action:string}>;
+  teacher_workloads: Array<{teacher_id:string;current_workload:number;delta:number;projected_workload:number;teaching_workload_limit:number;exceeds_limit:boolean}>;
+  warnings: Array<{code:string;offering_id?:string;teacher_id?:string;value?:number}>;
+};
 
 async function request<T>(path:string, options?:RequestInit):Promise<T>{
   const response=await fetch(`${API_URL}${path}`,{...options,headers:{"Content-Type":"application/json","X-Tenant-ID":TENANT_ID,...options?.headers}});
@@ -21,7 +27,8 @@ async function request<T>(path:string, options?:RequestInit):Promise<T>{
     teacher_not_active_in_school:"المعلم غير نشط أو غير مرتبط بهذه المدرسة.",subject_not_in_school:"المادة لا تتبع المدرسة الحالية.",
     subject_inactive:"المادة غير نشطة ولا يمكن إنشاء إسناد جديد لها.",resource_not_in_school:"المورد لا يتبع المدرسة الحالية.",
     resource_inactive:"المورد غير نشط.",section_offering_has_assignments:"احذف إسنادات الشعبة قبل تعطيلها.",
-    curriculum_requirement_missing:"لا يوجد نصاب منهجي لهذه الخلية.",duplicate_relation:"يوجد ارتباط مكرر داخل الإسناد.",validation_error:"راجع بيانات الإسناد المطلوبة.",
+    resource_has_assignments:"لا يمكن تعطيل مورد مستخدم في إسناد. أزل ارتباطه أولًا.",
+    curriculum_requirement_missing:"لا يوجد نصاب منهجي لهذه الخلية.",duplicate_relation:"يوجد ارتباط مكرر داخل الإسناد.",validation_error:"راجع البيانات وتأكد من عدم تكرار المعرفات.",
   };throw new Error(messages[code]??"تعذر تنفيذ عملية الإسناد.")}
   return response.status===204?undefined as T:response.json();
 }
@@ -30,9 +37,11 @@ export const assignmentApi={
   snapshot:(school:string,term:string)=>request<AssignmentSnapshot>(`/schools/${school}/assignments?term_id=${term}`),
   offerings:(school:string,payload:object)=>request<Offering[]>(`/schools/${school}/assignments/section-offerings`,{method:"PUT",body:JSON.stringify(payload)}),
   create:(school:string,payload:object)=>request<{assignment_id:string;warnings:Array<{code:string;value:number}>}>(`/schools/${school}/assignments`,{method:"POST",body:JSON.stringify(payload)}),
+  preview:(school:string,payload:object)=>request<AssignmentPreview>(`/schools/${school}/assignments/preview`,{method:"POST",body:JSON.stringify(payload)}),
   update:(school:string,id:string,payload:object)=>request<{assignment_id:string;warnings:Array<{code:string;value:number}>}>(`/schools/${school}/assignments/${id}`,{method:"PUT",body:JSON.stringify(payload)}),
   remove:(school:string,id:string)=>request<void>(`/schools/${school}/assignments/${id}`,{method:"DELETE"}),
   bulk:(school:string,payload:object)=>request<Array<{assignment_id:string;warnings:Array<{code:string;value:number}>}>>(`/schools/${school}/assignments/bulk/apply`,{method:"POST",body:JSON.stringify(payload)}),
+  bulkPreview:(school:string,payload:object)=>request<AssignmentPreview>(`/schools/${school}/assignments/bulk/preview`,{method:"POST",body:JSON.stringify(payload)}),
   bulkTeachers:(school:string,payload:object)=>request<Array<{assignment_id:string;warnings:Array<{code:string;value:number}>}>>(`/schools/${school}/assignments/bulk/teachers`,{method:"POST",body:JSON.stringify(payload)}),
   bulkDelete:(school:string,payload:object)=>request<{deleted:number}>(`/schools/${school}/assignments/bulk/delete`,{method:"POST",body:JSON.stringify(payload)}),
 };

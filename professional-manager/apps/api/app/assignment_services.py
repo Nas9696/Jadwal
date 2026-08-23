@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.assignment_schemas import (
     AssignmentInput,
+    AssignmentPreview,
+    AssignmentPreviewInput,
     BulkAssignmentInput,
     BulkDeleteInput,
     BulkTeacherInput,
@@ -45,7 +47,10 @@ def parse(schema: Any, payload: dict[str, Any]) -> Any:
     except ValidationError as exc:
         raise HTTPException(
             status_code=422,
-            detail={"code": "validation_error", "errors": exc.errors(include_url=False)},
+            detail={
+                "code": "validation_error",
+                "errors": exc.errors(include_url=False, include_context=False),
+            },
         ) from exc
 
 
@@ -381,6 +386,255 @@ def _teacher_workload(
     )
 
 
+def _coverage_status(required: int | None, assigned: int) -> str:
+    if required is None:
+        return "no_requirement"
+    if assigned == 0 and required > 0:
+        return "missing"
+    if assigned < required:
+        return "partial"
+    if assigned == required:
+        return "complete"
+    return "over"
+
+
+def _offering_required(
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    offering_id: uuid.UUID,
+    subject_id: uuid.UUID,
+) -> int | None:
+    offering = db.scalar(
+        select(SectionOffering).where(
+            SectionOffering.id == offering_id,
+            SectionOffering.tenant_id == tenant_id,
+            SectionOffering.school_id == school_id,
+        )
+    )
+    section = db.get(Section, offering.section_id) if offering else None
+    if section is None:
+        fail("section_offering_not_in_term")
+    return db.scalar(
+        select(CurriculumRequirement.weekly_occurrences).where(
+            CurriculumRequirement.tenant_id == tenant_id,
+            CurriculumRequirement.school_id == school_id,
+            CurriculumRequirement.grade_id == section.grade_id,
+            CurriculumRequirement.subject_id == subject_id,
+        )
+    )
+
+
+def _offering_coverage(
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    term_id: uuid.UUID,
+    offering_id: uuid.UUID,
+    subject_id: uuid.UUID,
+    *,
+    exclude_assignment_id: uuid.UUID | None = None,
+) -> int:
+    query = (
+        select(func.coalesce(func.sum(TeachingAssignment.weekly_occurrences), 0))
+        .join(
+            TeachingAssignmentSection,
+            TeachingAssignmentSection.teaching_assignment_id == TeachingAssignment.id,
+        )
+        .where(
+            TeachingAssignment.tenant_id == tenant_id,
+            TeachingAssignment.school_id == school_id,
+            TeachingAssignment.term_id == term_id,
+            TeachingAssignment.subject_id == subject_id,
+            TeachingAssignmentSection.section_offering_id == offering_id,
+        )
+    )
+    if exclude_assignment_id is not None:
+        query = query.where(TeachingAssignment.id != exclude_assignment_id)
+    return int(db.scalar(query) or 0)
+
+
+def preview_assignment(
+    db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: dict[str, Any]
+) -> AssignmentPreview:
+    _school(db, tenant_id, school_id)
+    preview_data = parse(AssignmentPreviewInput, payload)
+    data = AssignmentInput.model_validate(preview_data.model_dump(exclude={"assignment_id"}))
+    existing = None
+    if preview_data.assignment_id is not None:
+        existing = db.scalar(
+            select(TeachingAssignment).where(
+                TeachingAssignment.id == preview_data.assignment_id,
+                TeachingAssignment.tenant_id == tenant_id,
+                TeachingAssignment.school_id == school_id,
+            )
+        )
+        if existing is None:
+            fail("assignment_not_in_school", 404)
+    _validate_assignment(db, tenant_id, school_id, data, existing=existing)
+    old_offering_ids = (
+        set(
+            db.scalars(
+                select(TeachingAssignmentSection.section_offering_id).where(
+                    TeachingAssignmentSection.teaching_assignment_id == existing.id
+                )
+            )
+        )
+        if existing and existing.term_id == data.term_id and existing.subject_id == data.subject_id
+        else set()
+    )
+    coverage: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+    for offering_id in old_offering_ids | set(data.section_offering_ids):
+        required = _offering_required(db, tenant_id, school_id, offering_id, data.subject_id)
+        current = _offering_coverage(
+            db, tenant_id, school_id, data.term_id, offering_id, data.subject_id
+        )
+        old_value = existing.weekly_occurrences if existing and offering_id in old_offering_ids else 0
+        new_value = data.weekly_occurrences if offering_id in data.section_offering_ids else 0
+        delta = new_value - old_value
+        projected = current + delta
+        status = _coverage_status(required, projected)
+        coverage.append(
+            {
+                "offering_id": offering_id,
+                "required": required,
+                "current_assigned": current,
+                "delta": delta,
+                "projected_assigned": projected,
+                "projected_status": status,
+            }
+        )
+        if status == "over":
+            warnings.append(
+                {"code": "curriculum_over_assigned", "offering_id": offering_id, "value": projected}
+            )
+    old_teacher_ids = (
+        set(
+            db.scalars(
+                select(TeachingAssignmentTeacher.teacher_id).where(
+                    TeachingAssignmentTeacher.teaching_assignment_id == existing.id
+                )
+            )
+        )
+        if existing and existing.term_id == data.term_id
+        else set()
+    )
+    workloads: list[dict[str, Any]] = []
+    for teacher_id in old_teacher_ids | set(data.teacher_ids):
+        current = _teacher_workload(db, tenant_id, school_id, data.term_id, teacher_id)
+        teacher = db.get(Teacher, teacher_id)
+        limit = teacher.teaching_workload_limit if teacher else 0
+        old_value = existing.weekly_occurrences if existing and teacher_id in old_teacher_ids else 0
+        new_value = data.weekly_occurrences if teacher_id in data.teacher_ids else 0
+        delta = new_value - old_value
+        projected = current + delta
+        exceeds = projected > limit
+        workloads.append(
+            {
+                "teacher_id": teacher_id,
+                "current_workload": current,
+                "delta": delta,
+                "projected_workload": projected,
+                "teaching_workload_limit": limit,
+                "exceeds_limit": exceeds,
+            }
+        )
+        if exceeds:
+            warnings.append(
+                {"code": "teacher_workload_exceeded", "teacher_id": teacher_id, "value": projected}
+            )
+    return AssignmentPreview(
+        can_apply=True, coverage=coverage, teacher_workloads=workloads, warnings=warnings
+    )
+
+
+def preview_bulk_assignment(
+    db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: dict[str, Any]
+) -> AssignmentPreview:
+    _school(db, tenant_id, school_id)
+    data = parse(BulkAssignmentInput, payload)
+    coverage: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+    total_delta = 0
+    for offering_id in data.section_offering_ids:
+        required = _offering_required(db, tenant_id, school_id, offering_id, data.subject_id)
+        current = _offering_coverage(
+            db, tenant_id, school_id, data.term_id, offering_id, data.subject_id
+        )
+        action = "apply"
+        if data.fill_from_curriculum:
+            if required is None:
+                delta = 0
+                action = "skip_no_requirement"
+            else:
+                delta = max(required - current, 0)
+                if delta == 0:
+                    action = "skip_complete" if current == required else "skip_over"
+        else:
+            delta = data.weekly_occurrences or 0
+        projected = current + delta
+        coverage.append(
+            {
+                "offering_id": offering_id,
+                "required": required,
+                "current_assigned": current,
+                "delta": delta,
+                "projected_assigned": projected,
+                "projected_status": _coverage_status(required, projected),
+                "action": action,
+            }
+        )
+        total_delta += delta
+        if action != "apply":
+            warnings.append({"code": action, "offering_id": offering_id})
+        elif _coverage_status(required, projected) == "over":
+            warnings.append(
+                {"code": "curriculum_over_assigned", "offering_id": offering_id, "value": projected}
+            )
+    validation_count = next((item["delta"] for item in coverage if item["delta"] > 0), 1)
+    _validate_assignment(
+        db,
+        tenant_id,
+        school_id,
+        AssignmentInput(
+            term_id=data.term_id,
+            subject_id=data.subject_id,
+            weekly_occurrences=validation_count,
+            teacher_ids=data.teacher_ids,
+            section_offering_ids=data.section_offering_ids,
+            resource_ids=data.resource_ids,
+        ),
+    )
+    workloads: list[dict[str, Any]] = []
+    for teacher_id in data.teacher_ids:
+        current = _teacher_workload(db, tenant_id, school_id, data.term_id, teacher_id)
+        teacher = db.get(Teacher, teacher_id)
+        limit = teacher.teaching_workload_limit if teacher else 0
+        projected = current + total_delta
+        exceeds = projected > limit
+        workloads.append(
+            {
+                "teacher_id": teacher_id,
+                "current_workload": current,
+                "delta": total_delta,
+                "projected_workload": projected,
+                "teaching_workload_limit": limit,
+                "exceeds_limit": exceeds,
+            }
+        )
+        if exceeds:
+            warnings.append(
+                {"code": "teacher_workload_exceeded", "teacher_id": teacher_id, "value": projected}
+            )
+    return AssignmentPreview(
+        can_apply=any(item["action"] == "apply" for item in coverage),
+        coverage=coverage,
+        teacher_workloads=workloads,
+        warnings=warnings,
+    )
+
+
 def _overlapping_other_school_workload(
     db: Session,
     tenant_id: uuid.UUID,
@@ -431,32 +685,14 @@ def bulk_assign(
     db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: dict[str, Any]
 ) -> list[dict[str, Any]]:
     data = parse(BulkAssignmentInput, payload)
+    preview = preview_bulk_assignment(db, tenant_id, school_id, payload)
+    projections = {item.offering_id: item for item in preview.coverage}
     results = []
     for offering_id in data.section_offering_ids:
-        offering = db.scalar(
-            select(SectionOffering).where(
-                SectionOffering.id == offering_id,
-                SectionOffering.term_id == data.term_id,
-                SectionOffering.school_id == school_id,
-                SectionOffering.tenant_id == tenant_id,
-            )
-        )
-        if offering is None:
-            fail("section_offering_not_in_term")
-        section = db.get(Section, offering.section_id)
-        if section is None:
-            fail("section_not_in_school")
-        required = db.scalar(
-            select(CurriculumRequirement.weekly_occurrences).where(
-                CurriculumRequirement.tenant_id == tenant_id,
-                CurriculumRequirement.school_id == school_id,
-                CurriculumRequirement.grade_id == section.grade_id,
-                CurriculumRequirement.subject_id == data.subject_id,
-            )
-        )
-        count = required if data.fill_from_curriculum else data.weekly_occurrences
-        if not count:
-            fail("curriculum_requirement_missing")
+        projection = projections[offering_id]
+        count = projection.delta
+        if projection.action != "apply" or count <= 0:
+            continue
         results.append(
             save_assignment(
                 db,

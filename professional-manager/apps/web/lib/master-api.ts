@@ -21,6 +21,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       duplicate_or_dependent_data: "يوجد سجل بالرمز نفسه أو ارتباط مكرر.", teacher_not_in_tenant: "المعلم المحدد لا يتبع هذا الحساب.",
       teacher_membership_has_assignments: "لا يمكن فك ارتباط المعلم لوجود إسنادات مرتبطة.", subject_has_dependencies: "احذف الأنصبة المرتبطة بالمادة أولًا.",
       resource_has_dependencies: "المورد مستخدم في بيانات أخرى ولا يمكن حذفه.", grade_not_in_school: "الصف لا يتبع المدرسة الحالية.",
+      resource_has_assignments: "لا يمكن تعطيل المورد لأنه مستخدم في إسناد. أزل ارتباطه من الإسناد أولًا.",
       subject_not_in_school: "المادة لا تتبع المدرسة الحالية.", validation_error: "راجع الحقول والقيم المدخلة.",
       membership_already_exists_use_reactivation: "للمعلم ارتباط سابق بهذه المدرسة؛ استخدم إعادة التفعيل بدل إنشاء ارتباط جديد.",
       archived_teacher_cannot_have_active_membership: "هوية المعلم مؤرشفة. أعد تفعيل المعلم أولًا ثم فعّل ارتباطه بالمدرسة.",

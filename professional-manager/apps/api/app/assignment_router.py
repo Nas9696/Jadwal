@@ -11,8 +11,15 @@ from app.assignment_services import (
     bulk_delete_assignments,
     bulk_replace_teachers,
     delete_assignment,
+    preview_assignment,
+    preview_bulk_assignment,
     save_assignment,
     save_offerings,
+)
+from app.assignment_schemas import (
+    AssignmentPreview,
+    AssignmentPreviewInput,
+    BulkAssignmentInput,
 )
 from app.db import get_db
 from app.tenant import tenant_context
@@ -57,6 +64,16 @@ def create(
     return encoded(save_assignment(db, tenant_id, school_id, payload))
 
 
+@router.post("/preview", response_model=AssignmentPreview)
+def preview(
+    school_id: uuid.UUID,
+    payload: Annotated[AssignmentPreviewInput, Body()],
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> AssignmentPreview:
+    return preview_assignment(db, tenant_id, school_id, payload.model_dump())
+
+
 @router.put("/{assignment_id}")
 def update(
     school_id: uuid.UUID,
@@ -87,6 +104,16 @@ def bulk(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[dict[str, Any]]:
     return encoded(bulk_assign(db, tenant_id, school_id, payload))
+
+
+@router.post("/bulk/preview", response_model=AssignmentPreview)
+def bulk_preview(
+    school_id: uuid.UUID,
+    payload: Annotated[BulkAssignmentInput, Body()],
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> AssignmentPreview:
+    return preview_bulk_assignment(db, tenant_id, school_id, payload.model_dump())
 
 
 @router.post("/bulk/teachers")

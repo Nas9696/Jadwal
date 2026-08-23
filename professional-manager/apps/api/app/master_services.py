@@ -420,6 +420,25 @@ def save_catalog(
     if entity_id is None:
         db.add(entity)
     else:
+        if (
+            kind == "resources"
+            and entity.is_active
+            and not data.is_active
+            and db.scalar(
+                select(TeachingAssignmentResource.id)
+                .join(
+                    TeachingAssignment,
+                    TeachingAssignment.id
+                    == TeachingAssignmentResource.teaching_assignment_id,
+                )
+                .where(
+                    TeachingAssignmentResource.tenant_id == tenant_id,
+                    TeachingAssignmentResource.resource_id == entity_id,
+                    TeachingAssignment.school_id == school_id,
+                )
+            )
+        ):
+            fail("resource_has_assignments", 409)
         for key, value in values.items():
             setattr(entity, key, value)
     commit(db)
