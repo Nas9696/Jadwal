@@ -178,7 +178,12 @@ def teacher_snapshot(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID) ->
 
 
 def create_teacher(
-    db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: dict[str, Any]
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    payload: dict[str, Any],
+    *,
+    commit_changes: bool = True,
 ) -> TeacherSchoolMembership:
     school(db, tenant_id, school_id)
     data = parse(NewTeacherInput, payload)
@@ -196,13 +201,21 @@ def create_teacher(
         is_active=True,
     )
     db.add(membership)
-    commit(db)
+    if commit_changes:
+        commit(db)
+    else:
+        db.flush()
     db.refresh(membership)
     return membership
 
 
 def link_teacher(
-    db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: dict[str, Any]
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    payload: dict[str, Any],
+    *,
+    commit_changes: bool = True,
 ) -> TeacherSchoolMembership:
     school(db, tenant_id, school_id)
     data = parse(MembershipInput, payload)
@@ -223,7 +236,10 @@ def link_teacher(
     if data.is_home_school and data.is_active:
         _clear_home(db, tenant_id, data.teacher_id)
     db.add(membership)
-    commit(db)
+    if commit_changes:
+        commit(db)
+    else:
+        db.flush()
     db.refresh(membership)
     return membership
 
@@ -373,6 +389,8 @@ def save_catalog(
     kind: str,
     payload: dict[str, Any],
     entity_id: uuid.UUID | None = None,
+    *,
+    commit_changes: bool = True,
 ) -> Any:
     school(db, tenant_id, school_id)
     mapping: dict[str, tuple[Any, Any]] = {
@@ -441,7 +459,10 @@ def save_catalog(
             fail("resource_has_assignments", 409)
         for key, value in values.items():
             setattr(entity, key, value)
-    commit(db)
+    if commit_changes:
+        commit(db)
+    else:
+        db.flush()
     db.refresh(entity)
     return entity
 

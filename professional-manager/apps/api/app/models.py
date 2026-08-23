@@ -379,6 +379,52 @@ class TeachingAssignmentResource(IdMixin, TenantScoped, Base):
     __table_args__ = (UniqueConstraint("tenant_id", "teaching_assignment_id", "resource_id"),)
 
 
+class ImportJob(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "import_jobs"
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="CASCADE"), index=True
+    )
+    term_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("terms.id", ondelete="RESTRICT"), index=True
+    )
+    source_filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(120))
+    file_size: Mapped[int] = mapped_column(Integer)
+    file_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="uploaded", index=True)
+    detected_sheets: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    mapping: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    validation_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    result_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    duplicate_file_warning: Mapped[bool] = mapped_column(Boolean, default=False)
+    actor_reference: Mapped[str | None] = mapped_column(String(200))
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (CheckConstraint("file_size >= 0"),)
+
+
+class ImportRow(IdMixin, TenantScoped, Base):
+    __tablename__ = "import_rows"
+    import_job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("import_jobs.id", ondelete="CASCADE"), index=True
+    )
+    sheet_name: Mapped[str] = mapped_column(String(150))
+    source_row_number: Mapped[int] = mapped_column(Integer)
+    entity_type: Mapped[str] = mapped_column(String(50), index=True)
+    source_values: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    normalized_values: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    proposed_action: Mapped[str] = mapped_column(String(30), default="warning")
+    diagnostics: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    before_values: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    after_values: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    excluded: Mapped[bool] = mapped_column(Boolean, default=False)
+    group_key: Mapped[str | None] = mapped_column(String(120))
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "import_job_id", "sheet_name", "source_row_number"),
+        CheckConstraint("source_row_number > 0"),
+    )
+
+
 class Rule(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "rules"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))

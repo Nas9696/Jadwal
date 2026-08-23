@@ -152,7 +152,7 @@ def _validate_links(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, res
     return cast(dict[str, Any], values)
 
 
-def save_resource(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, resource: str, payload: dict[str, Any], entity_id: uuid.UUID | None = None) -> Any:
+def save_resource(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, resource: str, payload: dict[str, Any], entity_id: uuid.UUID | None = None, *, commit_changes: bool = True) -> Any:
     school_in_tenant(db, tenant_id, school_id)
     try:
         model, schema = RESOURCE_MODELS[resource]
@@ -215,7 +215,10 @@ def save_resource(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, resou
             )
         db.add(entity)
     try:
-        db.commit()
+        if commit_changes:
+            db.commit()
+        else:
+            db.flush()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail={"code": "duplicate_or_dependent_data"}) from exc

@@ -1,0 +1,613 @@
+import csv
+import hashlib
+import io
+import re
+import unicodedata
+import uuid
+import zipfile
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import PurePath
+from typing import Any, NoReturn
+
+from fastapi import HTTPException
+from openpyxl import load_workbook  # type: ignore[import-untyped]
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
+
+from app.assignment_services import preview_assignment, save_assignment, save_offerings
+from app.config import settings
+from app.master_services import create_teacher, link_teacher, save_catalog, school
+from app.models import (
+    CurriculumRequirement,
+    AcademicYear,
+    Grade,
+    ImportJob,
+    ImportRow,
+    Resource,
+    SchoolShift,
+    Section,
+    SectionOffering,
+    Stage,
+    Subject,
+    Teacher,
+    TeacherSchoolMembership,
+    Term,
+)
+from app.setup_services import save_resource
+
+
+ALIASES: dict[str, set[str]] = {
+    "teacher_name": {"اسم المعلم", "المعلم", "teacher", "teacher name"},
+    "teacher_code": {"رقم المعلم", "كود المعلم", "الكود", "teacher code", "employee id"},
+    "specialty": {"التخصص", "specialty"},
+    "subject_name": {"المادة", "اسم المادة", "subject", "subject name"},
+    "subject_code": {"رمز المادة", "كود المادة", "subject code"},
+    "stage_name": {"المرحلة", "اسم المرحلة", "stage"},
+    "stage_code": {"رمز المرحلة", "stage code"},
+    "grade_name": {"الصف", "اسم الصف", "grade"},
+    "section_name": {"الشعبة", "اسم الشعبة", "section", "class"},
+    "weekly_occurrences": {"الحصص", "عدد الحصص", "النصاب الأسبوعي", "weekly lessons"},
+    "resource_name": {"المعمل", "الغرفة", "المورد", "resource", "room"},
+    "resource_code": {"رمز المورد", "كود المورد", "resource code", "room code"},
+    "resource_type": {"نوع المورد", "resource type"},
+    "capacity": {"السعة", "capacity"},
+    "shift_name": {"الفترة", "الشفت", "shift"},
+    "group_key": {"مفتاح المجموعة", "مجموعة التدريس", "group key", "teaching group"},
+}
+ENTITY_FIELDS = {
+    "teachers": {"teacher_name", "teacher_code"},
+    "subjects": {"subject_name", "subject_code"},
+    "structure": {"stage_name", "grade_name", "section_name"},
+    "curriculum": {"grade_name", "subject_name", "weekly_occurrences"},
+    "resources": {"resource_name", "resource_code"},
+    "offerings": {"stage_name", "grade_name", "section_name", "shift_name"},
+    "assignments": {
+        "teacher_code", "subject_name", "grade_name", "section_name", "weekly_occurrences"
+    },
+}
+REQUIRED_FIELDS = {
+    "teachers": {"teacher_name", "teacher_code"},
+    "subjects": {"subject_name", "subject_code"},
+    "structure": {"stage_name", "grade_name", "section_name"},
+    "curriculum": {"grade_name", "subject_name", "weekly_occurrences"},
+    "resources": {"resource_name", "resource_code"},
+    "offerings": {"grade_name", "section_name", "shift_name"},
+    "assignments": {
+        "teacher_code", "subject_name", "grade_name", "section_name", "weekly_occurrences"
+    },
+}
+
+
+def fail(code: str, status: int = 422) -> NoReturn:
+    raise HTTPException(status_code=status, detail={"code": code})
+
+
+def normalize_text(value: object) -> str:
+    text = unicodedata.normalize("NFKC", str(value or "")).strip().lower()
+    translations: dict[str | int, str | int | None] = {
+        "أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ـ": ""
+    }
+    text = text.translate(str.maketrans(translations))
+    return re.sub(r"[\s\-_./\\:،,;؛()\[\]]+", " ", text).strip()
+
+
+NORMALIZED_ALIASES = {
+    alias: target for target, aliases in ALIASES.items() for alias in map(normalize_text, aliases)
+}
+
+
+def _suggest_mapping(headers: list[str]) -> dict[str, str]:
+    return {
+        header: NORMALIZED_ALIASES[normalized]
+        for header in headers
+        if (normalized := normalize_text(header)) in NORMALIZED_ALIASES
+    }
+
+
+def _detect_entity(mapping: dict[str, str]) -> tuple[str, float]:
+    found = set(mapping.values())
+    scores = {
+        entity: len(found & fields) / len(fields) for entity, fields in ENTITY_FIELDS.items()
+    }
+    entity, score = max(scores.items(), key=lambda item: item[1])
+    return entity, round(score, 2)
+
+
+def _safe_filename(filename: str | None) -> str:
+    name = PurePath(filename or "import").name.replace("\x00", "")[:255]
+    return name or "import"
+
+
+def _parse_csv(content: bytes) -> list[tuple[str, list[str], list[tuple[int, dict[str, Any]]]]]:
+    if content.startswith((b"PK", b"MZ")):
+        fail("content_signature_mismatch", 415)
+    if b"\x00" in content:
+        fail("binary_file_rejected", 415)
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        fail("csv_must_be_utf8", 415)
+    sample = text[:8192]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    reader = csv.reader(io.StringIO(text), dialect)
+    rows = list(reader)
+    if not rows:
+        fail("empty_file")
+    headers = [str(item).strip()[:150] for item in rows[0]]
+    parsed = []
+    for number, values in enumerate(rows[1:], 2):
+        if not any(str(value).strip() for value in values):
+            continue
+        parsed.append((number, {header: str(values[index]).strip()[:1000] if index < len(values) else "" for index, header in enumerate(headers)}))
+    return [("CSV", headers, parsed)]
+
+
+def _inspect_xlsx(content: bytes) -> None:
+    if not content.startswith(b"PK"):
+        fail("xlsx_signature_mismatch", 415)
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            entries = archive.infolist()
+            if len(entries) > settings.import_max_zip_entries:
+                fail("xlsx_zip_entry_limit", 413)
+            if sum(item.file_size for item in entries) > settings.import_max_expanded_bytes:
+                fail("xlsx_expanded_size_limit", 413)
+            names = {item.filename.lower() for item in entries}
+            if "[content_types].xml" not in names or "xl/workbook.xml" not in names:
+                fail("xlsx_structure_invalid", 415)
+            if any("vbaproject" in name or name.endswith(".bin") for name in names):
+                fail("macro_content_rejected", 415)
+    except zipfile.BadZipFile:
+        fail("xlsx_structure_invalid", 415)
+
+
+def _parse_xlsx(content: bytes) -> list[tuple[str, list[str], list[tuple[int, dict[str, Any]]]]]:
+    _inspect_xlsx(content)
+    workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
+    if len(workbook.sheetnames) > settings.import_max_sheets:
+        fail("sheet_limit_exceeded", 413)
+    result = []
+    for sheet in workbook.worksheets:
+        iterator = sheet.iter_rows()
+        first = next(iterator, None)
+        if first is None:
+            continue
+        headers = [str(cell.value or "").strip()[:150] for cell in first]
+        rows = []
+        for number, cells in enumerate(iterator, 2):
+            values: dict[str, Any] = {}
+            for index, header in enumerate(headers):
+                cell = cells[index] if index < len(cells) else None
+                if cell is None:
+                    values[header] = ""
+                elif cell.data_type == "f":
+                    values[header] = {"formula": str(cell.value)[:1000]}
+                else:
+                    values[header] = str(cell.value or "").strip()[:1000]
+            if any(value for value in values.values()):
+                rows.append((number, values))
+        result.append((sheet.title[:150], headers, rows))
+    workbook.close()
+    return result
+
+
+def upload_job(
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    term_id: uuid.UUID | None,
+    filename: str | None,
+    content_type: str | None,
+    content: bytes,
+) -> ImportJob:
+    school(db, tenant_id, school_id)
+    if term_id and not db.scalar(
+        select(Term.id)
+        .join(AcademicYear, AcademicYear.id == Term.academic_year_id)
+        .where(
+            Term.id == term_id,
+            Term.tenant_id == tenant_id,
+            AcademicYear.tenant_id == tenant_id,
+            AcademicYear.school_id == school_id,
+        )
+    ):
+        fail("term_not_in_school")
+    if len(content) > settings.import_max_file_bytes:
+        fail("file_size_limit", 413)
+    safe_name = _safe_filename(filename)
+    extension = PurePath(safe_name).suffix.lower()
+    if extension not in {".csv", ".xlsx"}:
+        fail("unsupported_file_type", 415)
+    sheets = _parse_csv(content) if extension == ".csv" else _parse_xlsx(content)
+    total_rows = sum(len(rows) for _, _, rows in sheets)
+    if total_rows > settings.import_max_rows:
+        fail("row_limit_exceeded", 413)
+    digest = hashlib.sha256(content).hexdigest()
+    duplicate = bool(
+        db.scalar(
+            select(ImportJob.id).where(
+                ImportJob.tenant_id == tenant_id,
+                ImportJob.school_id == school_id,
+                ImportJob.term_id == term_id,
+                ImportJob.file_sha256 == digest,
+                ImportJob.status == "committed",
+            )
+        )
+    )
+    detection = []
+    job = ImportJob(
+        tenant_id=tenant_id,
+        school_id=school_id,
+        term_id=term_id,
+        source_filename=safe_name,
+        content_type=(content_type or "application/octet-stream")[:120],
+        file_size=len(content),
+        file_sha256=digest,
+        status="uploaded",
+        detected_sheets=[],
+        mapping={},
+        validation_summary={},
+        result_summary={},
+        duplicate_file_warning=duplicate,
+    )
+    db.add(job)
+    db.flush()
+    for sheet_name, headers, rows in sheets:
+        mapping = _suggest_mapping(headers)
+        entity, confidence = _detect_entity(mapping)
+        detection.append(
+            {"name": sheet_name, "headers": headers, "entity_type": entity, "confidence": confidence, "suggested_mapping": mapping, "row_count": len(rows)}
+        )
+        for row_number, values in rows:
+            db.add(
+                ImportRow(
+                    tenant_id=tenant_id,
+                    import_job_id=job.id,
+                    sheet_name=sheet_name,
+                    source_row_number=row_number,
+                    entity_type=entity,
+                    source_values=values,
+                    normalized_values={},
+                    proposed_action="warning",
+                    diagnostics=[],
+                    before_values={},
+                    after_values={},
+                    excluded=False,
+                )
+            )
+    job.detected_sheets = detection
+    db.commit()
+    return job
+
+
+def _job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: uuid.UUID) -> ImportJob:
+    job = db.scalar(
+        select(ImportJob).where(
+            ImportJob.id == job_id,
+            ImportJob.tenant_id == tenant_id,
+            ImportJob.school_id == school_id,
+        )
+    )
+    if job is None:
+        fail("import_job_not_found", 404)
+    return job
+
+
+def job_rows(db: Session, job: ImportJob) -> list[ImportRow]:
+    return list(
+        db.scalars(
+            select(ImportRow)
+            .where(ImportRow.import_job_id == job.id, ImportRow.tenant_id == job.tenant_id)
+            .order_by(ImportRow.sheet_name, ImportRow.source_row_number)
+        )
+    )
+
+
+def save_mapping(
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    job_id: uuid.UUID,
+    mapping: dict[str, Any],
+    allow_updates: bool,
+) -> ImportJob:
+    job = _job(db, tenant_id, school_id, job_id)
+    if job.status == "committed":
+        fail("import_already_committed", 409)
+    known_sheets = {item["name"] for item in job.detected_sheets}
+    if set(mapping) - known_sheets:
+        fail("unknown_import_sheet")
+    for row in job_rows(db, job):
+        config = mapping.get(row.sheet_name)
+        if not config or config["entity_type"] == "skip":
+            row.excluded = True
+            row.entity_type = "skip"
+            row.normalized_values = {}
+            continue
+        row.excluded = False
+        row.entity_type = config["entity_type"]
+        row.normalized_values = {
+            target: row.source_values.get(source, "")
+            for source, target in config["columns"].items()
+            if target
+        }
+        row.group_key = _plain(row.normalized_values.get("group_key")) or None
+    job.mapping = {"sheets": mapping, "allow_updates": allow_updates}
+    job.status = "mapped"
+    db.commit()
+    return job
+
+
+def _plain(value: object) -> str:
+    return "" if isinstance(value, dict) else str(value or "").strip()[:1000]
+
+
+def _diag(row: ImportRow, severity: str, code: str, field: str | None = None) -> dict[str, Any]:
+    messages = {
+        "missing_required_field": "حقل مطلوب مفقود.",
+        "formula_not_allowed": "لا تُقبل الصيغ في الحقول المستوردة.",
+        "duplicate_row": "هذا الصف مكرر داخل الملف.",
+        "teacher_ambiguous": "اسم المعلم يطابق أكثر من هوية؛ يلزم تحديد الكود.",
+        "teacher_archived": "هوية المعلم مؤرشفة ولا تُفعّل بصمت.",
+        "membership_inactive": "ارتباط المعلم بهذه المدرسة غير نشط.",
+        "reference_not_found": "تعذر العثور على مرجع مطابق داخل المدرسة.",
+        "existing_data_conflict": "توجد بيانات حالية ولن تُستبدل في الوضع الآمن.",
+        "invalid_weekly_count": "عدد الحصص الأسبوعية غير صالح.",
+    }
+    return {"sheet": row.sheet_name, "row": row.source_row_number, "field": field, "severity": severity, "code": code, "message_ar": messages.get(code, code), "resolution_ar": "راجع المطابقة أو قيمة الخلية."}
+
+
+def _resolve_structure(db: Session, job: ImportJob, values: dict[str, Any]) -> tuple[Stage | None, Grade | None, Section | None]:
+    stage = db.scalar(select(Stage).where(Stage.tenant_id == job.tenant_id, Stage.school_id == job.school_id, func.lower(Stage.name_ar) == _plain(values.get("stage_name")).lower()))
+    grade = db.scalar(select(Grade).where(Grade.tenant_id == job.tenant_id, Grade.stage_id == stage.id, func.lower(Grade.name_ar) == _plain(values.get("grade_name")).lower())) if stage else None
+    section = db.scalar(select(Section).where(Section.tenant_id == job.tenant_id, Section.grade_id == grade.id, func.lower(Section.name_ar) == _plain(values.get("section_name")).lower())) if grade else None
+    return stage, grade, section
+
+
+def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: uuid.UUID) -> ImportJob:
+    job = _job(db, tenant_id, school_id, job_id)
+    if job.status == "committed":
+        fail("import_already_committed", 409)
+    if not job.mapping:
+        fail("mapping_required")
+    seen: set[tuple[str, str]] = set()
+    counts: Counter[str] = Counter()
+    for row in job_rows(db, job):
+        row.diagnostics = []
+        row.before_values = {}
+        row.after_values = dict(row.normalized_values)
+        if row.excluded or row.entity_type == "skip":
+            row.proposed_action = "skip_unchanged"
+            counts["skipped"] += 1
+            continue
+        values = row.normalized_values
+        for field in REQUIRED_FIELDS[row.entity_type]:
+            if not _plain(values.get(field)):
+                row.diagnostics.append(_diag(row, "error", "missing_required_field", field))
+        for field, value in values.items():
+            if isinstance(value, dict) and "formula" in value:
+                row.diagnostics.append(_diag(row, "error", "formula_not_allowed", field))
+        fingerprint = (row.entity_type, repr(sorted((key, _plain(value)) for key, value in values.items())))
+        if fingerprint in seen:
+            row.diagnostics.append(_diag(row, "error", "duplicate_row"))
+        seen.add(fingerprint)
+        action = "create"
+        if row.entity_type == "teachers":
+            code = _plain(values.get("teacher_code"))
+            teacher = db.scalar(select(Teacher).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code == code))
+            if teacher:
+                membership = db.scalar(select(TeacherSchoolMembership).where(TeacherSchoolMembership.tenant_id == tenant_id, TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.teacher_id == teacher.id))
+                if not teacher.is_active:
+                    row.diagnostics.append(_diag(row, "error", "teacher_archived", "teacher_code"))
+                elif membership and not membership.is_active:
+                    row.diagnostics.append(_diag(row, "error", "membership_inactive", "teacher_code"))
+                action = "skip_unchanged" if membership else "link_existing"
+                row.before_values = {"teacher_id": str(teacher.id), "name_ar": teacher.name_ar}
+            elif not code:
+                matches = list(db.scalars(select(Teacher).where(Teacher.tenant_id == tenant_id, func.lower(Teacher.name_ar) == _plain(values.get("teacher_name")).lower())))
+                if len(matches) != 1:
+                    row.diagnostics.append(_diag(row, "error", "teacher_ambiguous", "teacher_name"))
+        elif row.entity_type == "subjects":
+            subject_existing = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, Subject.code == _plain(values.get("subject_code"))))
+            action = "skip_unchanged" if subject_existing else "create"
+        elif row.entity_type == "resources":
+            resource_existing = db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == _plain(values.get("resource_code"))))
+            action = "skip_unchanged" if resource_existing else "create"
+        elif row.entity_type == "structure":
+            _, _, section = _resolve_structure(db, job, values)
+            action = "skip_unchanged" if section else "create"
+        elif row.entity_type in {"curriculum", "offerings", "assignments"}:
+            _, grade, section = _resolve_structure(db, job, values)
+            subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower())) if row.entity_type != "offerings" else None
+            if not grade or (row.entity_type != "curriculum" and not section) or (row.entity_type != "offerings" and not subject):
+                row.diagnostics.append(_diag(row, "error", "reference_not_found"))
+            try:
+                count = int(_plain(values.get("weekly_occurrences"))) if row.entity_type != "offerings" else 1
+                if count < 1 or count > 60:
+                    raise ValueError
+            except ValueError:
+                row.diagnostics.append(_diag(row, "error", "invalid_weekly_count", "weekly_occurrences"))
+            if row.entity_type == "curriculum" and grade and subject:
+                requirement_existing = db.scalar(select(CurriculumRequirement).where(CurriculumRequirement.tenant_id == tenant_id, CurriculumRequirement.school_id == school_id, CurriculumRequirement.grade_id == grade.id, CurriculumRequirement.subject_id == subject.id))
+                if requirement_existing:
+                    row.before_values = {"weekly_occurrences": requirement_existing.weekly_occurrences}
+                    if job.mapping.get("allow_updates"):
+                        action = "update"
+                    else:
+                        action = "conflict"
+                        row.diagnostics.append(_diag(row, "error", "existing_data_conflict"))
+            if row.entity_type == "offerings" and not job.term_id:
+                row.diagnostics.append(_diag(row, "error", "reference_not_found", "term"))
+            if row.entity_type == "assignments" and grade and section and subject and job.term_id:
+                teacher_codes = [item.strip() for item in _plain(values.get("teacher_code")).split("|") if item.strip()]
+                teachers = list(db.scalars(select(Teacher).join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code.in_(teacher_codes), Teacher.is_active.is_(True), TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.is_active.is_(True))))
+                offering = db.scalar(select(SectionOffering).where(SectionOffering.tenant_id == tenant_id, SectionOffering.school_id == school_id, SectionOffering.term_id == job.term_id, SectionOffering.section_id == section.id, SectionOffering.is_active.is_(True)))
+                resource_ids: list[uuid.UUID] = []
+                resource_code = _plain(values.get("resource_code"))
+                if resource_code:
+                    resource = db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == resource_code, Resource.is_active.is_(True)))
+                    if resource:
+                        resource_ids.append(resource.id)
+                    else:
+                        row.diagnostics.append(_diag(row, "error", "reference_not_found", "resource_code"))
+                if len(teachers) != len(set(teacher_codes)) or not offering:
+                    row.diagnostics.append(_diag(row, "error", "reference_not_found"))
+                elif not any(item["severity"] == "error" for item in row.diagnostics):
+                    preview = preview_assignment(db, tenant_id, school_id, {"term_id": job.term_id, "subject_id": subject.id, "weekly_occurrences": count, "teacher_ids": [teacher.id for teacher in teachers], "section_offering_ids": [offering.id], "resource_ids": resource_ids})
+                    row.diagnostics.extend({"sheet": row.sheet_name, "row": row.source_row_number, "field": None, "severity": "warning", "code": warning["code"], "message_ar": warning["code"], "resolution_ar": "راجع أثر الإسناد."} for warning in preview.warnings)
+        if any(item["severity"] == "error" for item in row.diagnostics):
+            action = "conflict"
+            counts["errors"] += 1
+        counts["warnings"] += sum(item["severity"] == "warning" for item in row.diagnostics)
+        counts[action] += 1
+        row.proposed_action = action
+        # JSON mutations must be reassigned so SQLAlchemy persists row diagnostics.
+        row.diagnostics = [dict(item) for item in row.diagnostics]
+        flag_modified(row, "diagnostics")
+    total = len(job_rows(db, job))
+    job.validation_summary = {"total": total, "valid": total - counts["errors"] - counts["skipped"], "errors": counts["errors"], "warnings": counts["warnings"], "actions": dict(counts)}
+    job.validated_at = datetime.now(timezone.utc)
+    job.status = "ready" if counts["errors"] == 0 else "validated"
+    db.commit()
+    return job
+
+
+def exclude_rows(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: uuid.UUID, row_ids: list[uuid.UUID]) -> ImportJob:
+    job = _job(db, tenant_id, school_id, job_id)
+    rows = list(db.scalars(select(ImportRow).where(ImportRow.import_job_id == job.id, ImportRow.tenant_id == tenant_id, ImportRow.id.in_(row_ids))))
+    if len(rows) != len(row_ids):
+        fail("import_row_not_in_job")
+    for row in rows:
+        row.excluded = True
+    job.status = "mapped"
+    db.commit()
+    return job
+
+
+def _find_structure(db: Session, job: ImportJob, values: dict[str, Any]) -> tuple[Stage, Grade, Section]:
+    stage, grade, section = _resolve_structure(db, job, values)
+    if not stage or not grade or not section:
+        fail("reference_not_found")
+    return stage, grade, section
+
+
+def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: uuid.UUID, acknowledge_warnings: bool) -> ImportJob:
+    job = _job(db, tenant_id, school_id, job_id)
+    if job.status == "committed" or job.committed_at:
+        fail("import_already_committed", 409)
+    if job.status != "ready":
+        fail("import_not_ready", 409)
+    if job.validation_summary.get("warnings") and not acknowledge_warnings:
+        fail("warnings_acknowledgement_required", 409)
+    rows = [row for row in job_rows(db, job) if not row.excluded and row.proposed_action not in {"skip_unchanged", "conflict"}]
+    counts: Counter[str] = Counter()
+    try:
+        for row in [item for item in rows if item.entity_type == "structure"]:
+            values = row.normalized_values
+            stage, grade, section = _resolve_structure(db, job, values)
+            if not stage:
+                stage = save_resource(db, tenant_id, school_id, "stages", {"code": _plain(values.get("stage_code")) or f"ST-{row.source_row_number}", "name_ar": _plain(values.get("stage_name")), "order": row.source_row_number}, commit_changes=False)
+            if not grade:
+                grade = save_resource(db, tenant_id, school_id, "grades", {"stage_id": stage.id, "name_ar": _plain(values.get("grade_name")), "order": row.source_row_number}, commit_changes=False)
+            if not section:
+                save_resource(db, tenant_id, school_id, "sections", {"grade_id": grade.id, "name_ar": _plain(values.get("section_name")), "capacity": int(_plain(values.get("capacity")) or 30)}, commit_changes=False)
+            counts["created"] += 1
+        for row in [item for item in rows if item.entity_type == "teachers"]:
+            values = row.normalized_values
+            teacher = db.scalar(select(Teacher).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code == _plain(values.get("teacher_code"))))
+            if teacher:
+                link_teacher(db, tenant_id, school_id, {"teacher_id": teacher.id, "local_employee_code": _plain(values.get("teacher_code")), "is_home_school": False, "is_active": True}, commit_changes=False)
+                counts["linked"] += 1
+            else:
+                create_teacher(db, tenant_id, school_id, {"canonical_code": _plain(values.get("teacher_code")), "name_ar": _plain(values.get("teacher_name")), "specialty_reference": _plain(values.get("specialty")) or None, "base_workload": 0, "teaching_workload_limit": 24, "is_active": True, "local_employee_code": _plain(values.get("teacher_code")), "is_home_school": False}, commit_changes=False)
+                counts["created"] += 1
+        for entity, kind in (("subjects", "subjects"), ("resources", "resources")):
+            for row in [item for item in rows if item.entity_type == entity]:
+                values = row.normalized_values
+                payload: dict[str, Any] = ({"code": _plain(values.get("subject_code")), "name_ar": _plain(values.get("subject_name")), "name_en": None, "is_active": True} if entity == "subjects" else {"code": _plain(values.get("resource_code")), "name_ar": _plain(values.get("resource_name")), "resource_type": _plain(values.get("resource_type")) or "room", "capacity": int(_plain(values.get("capacity")) or 30), "exclusive": True, "is_active": True})
+                save_catalog(db, tenant_id, school_id, kind, payload, commit_changes=False)
+                counts["created"] += 1
+        for row in [item for item in rows if item.entity_type == "curriculum"]:
+            values = row.normalized_values
+            _, grade, _ = _resolve_structure(db, job, values)
+            subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower()))
+            if not grade or not subject:
+                fail("reference_not_found")
+            existing = db.scalar(select(CurriculumRequirement).where(CurriculumRequirement.tenant_id == tenant_id, CurriculumRequirement.school_id == school_id, CurriculumRequirement.grade_id == grade.id, CurriculumRequirement.subject_id == subject.id))
+            save_catalog(db, tenant_id, school_id, "requirements", {"grade_id": grade.id, "subject_id": subject.id, "weekly_occurrences": int(_plain(values.get("weekly_occurrences"))), "notes": None}, existing.id if existing else None, commit_changes=False)
+            counts["updated" if existing else "created"] += 1
+        for row in [item for item in rows if item.entity_type == "offerings"]:
+            _, _, section = _find_structure(db, job, row.normalized_values)
+            shift = db.scalar(select(SchoolShift).where(SchoolShift.tenant_id == tenant_id, SchoolShift.school_id == school_id, func.lower(SchoolShift.name_ar) == _plain(row.normalized_values.get("shift_name")).lower(), SchoolShift.is_active.is_(True)))
+            if not shift or not job.term_id:
+                fail("reference_not_found")
+            save_offerings(db, tenant_id, school_id, {"offerings": [{"term_id": job.term_id, "section_id": section.id, "shift_id": shift.id, "is_active": True}]}, commit_changes=False)
+            counts["created"] += 1
+        assignment_rows = [item for item in rows if item.entity_type == "assignments"]
+        groups: dict[str, list[ImportRow]] = defaultdict(list)
+        for row in assignment_rows:
+            groups[row.group_key or str(row.id)].append(row)
+        for grouped in groups.values():
+            first = grouped[0]
+            values = first.normalized_values
+            subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower()))
+            teachers: set[uuid.UUID] = set()
+            offerings: set[uuid.UUID] = set()
+            resources: set[uuid.UUID] = set()
+            for row in grouped:
+                _, _, section = _find_structure(db, job, row.normalized_values)
+                offering = db.scalar(select(SectionOffering).where(SectionOffering.tenant_id == tenant_id, SectionOffering.school_id == school_id, SectionOffering.term_id == job.term_id, SectionOffering.section_id == section.id, SectionOffering.is_active.is_(True)))
+                if not offering:
+                    fail("reference_not_found")
+                offerings.add(offering.id)
+                codes = [_plain(item) for item in _plain(row.normalized_values.get("teacher_code")).split("|")]
+                teachers.update(db.scalars(select(Teacher.id).join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code.in_(codes), Teacher.is_active.is_(True), TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.is_active.is_(True))))
+                resource_code = _plain(row.normalized_values.get("resource_code"))
+                if resource_code:
+                    resource = db.scalar(select(Resource).where(Resource.tenant_id == tenant_id, Resource.school_id == school_id, Resource.code == resource_code, Resource.is_active.is_(True)))
+                    if not resource:
+                        fail("reference_not_found")
+                    resources.add(resource.id)
+            if not subject or not job.term_id or not teachers:
+                fail("reference_not_found")
+            save_assignment(db, tenant_id, school_id, {"term_id": job.term_id, "subject_id": subject.id, "weekly_occurrences": int(_plain(values.get("weekly_occurrences"))), "teacher_ids": list(teachers), "section_offering_ids": list(offerings), "resource_ids": list(resources), "notes": f"Import {job.id}"}, commit_changes=False)
+            counts["created"] += 1
+        job.status = "committed"
+        job.committed_at = datetime.now(timezone.utc)
+        job.result_summary = dict(counts)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        failed = _job(db, tenant_id, school_id, job_id)
+        failed.status = "failed"
+        failed.result_summary = {"error": type(exc).__name__}
+        db.commit()
+        raise HTTPException(status_code=409, detail={"code": "atomic_import_failed"}) from exc
+    return job
+
+
+def serialize_job(db: Session, job: ImportJob) -> dict[str, Any]:
+    return {"id": job.id, "school_id": job.school_id, "term_id": job.term_id, "source_filename": job.source_filename, "file_size": job.file_size, "file_sha256": job.file_sha256, "status": job.status, "detected_sheets": job.detected_sheets, "mapping": job.mapping, "validation_summary": job.validation_summary, "result_summary": job.result_summary, "duplicate_file_warning": job.duplicate_file_warning, "rows": job_rows(db, job)}
+
+
+TEMPLATES = {
+    "teachers": ["كود المعلم", "اسم المعلم", "التخصص"],
+    "subjects": ["رمز المادة", "اسم المادة"],
+    "structure": ["رمز المرحلة", "المرحلة", "الصف", "الشعبة", "السعة"],
+    "curriculum": ["المرحلة", "الصف", "المادة", "عدد الحصص"],
+    "resources": ["رمز المورد", "المورد", "نوع المورد", "السعة"],
+    "assignments": ["كود المعلم", "المادة", "المرحلة", "الصف", "الشعبة", "عدد الحصص", "رمز المورد", "مفتاح المجموعة"],
+}
+
+
+def template_csv(kind: str) -> bytes:
+    if kind not in TEMPLATES:
+        fail("unknown_import_template", 404)
+    stream = io.StringIO()
+    csv.writer(stream).writerow(TEMPLATES[kind])
+    return ("\ufeff" + stream.getvalue()).encode("utf-8")

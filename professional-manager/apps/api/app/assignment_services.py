@@ -106,7 +106,12 @@ def _section_context(
 
 
 def save_offerings(
-    db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: dict[str, Any]
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    payload: dict[str, Any],
+    *,
+    commit_changes: bool = True,
 ) -> list[SectionOffering]:
     _school(db, tenant_id, school_id)
     data = parse(OfferingBulkInput, payload)
@@ -152,7 +157,10 @@ def save_offerings(
             offering.shift_id = item.shift_id
             offering.is_active = item.is_active
         result.append(offering)
-    commit(db)
+    if commit_changes:
+        commit(db)
+    else:
+        db.flush()
     return result
 
 
