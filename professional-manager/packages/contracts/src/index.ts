@@ -24,6 +24,16 @@ export interface TeacherSchoolMembership {
   is_active: boolean;
 }
 
+export interface LinkedTeacherSchool {
+  school_id: string;
+  name_ar: string;
+  code: string;
+  is_home_school: boolean;
+  is_active: boolean;
+  local_employee_code: string | null;
+  is_current_school: boolean;
+}
+
 export interface CanonicalTeacher {
   id: string;
   tenant_id: string;

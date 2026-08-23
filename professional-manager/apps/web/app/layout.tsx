@@ -3,6 +3,7 @@ import "./globals.css";
 import "./workspace.css";
 import "./dialogs.css";
 import "./master-data.css";
+import "./membership-repair.css";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {

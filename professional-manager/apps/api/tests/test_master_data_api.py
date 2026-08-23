@@ -1,4 +1,11 @@
+import uuid
+
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.models import TeacherSchoolMembership
 
 from conftest import (
     FIRST_SCHOOL,
@@ -47,7 +54,100 @@ def test_one_canonical_teacher_links_to_two_schools_and_lists_as_shared(client: 
     card = first["teachers"][0]
     assert card["teacher"]["id"] == SHARED_TEACHER
     assert card["is_shared"] is True
-    assert {school["id"] for school in card["schools"]} == {FIRST_SCHOOL, SECOND_SCHOOL}
+    assert {school["school_id"] for school in card["schools"]} == {
+        FIRST_SCHOOL,
+        SECOND_SCHOOL,
+    }
+
+
+def test_inactive_membership_reloads_and_reactivates_same_identity(client: TestClient) -> None:
+    membership = link(client, FIRST_SCHOOL, True)
+    membership_id = membership["id"]
+    deactivated = client.put(
+        f"{memberships_url()}/{membership_id}",
+        headers=HEADERS,
+        json={"local_employee_code": "INACTIVE", "is_home_school": True, "is_active": False},
+    )
+    assert deactivated.status_code == 200
+
+    reloaded = client.get(teacher_url(), headers=HEADERS).json()
+    assert len(reloaded["teachers"]) == 1
+    assert reloaded["teachers"][0]["membership"]["id"] == membership_id
+    assert reloaded["teachers"][0]["membership"]["is_active"] is False
+    assert all(item["id"] != SHARED_TEACHER for item in reloaded["available_teachers"])
+
+    reactivated = client.put(
+        f"{memberships_url()}/{membership_id}",
+        headers=HEADERS,
+        json={"local_employee_code": "ACTIVE", "is_home_school": True, "is_active": True},
+    )
+    assert reactivated.status_code == 200
+    assert reactivated.json()["id"] == membership_id
+
+    final = client.get(teacher_url(), headers=HEADERS).json()
+    assert len(final["teachers"]) == 1
+    assert final["teachers"][0]["membership"]["id"] == membership_id
+    assert final["teachers"][0]["membership"]["is_active"] is True
+
+
+def test_shared_teacher_snapshot_marks_home_school_when_viewed_elsewhere(
+    client: TestClient,
+) -> None:
+    link(client, FIRST_SCHOOL, True)
+    link(client, SECOND_SCHOOL)
+    card = client.get(teacher_url(school=SECOND_SCHOOL), headers=HEADERS).json()["teachers"][0]
+    schools = {item["school_id"]: item for item in card["schools"]}
+    assert schools[FIRST_SCHOOL]["is_home_school"] is True
+    assert schools[FIRST_SCHOOL]["is_current_school"] is False
+    assert schools[SECOND_SCHOOL]["is_home_school"] is False
+    assert schools[SECOND_SCHOOL]["is_current_school"] is True
+
+
+def test_archived_teacher_requires_explicit_reactivation_before_membership(
+    client: TestClient,
+) -> None:
+    membership = link(client, FIRST_SCHOOL)
+    client.put(
+        f"{memberships_url()}/{membership['id']}",
+        headers=HEADERS,
+        json={"local_employee_code": None, "is_home_school": False, "is_active": False},
+    )
+    teacher = client.get(teacher_url(), headers=HEADERS).json()["teachers"][0]["teacher"]
+    archived = client.put(
+        teacher_url(f"/{teacher['id']}"),
+        headers=HEADERS,
+        json={
+            "canonical_code": teacher["canonical_code"],
+            "name_ar": teacher["name_ar"],
+            "name_en": teacher["name_en"],
+            "specialty_reference": teacher["specialty_reference"],
+            "base_workload": teacher["base_workload"],
+            "teaching_workload_limit": teacher["teaching_workload_limit"],
+            "is_active": False,
+        },
+    )
+    assert archived.status_code == 200
+
+    rejected = client.put(
+        f"{memberships_url()}/{membership['id']}",
+        headers=HEADERS,
+        json={"local_employee_code": None, "is_home_school": False, "is_active": True},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "archived_teacher_cannot_have_active_membership"
+
+    teacher["is_active"] = True
+    assert (
+        client.put(teacher_url(f"/{teacher['id']}"), headers=HEADERS, json=teacher).status_code
+        == 200
+    )
+    restored = client.put(
+        f"{memberships_url()}/{membership['id']}",
+        headers=HEADERS,
+        json={"local_employee_code": None, "is_home_school": False, "is_active": True},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["id"] == membership["id"]
 
 
 def test_school_teacher_list_excludes_unlinked_and_cross_tenant_link_is_rejected(
@@ -81,6 +181,23 @@ def test_duplicate_membership_rejected_and_home_school_moves_atomically(client: 
         0
     ]
     assert second_card["membership"]["is_home_school"] is True
+
+
+def test_database_rejects_two_active_home_memberships(session: Session) -> None:
+    session.add_all(
+        [
+            TeacherSchoolMembership(
+                tenant_id=uuid.UUID(TEST_TENANT),
+                teacher_id=uuid.UUID(SHARED_TEACHER),
+                school_id=uuid.UUID(school_id),
+                is_home_school=True,
+                is_active=True,
+            )
+            for school_id in (FIRST_SCHOOL, SECOND_SCHOOL)
+        ]
+    )
+    with pytest.raises(IntegrityError):
+        session.commit()
 
 
 def test_unlinking_one_school_preserves_canonical_teacher_and_other_membership(

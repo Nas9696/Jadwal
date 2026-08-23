@@ -2,23 +2,50 @@ import uuid
 from datetime import date, datetime, time, timezone
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, Date, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, Time, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    String,
+    Time,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
+
 def new_uuid() -> uuid.UUID:
     return uuid.uuid4()
+
 
 class IdMixin:
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
 
+
 class TenantScoped:
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+
 
 class Timestamped:
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
 
 class Tenant(IdMixin, Timestamped, Base):
     __tablename__ = "tenants"
@@ -63,6 +90,7 @@ class School(IdMixin, TenantScoped, Timestamped, Base):
     school_type: Mapped[str] = mapped_column(String(40), default="school")
     __table_args__ = (UniqueConstraint("tenant_id", "code"),)
 
+
 class AcademicYear(IdMixin, TenantScoped, Base):
     __tablename__ = "academic_years"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
@@ -75,9 +103,12 @@ class AcademicYear(IdMixin, TenantScoped, Base):
         CheckConstraint("starts_on < ends_on"),
     )
 
+
 class Term(IdMixin, TenantScoped, Base):
     __tablename__ = "terms"
-    academic_year_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("academic_years.id", ondelete="CASCADE"))
+    academic_year_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("academic_years.id", ondelete="CASCADE")
+    )
     name_ar: Mapped[str] = mapped_column(String(100))
     name_en: Mapped[str | None] = mapped_column(String(100))
     order: Mapped[int] = mapped_column(Integer)
@@ -103,6 +134,7 @@ class SchoolShift(IdMixin, TenantScoped, Timestamped, Base):
         UniqueConstraint("tenant_id", "school_id", "code"),
         UniqueConstraint("tenant_id", "school_id", "order"),
     )
+
 
 class Teacher(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teachers"
@@ -130,7 +162,16 @@ class TeacherSchoolMembership(IdMixin, TenantScoped, Timestamped, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "teacher_id", "school_id"),
         UniqueConstraint("tenant_id", "school_id", "local_employee_code"),
+        Index(
+            "uq_teacher_active_home_school",
+            "tenant_id",
+            "teacher_id",
+            unique=True,
+            postgresql_where=text("is_home_school = true AND is_active = true"),
+            sqlite_where=text("is_home_school = 1 AND is_active = 1"),
+        ),
     )
+
 
 class Subject(IdMixin, TenantScoped, Base):
     __tablename__ = "subjects"
@@ -144,6 +185,7 @@ class Subject(IdMixin, TenantScoped, Base):
         UniqueConstraint("tenant_id", "school_id", "name_ar"),
     )
 
+
 class Stage(IdMixin, TenantScoped, Base):
     __tablename__ = "stages"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
@@ -155,6 +197,7 @@ class Stage(IdMixin, TenantScoped, Base):
         UniqueConstraint("tenant_id", "school_id", "order"),
     )
 
+
 class Grade(IdMixin, TenantScoped, Base):
     __tablename__ = "grades"
     stage_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"))
@@ -162,12 +205,14 @@ class Grade(IdMixin, TenantScoped, Base):
     order: Mapped[int] = mapped_column(Integer)
     __table_args__ = (UniqueConstraint("tenant_id", "stage_id", "order"),)
 
+
 class Section(IdMixin, TenantScoped, Base):
     __tablename__ = "sections"
     grade_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("grades.id", ondelete="CASCADE"))
     name_ar: Mapped[str] = mapped_column(String(100))
     capacity: Mapped[int | None] = mapped_column(Integer)
     __table_args__ = (UniqueConstraint("tenant_id", "grade_id", "name_ar"),)
+
 
 class Resource(IdMixin, TenantScoped, Base):
     __tablename__ = "resources"
@@ -199,6 +244,7 @@ class CurriculumRequirement(IdMixin, TenantScoped, Timestamped, Base):
         CheckConstraint("weekly_occurrences > 0"),
     )
 
+
 class WeekPattern(IdMixin, TenantScoped, Base):
     __tablename__ = "week_patterns"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
@@ -228,11 +274,10 @@ class SchoolDay(IdMixin, TenantScoped, Timestamped, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     label_ar: Mapped[str | None] = mapped_column(String(80))
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "school_id", "shift_id", "week_pattern_id", "weekday_index"
-        ),
+        UniqueConstraint("tenant_id", "school_id", "shift_id", "week_pattern_id", "weekday_index"),
         CheckConstraint("weekday_index >= 0 AND weekday_index <= 6"),
     )
+
 
 class PeriodTemplate(IdMixin, TenantScoped, Base):
     __tablename__ = "period_templates"
@@ -259,15 +304,14 @@ class PeriodTemplate(IdMixin, TenantScoped, Base):
             ["week_patterns.id", "week_patterns.school_id", "week_patterns.tenant_id"],
             ondelete="CASCADE",
         ),
-        UniqueConstraint(
-            "tenant_id", "school_day_id", "block_order"
-        ),
+        UniqueConstraint("tenant_id", "school_day_id", "block_order"),
         CheckConstraint("starts_at < ends_at"),
         CheckConstraint("weekday_index >= 0 AND weekday_index <= 6"),
         CheckConstraint(
             "block_type != 'lesson' OR (period_number IS NOT NULL AND schedulable = TRUE)"
         ),
     )
+
 
 class TeachingAssignment(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teaching_assignments"
@@ -287,9 +331,8 @@ class TeachingAssignmentTeacher(IdMixin, TenantScoped, Base):
     teacher_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("teachers.id", ondelete="CASCADE"), index=True
     )
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "teaching_assignment_id", "teacher_id"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "teaching_assignment_id", "teacher_id"),)
+
 
 class Rule(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "rules"
@@ -303,6 +346,7 @@ class Rule(IdMixin, TenantScoped, Timestamped, Base):
     time_selectors: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     parameters: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     source: Mapped[str] = mapped_column(String(20), default="manual")
+
 
 class TimetableProject(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "timetable_projects"
@@ -326,6 +370,4 @@ class TimetableProjectSchool(IdMixin, TenantScoped, Base):
     term_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("terms.id", ondelete="RESTRICT"), index=True
     )
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "timetable_project_id", "school_id"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "timetable_project_id", "school_id"),)

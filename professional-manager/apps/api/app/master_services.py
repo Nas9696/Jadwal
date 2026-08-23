@@ -108,7 +108,6 @@ def teacher_snapshot(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID) ->
             select(TeacherSchoolMembership).where(
                 TeacherSchoolMembership.tenant_id == tenant_id,
                 TeacherSchoolMembership.school_id == school_id,
-                TeacherSchoolMembership.is_active.is_(True),
             )
         )
     )
@@ -120,11 +119,23 @@ def teacher_snapshot(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID) ->
                 select(TeacherSchoolMembership).where(
                     TeacherSchoolMembership.tenant_id == tenant_id,
                     TeacherSchoolMembership.teacher_id == teacher.id,
-                    TeacherSchoolMembership.is_active.is_(True),
                 )
             )
         )
-        linked_schools = [school(db, tenant_id, item.school_id) for item in all_memberships]
+        linked_schools = []
+        for item in all_memberships:
+            linked_school = school(db, tenant_id, item.school_id)
+            linked_schools.append(
+                {
+                    "school_id": linked_school.id,
+                    "name_ar": linked_school.name_ar,
+                    "code": linked_school.code,
+                    "is_home_school": item.is_home_school,
+                    "is_active": item.is_active,
+                    "local_employee_code": item.local_employee_code,
+                    "is_current_school": item.school_id == school_id,
+                }
+            )
         assigned = (
             db.scalar(
                 select(func.coalesce(func.sum(TeachingAssignment.weekly_occurrences), 0))
@@ -146,7 +157,7 @@ def teacher_snapshot(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID) ->
                 "teacher": teacher,
                 "membership": membership,
                 "schools": linked_schools,
-                "is_shared": len(linked_schools) > 1,
+                "is_shared": sum(item.is_active for item in all_memberships) > 1,
                 "assigned_workload": assigned,
             }
         )
@@ -156,6 +167,7 @@ def teacher_snapshot(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID) ->
             select(Teacher)
             .where(
                 Teacher.tenant_id == tenant_id,
+                Teacher.is_active.is_(True),
                 Teacher.id.not_in(linked_ids) if linked_ids else Teacher.id.is_not(None),
             )
             .order_by(Teacher.name_ar)
@@ -169,6 +181,8 @@ def create_teacher(
 ) -> TeacherSchoolMembership:
     school(db, tenant_id, school_id)
     data = parse(NewTeacherInput, payload)
+    if not data.is_active:
+        fail("archived_teacher_cannot_have_active_membership", 409)
     values = data.model_dump(exclude={"local_employee_code", "is_home_school"})
     teacher = Teacher(id=uuid.uuid4(), tenant_id=tenant_id, **values)
     db.add(teacher)
@@ -191,7 +205,17 @@ def link_teacher(
 ) -> TeacherSchoolMembership:
     school(db, tenant_id, school_id)
     data = parse(MembershipInput, payload)
-    _teacher(db, tenant_id, data.teacher_id)
+    teacher = _teacher(db, tenant_id, data.teacher_id)
+    if db.scalar(
+        select(TeacherSchoolMembership.id).where(
+            TeacherSchoolMembership.tenant_id == tenant_id,
+            TeacherSchoolMembership.teacher_id == data.teacher_id,
+            TeacherSchoolMembership.school_id == school_id,
+        )
+    ):
+        fail("membership_already_exists_use_reactivation", 409)
+    if data.is_active and not teacher.is_active:
+        fail("archived_teacher_cannot_have_active_membership", 409)
     membership = TeacherSchoolMembership(
         tenant_id=tenant_id, school_id=school_id, **data.model_dump()
     )
@@ -221,6 +245,14 @@ def update_teacher(
     ):
         fail("teacher_not_in_school", 404)
     data = parse(TeacherInput, payload)
+    if not data.is_active and db.scalar(
+        select(TeacherSchoolMembership.id).where(
+            TeacherSchoolMembership.tenant_id == tenant_id,
+            TeacherSchoolMembership.teacher_id == teacher_id,
+            TeacherSchoolMembership.is_active.is_(True),
+        )
+    ):
+        fail("teacher_has_active_memberships", 409)
     for key, value in data.model_dump().items():
         setattr(teacher, key, value)
     commit(db)
@@ -237,6 +269,9 @@ def update_membership(
 ) -> TeacherSchoolMembership:
     membership = _membership(db, tenant_id, school_id, membership_id)
     data = parse(MembershipUpdateInput, payload)
+    teacher = _teacher(db, tenant_id, membership.teacher_id)
+    if data.is_active and not teacher.is_active:
+        fail("archived_teacher_cannot_have_active_membership", 409)
     if data.is_home_school and data.is_active:
         _clear_home(db, tenant_id, membership.teacher_id, membership.id)
     for key, value in data.model_dump().items():
