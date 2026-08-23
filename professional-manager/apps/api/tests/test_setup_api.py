@@ -62,6 +62,41 @@ def test_invalid_year_and_term_dates_are_rejected(client: TestClient) -> None:
     assert outside.json()["detail"]["code"] == "term_outside_year"
 
 
+def test_setting_current_year_atomically_clears_previous_in_same_school(
+    client: TestClient,
+) -> None:
+    first = client.post(
+        url("years"), headers=headers(),
+        json={"name": "1449", "starts_on": "2027-01-01", "ends_on": "2027-12-31", "is_current": True},
+    )
+    second = client.post(
+        url("years"), headers=headers(),
+        json={"name": "1450", "starts_on": "2028-01-01", "ends_on": "2028-12-31", "is_current": True},
+    )
+    assert first.status_code == second.status_code == 201
+    years = client.get(f"/api/v1/schools/{FIRST_SCHOOL}/setup", headers=headers()).json()["years"]
+    assert [year["id"] for year in years if year["is_current"]] == [second.json()["id"]]
+
+
+def test_updating_year_to_current_clears_previous(client: TestClient) -> None:
+    previous = client.post(
+        url("years"), headers=headers(),
+        json={"name": "1449", "starts_on": "2027-01-01", "ends_on": "2027-12-31", "is_current": True},
+    ).json()
+    candidate = client.post(
+        url("years"), headers=headers(),
+        json={"name": "1450", "starts_on": "2028-01-01", "ends_on": "2028-12-31", "is_current": False},
+    ).json()
+    updated = client.put(
+        f"{url('years')}/{candidate['id']}", headers=headers(),
+        json={"name": "1450", "starts_on": "2028-01-01", "ends_on": "2028-12-31", "is_current": True},
+    )
+    assert updated.status_code == 200
+    years = client.get(f"/api/v1/schools/{FIRST_SCHOOL}/setup", headers=headers()).json()["years"]
+    assert next(year for year in years if year["id"] == previous["id"])["is_current"] is False
+    assert next(year for year in years if year["id"] == candidate["id"])["is_current"] is True
+
+
 def test_single_and_abc_week_patterns_are_contiguous_and_persisted(client: TestClient) -> None:
     for index, code in enumerate(("A", "B", "C")):
         response = client.post(
@@ -86,6 +121,13 @@ def test_single_and_abc_week_patterns_are_contiguous_and_persisted(client: TestC
         f"/api/v1/schools/{FIRST_SCHOOL}/setup", headers=headers()
     ).json()
     assert [pattern["cycle_week_index"] for pattern in snapshot["patterns"]] == [0, 1, 2]
+    invalid_update = client.put(
+        f"{url('patterns')}/{snapshot['patterns'][0]['id']}",
+        headers=headers(),
+        json={"code": "A", "name_ar": "الأسبوع A", "cycle_week_index": 3},
+    )
+    assert invalid_update.status_code == 422
+    assert invalid_update.json()["detail"]["code"] == "week_indexes_must_be_contiguous"
 
 
 def test_day_links_and_overlapping_blocks_are_validated(client: TestClient) -> None:
@@ -119,6 +161,21 @@ def test_day_links_and_overlapping_blocks_are_validated(client: TestClient) -> N
     )
     assert overlap.status_code == 422
     assert overlap.json()["detail"]["code"] == "day_block_overlap"
+
+
+def test_updating_school_day_keeps_its_blocks_calendar_scoped(client: TestClient) -> None:
+    shift_id, pattern_id, day_id = create_calendar_prerequisites(client)
+    block = client.post(
+        url("blocks"), headers=headers(),
+        json={"school_day_id": day_id, "block_order": 0, "block_type": "lesson", "period_number": 1, "label_ar": "حصة", "starts_at": "08:00:00", "ends_at": "08:45:00", "attendance_mode": "onsite"},
+    ).json()
+    updated = client.put(
+        f"{url('days')}/{day_id}", headers=headers(),
+        json={"shift_id": shift_id, "week_pattern_id": pattern_id, "weekday_index": 1, "enabled": True, "label_ar": "الاثنين"},
+    )
+    assert updated.status_code == 200
+    blocks = client.get(f"/api/v1/schools/{FIRST_SCHOOL}/setup", headers=headers()).json()["blocks"]
+    assert next(item for item in blocks if item["id"] == block["id"])["weekday_index"] == 1
 
 
 def test_wrong_school_shift_and_pattern_are_rejected(client: TestClient) -> None:

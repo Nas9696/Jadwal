@@ -3,7 +3,11 @@ export const TENANT_ID = process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "00000000-000
 
 export type School = { id: string; name_ar: string; name_en?: string; code: string };
 export type Item = Record<string, string | number | boolean | null> & { id: string };
-export type SetupSnapshot = { school: School } & Record<string, Item[]>;
+export type SetupSnapshot = {
+  school: School;
+  years: Item[]; terms: Item[]; shifts: Item[]; patterns: Item[];
+  days: Item[]; blocks: Item[]; stages: Item[]; grades: Item[]; sections: Item[];
+};
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {

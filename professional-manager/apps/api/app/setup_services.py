@@ -2,7 +2,7 @@ import uuid
 from typing import Any, NoReturn, cast
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
@@ -98,7 +98,21 @@ def _validate_links(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, res
             fail("term_outside_year")
     elif resource == "patterns":
         existing = list(db.scalars(select(WeekPattern).where(WeekPattern.tenant_id == tenant_id, WeekPattern.school_id == school_id)))
-        if data.cycle_week_index > len(existing):
+        if any(
+            pattern.id != entity_id
+            and (
+                pattern.code == data.code
+                or pattern.cycle_week_index == data.cycle_week_index
+            )
+            for pattern in existing
+        ):
+            fail("duplicate_or_dependent_data", 409)
+        indexes = [
+            pattern.cycle_week_index
+            for pattern in existing
+            if pattern.id != entity_id
+        ] + [data.cycle_week_index]
+        if sorted(indexes) != list(range(len(indexes))):
             fail("week_indexes_must_be_contiguous")
     elif resource == "days":
         shift = scoped(db, SchoolShift, data.shift_id, tenant_id)
@@ -161,9 +175,44 @@ def save_resource(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, resou
     if entity_id is not None:
         if _school_for_entity(db, entity) != school_id:
             fail("resource_not_in_school")
+        if resource == "years" and data.is_current:
+            db.execute(
+                update(AcademicYear)
+                .where(
+                    AcademicYear.tenant_id == tenant_id,
+                    AcademicYear.school_id == school_id,
+                    AcademicYear.id != entity_id,
+                    AcademicYear.is_current.is_(True),
+                )
+                .values(is_current=False)
+            )
         for key, value in values.items():
             setattr(entity, key, value)
+        if resource == "days":
+            db.execute(
+                update(PeriodTemplate)
+                .where(
+                    PeriodTemplate.tenant_id == tenant_id,
+                    PeriodTemplate.school_id == school_id,
+                    PeriodTemplate.school_day_id == entity_id,
+                )
+                .values(
+                    shift_id=data.shift_id,
+                    week_pattern_id=data.week_pattern_id,
+                    weekday_index=data.weekday_index,
+                )
+            )
     else:
+        if resource == "years" and data.is_current:
+            db.execute(
+                update(AcademicYear)
+                .where(
+                    AcademicYear.tenant_id == tenant_id,
+                    AcademicYear.school_id == school_id,
+                    AcademicYear.is_current.is_(True),
+                )
+                .values(is_current=False)
+            )
         db.add(entity)
     try:
         db.commit()
