@@ -1,1 +1,3 @@
-import { ComingSoon } from "@/components/coming-soon"; export default function Page(){ return <ComingSoon title="الإسناد"/>; }
+import { AssignmentWorkspace } from "@/components/assignment-workspace";
+
+export default function Page(){ return <AssignmentWorkspace/>; }

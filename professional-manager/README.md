@@ -30,6 +30,21 @@
 - `GET /api/v1/schools/{school_id}/setup`: لقطة الإعداد المحفوظة.
 - `POST|PUT|DELETE /api/v1/schools/{school_id}/setup/{resource}`: عمليات الإعداد، بعزل المستأجر والمدرسة والتحقق من العلاقات على الخادم.
 
+## مصفوفة الإسناد PM-002C
+
+يتيح مسار `/assignments` اختيار العام والفصل الدراسي صراحة، وتفعيل شعب الفصل وربط كل شعبة بشفت محدد، ثم العمل على مصفوفة الشعب × المواد. تعرض كل خلية المطلوب من `CurriculumRequirement` والمسند الفعلي وحالة عربية واضحة، ويفتح النقر محررًا لاختيار معلم أو عدة معلمين، شعبة أو عدة شعب مدمجة، وعدد الحصص والموارد. كما تتوفر إجراءات جماعية آمنة لخلايا المادة نفسها وقائمة متقدمة لمراجعة التدريس المشترك والشعب المدمجة.
+
+كل `TeachingAssignment` مرتبط بـ `term_id`. ترتبط الشعب عبر `SectionOffering` الذي يحدد الفصل والشفت، وتُحفظ علاقات الشعب والموارد والمعلمين في `TeachingAssignmentSection` و`TeachingAssignmentResource` و`TeachingAssignmentTeacher`. لم تعد حقول JSON القديمة مرجعًا authoritative وقد أزالتها migration PM-002C بعد backfill البيانات الصالحة.
+
+يحسب الخادم تغطية كل شعبة مرة لكل إسناد مدمج، بينما يحسب نصاب كل معلم مرة واحدة للإسناد بصرف النظر عن عدد الشعب. التدريس المشترك يضيف العدد نفسه لكل معلم، وتجاوز المنهج أو حد المعلم يرجع تحذيرًا تخطيطيًا ولا يمنع الحفظ.
+
+واجهات API الرئيسية:
+
+- `GET /api/v1/schools/{school_id}/assignments?term_id=...`: لقطة المصفوفة والتغطية والأنصبة.
+- `PUT /api/v1/schools/{school_id}/assignments/section-offerings`: تفعيل الشعب والشفتات للفصل.
+- `POST|PUT|DELETE /api/v1/schools/{school_id}/assignments...`: إدارة مجموعات التدريس relational.
+- `POST /api/v1/schools/{school_id}/assignments/bulk/apply`: إسناد جماعي لخلايا المادة نفسها.
+
 ## ما يتضمنه الأساس
 
 - `apps/web`: Next.js وTypeScript، واجهة عربية RTL افتراضية، مبدّل لغة أولي، حالات تحميل/خطأ، واتصال بـ API health.

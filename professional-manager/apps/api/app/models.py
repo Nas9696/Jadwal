@@ -214,6 +214,24 @@ class Section(IdMixin, TenantScoped, Base):
     __table_args__ = (UniqueConstraint("tenant_id", "grade_id", "name_ar"),)
 
 
+class SectionOffering(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "section_offerings"
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="CASCADE"), index=True
+    )
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("terms.id", ondelete="CASCADE"), index=True
+    )
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sections.id", ondelete="RESTRICT"), index=True
+    )
+    shift_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("school_shifts.id", ondelete="RESTRICT"), index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (UniqueConstraint("tenant_id", "school_id", "term_id", "section_id"),)
+
+
 class Resource(IdMixin, TenantScoped, Base):
     __tablename__ = "resources"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
@@ -316,11 +334,14 @@ class PeriodTemplate(IdMixin, TenantScoped, Base):
 class TeachingAssignment(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teaching_assignments"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("terms.id", ondelete="CASCADE"), index=True
+    )
     subject_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("subjects.id"))
-    section_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
-    resource_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     weekly_occurrences: Mapped[int] = mapped_column(Integer)
     distribution: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    notes: Mapped[str | None] = mapped_column(String(300))
+    __table_args__ = (CheckConstraint("weekly_occurrences > 0"),)
 
 
 class TeachingAssignmentTeacher(IdMixin, TenantScoped, Base):
@@ -332,6 +353,30 @@ class TeachingAssignmentTeacher(IdMixin, TenantScoped, Base):
         ForeignKey("teachers.id", ondelete="CASCADE"), index=True
     )
     __table_args__ = (UniqueConstraint("tenant_id", "teaching_assignment_id", "teacher_id"),)
+
+
+class TeachingAssignmentSection(IdMixin, TenantScoped, Base):
+    __tablename__ = "teaching_assignment_sections"
+    teaching_assignment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teaching_assignments.id", ondelete="CASCADE"), index=True
+    )
+    section_offering_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("section_offerings.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "teaching_assignment_id", "section_offering_id"),
+    )
+
+
+class TeachingAssignmentResource(IdMixin, TenantScoped, Base):
+    __tablename__ = "teaching_assignment_resources"
+    teaching_assignment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teaching_assignments.id", ondelete="CASCADE"), index=True
+    )
+    resource_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("resources.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (UniqueConstraint("tenant_id", "teaching_assignment_id", "resource_id"),)
 
 
 class Rule(IdMixin, TenantScoped, Timestamped, Base):

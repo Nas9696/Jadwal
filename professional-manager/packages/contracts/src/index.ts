@@ -87,6 +87,45 @@ export interface SchoolResource {
   is_active: boolean;
 }
 
+export interface SectionOffering {
+  id: string;
+  tenant_id: string;
+  school_id: string;
+  term_id: string;
+  section_id: string;
+  shift_id: string;
+  is_active: boolean;
+}
+
+export interface TeachingAssignment {
+  id: string;
+  tenant_id: string;
+  school_id: string;
+  term_id: string;
+  subject_id: string;
+  weekly_occurrences: number;
+  teacher_ids: string[];
+  section_offering_ids: string[];
+  resource_ids: string[];
+  notes: string | null;
+}
+
+export type CurriculumCoverageStatus =
+  | "missing"
+  | "partial"
+  | "complete"
+  | "over"
+  | "no_requirement";
+
+export interface AssignmentCoverageCell {
+  offering_id: string;
+  subject_id: string;
+  required: number | null;
+  assigned: number;
+  status: CurriculumCoverageStatus;
+  assignment_ids: string[];
+}
+
 export interface TimetableProject {
   id: string;
   tenant_id: string;

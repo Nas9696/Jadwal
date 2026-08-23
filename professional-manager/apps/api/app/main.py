@@ -33,56 +33,93 @@ from app.services import create_teacher_school_membership, create_timetable_proj
 from app.tenant import tenant_context
 from app.setup_router import router as setup_router
 from app.master_router import router as master_router
+from app.assignment_router import router as assignment_router
 
-app = FastAPI(title=settings.app_name, version="0.1.0", openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs")
-app.add_middleware(CORSMiddleware, allow_origins=settings.api_cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.api_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(setup_router)
 app.include_router(master_router)
+app.include_router(assignment_router)
+
 
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["system"])
 def health() -> HealthResponse:
     return HealthResponse(status="ok", service="professional-manager-api", version="0.1.0")
 
+
 @app.get("/api/v1/schools", response_model=list[SchoolRead], tags=["schools"])
-def schools(tenant_id: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> list[School]:
-    return list(db.scalars(select(School).where(School.tenant_id == tenant_id).order_by(School.name_ar)))
+def schools(
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[School]:
+    return list(
+        db.scalars(select(School).where(School.tenant_id == tenant_id).order_by(School.name_ar))
+    )
+
 
 @app.get("/api/v1/dashboard/{school_id}", response_model=DashboardSummary, tags=["dashboard"])
-def dashboard(school_id: uuid.UUID, tenant_id: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> DashboardSummary:
+def dashboard(
+    school_id: uuid.UUID,
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DashboardSummary:
     school = db.scalar(select(School).where(School.id == school_id, School.tenant_id == tenant_id))
     if not school:
         raise HTTPException(status_code=404, detail="School not found in tenant")
-    teachers = db.scalar(
-        select(func.count(Teacher.id.distinct()))
-        .join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id)
-        .where(
-            Teacher.tenant_id == tenant_id,
-            TeacherSchoolMembership.tenant_id == tenant_id,
-            TeacherSchoolMembership.school_id == school_id,
-            TeacherSchoolMembership.is_active.is_(True),
+    teachers = (
+        db.scalar(
+            select(func.count(Teacher.id.distinct()))
+            .join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id)
+            .where(
+                Teacher.tenant_id == tenant_id,
+                TeacherSchoolMembership.tenant_id == tenant_id,
+                TeacherSchoolMembership.school_id == school_id,
+                TeacherSchoolMembership.is_active.is_(True),
+            )
         )
-    ) or 0
-    subjects = db.scalar(
-        select(func.count()).select_from(Subject).where(
-            Subject.tenant_id == tenant_id, Subject.school_id == school_id
+        or 0
+    )
+    subjects = (
+        db.scalar(
+            select(func.count())
+            .select_from(Subject)
+            .where(Subject.tenant_id == tenant_id, Subject.school_id == school_id)
         )
-    ) or 0
-    sections = db.scalar(
-        select(func.count(Section.id))
-        .join(Grade, Grade.id == Section.grade_id)
-        .join(Stage, Stage.id == Grade.stage_id)
-        .where(
-            Section.tenant_id == tenant_id,
-            Grade.tenant_id == tenant_id,
-            Stage.tenant_id == tenant_id,
-            Stage.school_id == school_id,
+        or 0
+    )
+    sections = (
+        db.scalar(
+            select(func.count(Section.id))
+            .join(Grade, Grade.id == Section.grade_id)
+            .join(Stage, Stage.id == Grade.stage_id)
+            .where(
+                Section.tenant_id == tenant_id,
+                Grade.tenant_id == tenant_id,
+                Stage.tenant_id == tenant_id,
+                Stage.school_id == school_id,
+            )
         )
-    ) or 0
-    resources = db.scalar(
-        select(func.count()).select_from(Resource).where(
-            Resource.tenant_id == tenant_id, Resource.school_id == school_id
+        or 0
+    )
+    resources = (
+        db.scalar(
+            select(func.count())
+            .select_from(Resource)
+            .where(Resource.tenant_id == tenant_id, Resource.school_id == school_id)
         )
-    ) or 0
+        or 0
+    )
     project = db.scalar(
         select(TimetableProject)
         .join(

@@ -10,6 +10,8 @@ from app.models import (
     Grade,
     PeriodTemplate,
     Resource,
+    Section,
+    SectionOffering,
     School,
     SchoolComplex,
     SchoolDay,
@@ -18,6 +20,10 @@ from app.models import (
     Subject,
     Teacher,
     TeacherSchoolMembership,
+    TeachingAssignment,
+    TeachingAssignmentResource,
+    TeachingAssignmentSection,
+    TeachingAssignmentTeacher,
     Term,
     Tenant,
     TenantMembership,
@@ -227,6 +233,25 @@ def seed() -> None:
         grade = Grade(tenant_id=DEMO_TENANT_ID, stage_id=stage.id, name_ar="الأول المتوسط", order=0)
         db.add(grade)
         db.flush()
+        sections = [
+            Section(tenant_id=DEMO_TENANT_ID, grade_id=grade.id, name_ar=name, capacity=30)
+            for name in ("أ", "ب")
+        ]
+        db.add_all(sections)
+        db.flush()
+        offerings = [
+            SectionOffering(
+                tenant_id=DEMO_TENANT_ID,
+                school_id=DEMO_SCHOOL_ID,
+                term_id=DEMO_FIRST_TERM_ID,
+                section_id=section.id,
+                shift_id=shift.id,
+                is_active=True,
+            )
+            for section in sections
+        ]
+        db.add_all(offerings)
+        db.flush()
         db.add_all(
             CurriculumRequirement(
                 tenant_id=DEMO_TENANT_ID,
@@ -237,15 +262,45 @@ def seed() -> None:
             )
             for subject, count in zip(subjects, (6, 4, 6), strict=True)
         )
-        db.add(
-            Resource(
-                tenant_id=DEMO_TENANT_ID,
-                school_id=DEMO_SCHOOL_ID,
-                code="SCI-LAB",
-                name_ar="مختبر العلوم",
-                resource_type="science_lab",
-                capacity=30,
-            )
+        resource = Resource(
+            tenant_id=DEMO_TENANT_ID,
+            school_id=DEMO_SCHOOL_ID,
+            code="SCI-LAB",
+            name_ar="مختبر العلوم",
+            resource_type="science_lab",
+            capacity=30,
+        )
+        db.add(resource)
+        db.flush()
+        assignment = TeachingAssignment(
+            tenant_id=DEMO_TENANT_ID,
+            school_id=DEMO_SCHOOL_ID,
+            term_id=DEMO_FIRST_TERM_ID,
+            subject_id=subjects[0].id,
+            weekly_occurrences=3,
+            notes="إسناد تجريبي جزئي",
+            distribution={},
+        )
+        db.add(assignment)
+        db.flush()
+        db.add_all(
+            [
+                TeachingAssignmentTeacher(
+                    tenant_id=DEMO_TENANT_ID,
+                    teaching_assignment_id=assignment.id,
+                    teacher_id=teachers[0].id,
+                ),
+                TeachingAssignmentSection(
+                    tenant_id=DEMO_TENANT_ID,
+                    teaching_assignment_id=assignment.id,
+                    section_offering_id=offerings[0].id,
+                ),
+                TeachingAssignmentResource(
+                    tenant_id=DEMO_TENANT_ID,
+                    teaching_assignment_id=assignment.id,
+                    resource_id=resource.id,
+                ),
+            ]
         )
         project = TimetableProject(
             tenant_id=DEMO_TENANT_ID,

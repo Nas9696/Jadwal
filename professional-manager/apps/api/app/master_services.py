@@ -26,6 +26,7 @@ from app.models import (
     Teacher,
     TeacherSchoolMembership,
     TeachingAssignment,
+    TeachingAssignmentResource,
     TeachingAssignmentTeacher,
 )
 
@@ -270,6 +271,23 @@ def update_membership(
     membership = _membership(db, tenant_id, school_id, membership_id)
     data = parse(MembershipUpdateInput, payload)
     teacher = _teacher(db, tenant_id, membership.teacher_id)
+    if (
+        not data.is_active
+        and membership.is_active
+        and db.scalar(
+            select(TeachingAssignmentTeacher.id)
+            .join(
+                TeachingAssignment,
+                TeachingAssignment.id == TeachingAssignmentTeacher.teaching_assignment_id,
+            )
+            .where(
+                TeachingAssignmentTeacher.tenant_id == tenant_id,
+                TeachingAssignmentTeacher.teacher_id == membership.teacher_id,
+                TeachingAssignment.school_id == school_id,
+            )
+        )
+    ):
+        fail("teacher_membership_has_assignments", 409)
     if data.is_active and not teacher.is_active:
         fail("archived_teacher_cannot_have_active_membership", 409)
     if data.is_home_school and data.is_active:
@@ -439,15 +457,18 @@ def delete_catalog(
         ):
             fail("subject_has_dependencies", 409)
     if kind == "resources":
-        assignments = list(
-            db.scalars(
-                select(TeachingAssignment).where(
-                    TeachingAssignment.tenant_id == tenant_id,
-                    TeachingAssignment.school_id == school_id,
-                )
+        if db.scalar(
+            select(TeachingAssignmentResource.id)
+            .join(
+                TeachingAssignment,
+                TeachingAssignment.id == TeachingAssignmentResource.teaching_assignment_id,
             )
-        )
-        if any(str(entity_id) in assignment.resource_ids for assignment in assignments):
+            .where(
+                TeachingAssignmentResource.tenant_id == tenant_id,
+                TeachingAssignmentResource.resource_id == entity_id,
+                TeachingAssignment.school_id == school_id,
+            )
+        ):
             fail("resource_has_dependencies", 409)
     db.delete(entity)
     commit(db)
