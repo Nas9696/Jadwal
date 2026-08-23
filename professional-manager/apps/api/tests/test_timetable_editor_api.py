@@ -31,6 +31,33 @@ def derive(client: TestClient, session: Session) -> tuple[str, dict[str, object]
     return str(project.id), response.json()
 
 
+def test_candidate_and_working_quality_and_explanation_are_factual(
+    client: TestClient, session: Session
+) -> None:
+    project_id, working = derive(client, session)
+    occurrence = working["entries"][0]  # type: ignore[index]
+    candidate_id = working["source_candidate_id"]
+    candidate_quality = client.get(
+        f"/api/v1/timetable-projects/{project_id}/candidates/{candidate_id}/quality",
+        headers=HEADERS,
+    )
+    assert candidate_quality.status_code == 200, candidate_quality.text
+    assert "total_weighted_penalty" in candidate_quality.json()
+    quality = client.get(
+        f"/api/v1/timetable-projects/{project_id}/working-timetable/quality", headers=HEADERS
+    )
+    assert quality.status_code == 200
+    assert quality.json()["hard_violations"] == []
+    explanation = client.get(
+        f"/api/v1/timetable-projects/{project_id}/working-timetable/explanations",
+        headers=HEADERS,
+        params={"occurrence_id": occurrence["occurrence_id"]},  # type: ignore[index]
+    )
+    assert explanation.status_code == 200, explanation.text
+    assert explanation.json()["chosen_slot"]["id"] == occurrence["slot_id"]  # type: ignore[index]
+    assert all("penalty_delta" in item for item in explanation.json()["alternatives"])
+
+
 def test_candidate_is_immutable_move_revision_and_persisted_undo_redo(
     client: TestClient, session: Session
 ) -> None:

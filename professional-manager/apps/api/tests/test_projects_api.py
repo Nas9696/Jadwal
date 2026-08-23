@@ -38,7 +38,11 @@ def test_project_scope_rule_registry_and_preflight_are_server_side(client: TestC
         == 422
     )
     catalog = client.get("/api/v1/timetable-projects/rule-catalog", headers=HEADERS).json()
-    assert len(catalog) == 9
+    assert len(catalog) == 28
+    assert {item["category"] for item in catalog} == {
+        "availability", "distribution", "consecutive", "relationships", "resources"
+    }
+    assert next(x for x in catalog if x["rule_type"] == "assignment_min_days")["translator"] == "pm004a-cp-sat"
 
 
 def test_term_and_phase_are_validated(client: TestClient) -> None:

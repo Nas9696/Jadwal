@@ -7,14 +7,15 @@ from app.db import get_db
 from app.models import SchedulingRule, TimetableProject
 from app.project_schemas import ProjectInput, RuleInput
 from app.project_services import (
-    RULE_REGISTRY,
     _project,
     build_problem,
     preflight,
     save_project,
     save_rule,
     serialize_project,
+    serialize_rule,
 )
+from pm_scheduler.rules import RULE_REGISTRY
 from app.solve_schemas import SolveRequest
 from app.solve_services import (
     create_solve_run,
@@ -24,6 +25,7 @@ from app.solve_services import (
     serialize_run,
 )
 from app.tenant import tenant_context
+from app.quality_services import candidate_explanation, candidate_quality
 
 router = APIRouter(prefix="/api/v1/timetable-projects", tags=["timetable-projects"])
 
@@ -80,10 +82,11 @@ def catalog() -> list[dict[str, Any]]:
     return [
         {
             "rule_type": k,
-            "target": v[0],
-            "allowed_severity": sorted(v[1]),
-            "label_ar": v[2],
-            "translator": "pm003b",
+            "targets": list(v.target_keys),
+            "allowed_severity": sorted(v.severities),
+            "label_ar": v.label_ar,
+            "category": v.category,
+            "translator": "pm004a-cp-sat",
         }
         for k, v in RULE_REGISTRY.items()
     ]
@@ -96,16 +99,14 @@ def rules(
     db: Annotated[Session, Depends(get_db)],
 ) -> Any:
     _project(db, tenant, project_id)
-    return list(
-        db.scalars(
+    return [serialize_rule(rule) for rule in db.scalars(
             select(SchedulingRule)
             .where(
                 SchedulingRule.tenant_id == tenant,
                 SchedulingRule.timetable_project_id == project_id,
             )
             .order_by(SchedulingRule.created_at.desc())
-        )
-    )
+        )]
 
 
 @router.post("/{project_id}/rules", status_code=201)
@@ -115,7 +116,7 @@ def create_project_rule(
     tenant: Annotated[uuid.UUID, Depends(tenant_context)],
     db: Annotated[Session, Depends(get_db)],
 ) -> Any:
-    return save_rule(db, tenant, project_id, payload)
+    return serialize_rule(save_rule(db, tenant, project_id, payload))
 
 
 @router.put("/{project_id}/rules/{rule_id}")
@@ -126,7 +127,7 @@ def update_project_rule(
     tenant: Annotated[uuid.UUID, Depends(tenant_context)],
     db: Annotated[Session, Depends(get_db)],
 ) -> Any:
-    return save_rule(db, tenant, project_id, payload, rule_id)
+    return serialize_rule(save_rule(db, tenant, project_id, payload, rule_id))
 
 
 @router.post("/{project_id}/rules/{rule_id}/duplicate", status_code=201)
@@ -145,7 +146,7 @@ def duplicate(
     )
     if rule is None:
         raise HTTPException(404, detail={"code": "rule_not_found"})
-    return save_rule(
+    return serialize_rule(save_rule(
         db,
         tenant,
         project_id,
@@ -161,7 +162,7 @@ def duplicate(
                 "enabled": rule.enabled,
             }
         ),
-    )
+    ))
 
 
 @router.delete("/{project_id}/rules/{rule_id}", status_code=204)
@@ -233,3 +234,13 @@ def candidate_detail(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
     return serialize_candidate(db, tenant, project_id, candidate_id)
+
+
+@router.get("/{project_id}/candidates/{candidate_id}/quality")
+def candidate_quality_report(project_id: uuid.UUID, candidate_id: uuid.UUID, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    return candidate_quality(db, tenant, project_id, candidate_id)
+
+
+@router.get("/{project_id}/candidates/{candidate_id}/explanations")
+def explain_candidate_placement(project_id: uuid.UUID, candidate_id: uuid.UUID, occurrence_id: str, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    return candidate_explanation(db, tenant, project_id, candidate_id, occurrence_id)

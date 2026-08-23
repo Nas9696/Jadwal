@@ -34,8 +34,24 @@ from app.editor_services import (
     _working,
 )
 from app.tenant import tenant_context
+from app.quality_services import compare_quality, working_explanation, working_quality
 
 router = APIRouter(prefix="/api/v1/timetable-projects", tags=["timetable-editor"])
+
+
+@router.get("/{project_id}/working-timetable/quality")
+def quality(project_id: uuid.UUID, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    return working_quality(db, tenant, project_id)
+
+
+@router.get("/{project_id}/working-timetable/quality/compare/{candidate_id}")
+def quality_compare(project_id: uuid.UUID, candidate_id: uuid.UUID, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    return compare_quality(db, tenant, project_id, candidate_id)
+
+
+@router.get("/{project_id}/working-timetable/explanations")
+def explain_working(project_id: uuid.UUID, occurrence_id: str, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    return working_explanation(db, tenant, project_id, occurrence_id)
 
 
 @router.post("/{project_id}/working-timetable/from-candidate/{candidate_id}", status_code=201)

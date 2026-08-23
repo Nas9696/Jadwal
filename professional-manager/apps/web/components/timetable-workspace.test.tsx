@@ -5,7 +5,7 @@ import { projectApi } from "@/lib/project-api";
 import { TimetableWorkspace } from "./timetable-workspace";
 
 vi.mock("@/lib/setup-api", () => ({ setupApi: { schools: vi.fn(), snapshot: vi.fn() } }));
-vi.mock("@/lib/project-api", () => ({ projectApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), rules: vi.fn(), saveRule: vi.fn(), updateRule: vi.fn(), duplicateRule: vi.fn(), removeRule: vi.fn(), preflight: vi.fn(), solve: vi.fn(), solveRun: vi.fn(), candidate: vi.fn() } }));
+vi.mock("@/lib/project-api", () => ({ projectApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), rules: vi.fn(), saveRule: vi.fn(), updateRule: vi.fn(), duplicateRule: vi.fn(), removeRule: vi.fn(), preflight: vi.fn(), solve: vi.fn(), solveRun: vi.fn(), candidate: vi.fn(), candidateQuality:vi.fn(), candidateExplanation:vi.fn() } }));
 
 const school = { id: "s1", name_ar: "مدرسة النور", code: "S1" };
 const setup = { school, years: [], terms: [{ id: "t1", name_ar: "الأول" }], shifts: [], patterns: [{ id: "w1", name_ar: "A" }, { id: "w2", name_ar: "B" }], days: [], blocks: [], stages: [], grades: [], sections: [] };
@@ -24,6 +24,8 @@ describe("timetable workspace", () => {
     vi.mocked(projectApi.preflight).mockResolvedValue({ readiness: "توجد أخطاء تمنع التوليد", errors: 1, warnings: 0, diagnostics: [{ code: "no_lesson_slots", message: "لا توجد حصص قابلة للجدولة" }] });
     vi.mocked(projectApi.solve).mockResolvedValue(completed);
     vi.mocked(projectApi.candidate).mockImplementation(async (_projectId, id) => id === "c2" ? detail("c2", 2, "العلوم") : detail("c1", 1, "الرياضيات"));
+    vi.mocked(projectApi.candidateQuality).mockResolvedValue({hard_violations:[],total_weighted_penalty:12,penalty_breakdown:[],teacher_gaps:{t:1},teacher_gap_total:1,first_period_distribution:{t:2},last_period_distribution:{t:1},consecutive_streaks:[],distribution_violations:[],source:{type:"candidate"}});
+    vi.mocked(projectApi.candidateExplanation).mockResolvedValue({occurrence_id:"o1",chosen_slot:{id:"slot",school_id:"s1",project_cycle_week_index:0,weekday_index:0,starts_at_minute:480,ends_at_minute:525,attendance_mode:"onsite"},mandatory_rule_facts:[],preference_rule_facts:[{rule_type:"subject_preferred_time"}],entity_facts:{teacher_ids:["t"]},alternatives:[{slot:{id:"late",school_id:"s1",project_cycle_week_index:0,weekday_index:0,starts_at_minute:525,ends_at_minute:570,attendance_mode:"onsite"},status:"valid_but_worse",blocking_facts:[],penalty_delta:25}]});
   });
   afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
@@ -76,5 +78,17 @@ describe("timetable workspace", () => {
     await waitFor(() => expect(projectApi.duplicateRule).toHaveBeenCalledWith("p1", "r1"));
     fireEvent.click(screen.getByRole("button", { name: "تعطيل" }));
     await waitFor(() => expect(projectApi.updateRule).toHaveBeenCalledWith("p1", "r1", expect.objectContaining({ enabled: false })));
+  });
+
+  it("shows advanced RTL rule categories and sends the server optimization profile",async()=>{
+    vi.mocked(projectApi.preflight).mockResolvedValue({readiness:"جاهز للتوليد",errors:0,warnings:0,diagnostics:[]});
+    render(<TimetableWorkspace/>);fireEvent.click(await screen.findByRole("button",{name:/مشروع الفصل/}));
+    expect(screen.getByText("توزيع الحصص")).toBeInTheDocument();expect(screen.getByText("الحصص المتتالية")).toBeInTheDocument();expect(screen.getByText("الراحة والتوازن")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("ملف التحسين"),{target:{value:"teacher_comfort"}});fireEvent.click(screen.getByRole("button",{name:"تشغيل فحص الجاهزية"}));await screen.findByText("جاهز للتوليد");fireEvent.click(screen.getByRole("button",{name:"توليد الجدول"}));
+    await waitFor(()=>expect(projectApi.solve).toHaveBeenCalledWith("p1",expect.objectContaining({optimization_profile:"teacher_comfort"})));
+  });
+
+  it("renders factual quality and placement explanation panels",async()=>{
+    vi.mocked(projectApi.preflight).mockResolvedValue({readiness:"جاهز للتوليد",errors:0,warnings:0,diagnostics:[]});render(<TimetableWorkspace/>);fireEvent.click(await screen.findByRole("button",{name:/مشروع الفصل/}));fireEvent.click(screen.getByRole("button",{name:"تشغيل فحص الجاهزية"}));await screen.findByText("جاهز للتوليد");fireEvent.click(screen.getByRole("button",{name:"توليد الجدول"}));await screen.findByText("الرياضيات");fireEvent.click(screen.getByRole("button",{name:"جودة الجدول"}));expect(await screen.findByText("مجموع الجزاء الموزون: 12")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"لماذا هنا؟"}));expect(await screen.findByText(/بديل صالح لكنه أسوأ/)).toHaveTextContent("فرق الجزاء 25");
   });
 });

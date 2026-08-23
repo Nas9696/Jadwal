@@ -15,6 +15,7 @@ from app.models import (
     Section,
     SectionOffering,
     Stage,
+    Subject,
     Teacher,
     TeacherSchoolMembership,
     TeachingAssignment,
@@ -34,22 +35,13 @@ from pm_scheduler.contracts import (
     ResourceEntity,
     SchedulingProblem,
     SchedulingRule as SolverRule,
+    SolveOptions,
     TimeSlot,
 )
 from pm_scheduler.cycle import expand_project_slots
+from pm_scheduler.rules import RULE_REGISTRY, validate_parameters
 
 MAX_CYCLE = 12
-RULE_REGISTRY = {
-    "teacher_unavailable": ("teacher_id", {"hard"}, "عدم توفر المعلم"),
-    "section_unavailable": ("section_id", {"hard"}, "عدم توفر الشعبة"),
-    "resource_unavailable": ("resource_id", {"hard"}, "عدم توفر المورد"),
-    "assignment_forbidden_time": ("assignment_id", {"hard"}, "وقت ممنوع للإسناد"),
-    "assignment_required_time": ("assignment_id", {"hard"}, "وقت مطلوب للإسناد"),
-    "teacher_preferred_time": ("teacher_id", {"soft"}, "وقت مفضل للمعلم"),
-    "teacher_avoided_time": ("teacher_id", {"soft"}, "وقت غير مفضل للمعلم"),
-    "assignment_preferred_time": ("assignment_id", {"soft"}, "وقت مفضل للإسناد"),
-    "assignment_avoided_time": ("assignment_id", {"soft"}, "وقت غير مفضل للإسناد"),
-}
 
 
 def _project(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> TimetableProject:
@@ -153,6 +145,8 @@ def serialize_project(db: Session, project: TimetableProject) -> dict[str, Any]:
         "status": project.status,
         "created_at": project.created_at,
         "updated_at": project.updated_at,
+        "optimization_profile": (project.settings or {}).get("optimization_profile", "balanced"),
+        "optimization_weights": (project.settings or {}).get("optimization_weights", {}),
         "schools": [
             {
                 "school_id": x.school_id,
@@ -168,14 +162,8 @@ def validate_rule(
     db: Session, tenant: uuid.UUID, project: TimetableProject, data: RuleInput
 ) -> None:
     spec = RULE_REGISTRY.get(data.rule_type)
-    if not spec or data.severity not in spec[1]:
+    if not spec or data.severity not in spec.severities:
         raise HTTPException(422, detail={"code": "invalid_rule_schema"})
-    target_key = spec[0]
-    raw = data.selector.get(target_key)
-    try:
-        target = uuid.UUID(str(raw))
-    except ValueError as exc:
-        raise HTTPException(422, detail={"code": "invalid_rule_target"}) from exc
     scopes = list(
         db.scalars(
             select(TimetableProjectSchool).where(
@@ -184,42 +172,38 @@ def validate_rule(
         )
     )
     school_ids = {x.school_id for x in scopes}
-    model: Any = {
-        "teacher_id": Teacher,
-        "section_id": Section,
-        "resource_id": Resource,
-        "assignment_id": TeachingAssignment,
-    }[target_key]
-    entity: Any = db.scalar(select(model).where(model.id == target, model.tenant_id == tenant))
-    if not entity:
-        raise HTTPException(422, detail={"code": "cross_tenant_rule_target"})
-    if target_key == "teacher_id":
-        valid = db.scalar(
-            select(TeacherSchoolMembership.id).where(
-                TeacherSchoolMembership.teacher_id == target,
-                TeacherSchoolMembership.school_id.in_(school_ids),
-            )
-        )
-    elif target_key == "section_id":
-        valid = db.scalar(
-            select(Section.id)
-            .join(Grade)
-            .join(Stage)
-            .where(Section.id == target, Stage.school_id.in_(school_ids))
-        )
-    else:
-        valid = entity.id if getattr(entity, "school_id", None) in school_ids else None
-    if not valid:
-        raise HTTPException(422, detail={"code": "cross_school_rule_target"})
-    allowed = {
-        "project_cycle_week_index",
-        "weekday_index",
-        "starts_at_minute",
-        "ends_at_minute",
-        "slot_id",
-    }
-    if set(data.parameters) - allowed:
-        raise HTTPException(422, detail={"code": "invalid_rule_parameters"})
+    term_by_school = {x.school_id: x.term_id for x in scopes}
+    if set(data.selector) != set(spec.target_keys):
+        raise HTTPException(422, detail={"code": "invalid_rule_selector"})
+    for raw_key in spec.target_keys:
+        raw_values = data.selector.get(raw_key)
+        values = raw_values if raw_key == "assignment_ids" and isinstance(raw_values, list) else [raw_values]
+        if raw_key == "assignment_ids" and (len(values) != 2 or len(set(map(str, values))) != 2):
+            raise HTTPException(422, detail={"code": "invalid_relationship_targets"})
+        key = "assignment_id" if raw_key == "assignment_ids" else raw_key
+        model: Any = {"teacher_id": Teacher, "section_id": Section, "resource_id": Resource, "assignment_id": TeachingAssignment, "subject_id": Subject}[key]
+        for raw in values:
+            try:
+                target = uuid.UUID(str(raw))
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(422, detail={"code": "invalid_rule_target"}) from exc
+            entity: Any = db.scalar(select(model).where(model.id == target, model.tenant_id == tenant))
+            if not entity:
+                raise HTTPException(422, detail={"code": "cross_tenant_rule_target"})
+            if key == "teacher_id":
+                valid = db.scalar(select(TeacherSchoolMembership.id).where(TeacherSchoolMembership.teacher_id == target, TeacherSchoolMembership.school_id.in_(school_ids), TeacherSchoolMembership.is_active.is_(True)))
+            elif key == "section_id":
+                valid = db.scalar(select(Section.id).join(Grade).join(Stage).where(Section.id == target, Stage.school_id.in_(school_ids)))
+            elif key == "assignment_id":
+                valid = entity.id if entity.school_id in school_ids and term_by_school.get(entity.school_id) == entity.term_id else None
+            else:
+                valid = entity.id if getattr(entity, "school_id", None) in school_ids else None
+            if not valid:
+                raise HTTPException(422, detail={"code": "cross_school_rule_target"})
+    try:
+        data.parameters = validate_parameters(data.rule_type, data.parameters)
+    except ValueError as exc:
+        raise HTTPException(422, detail={"code": "invalid_rule_parameters"}) from exc
 
 
 def save_rule(
@@ -250,6 +234,23 @@ def save_rule(
     db.commit()
     db.refresh(rule)
     return rule
+
+
+def serialize_rule(rule: SchedulingRule) -> dict[str, Any]:
+    return {
+        "id": rule.id,
+        "project_id": rule.timetable_project_id,
+        "label": rule.label,
+        "description": rule.description,
+        "rule_type": rule.rule_type,
+        "severity": rule.severity,
+        "weight": rule.weight,
+        "selector": rule.selector,
+        "parameters": rule.parameters,
+        "enabled": rule.enabled,
+        "created_at": rule.created_at,
+        "updated_at": rule.updated_at,
+    }
 
 
 def _matches(slot: TimeSlot, params: dict[str, Any]) -> bool:
@@ -486,7 +487,7 @@ def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Sche
         slots=sorted(slots, key=lambda s: s.id),
         teachers=[Entity(id=item) for item in teacher_ids],
         sections=[Entity(id=item) for item in section_ids],
-        resources=[ResourceEntity(id=str(item.id), exclusive=item.exclusive) for item in resource_rows],
+        resources=[ResourceEntity(id=str(item.id), exclusive=item.exclusive, resource_type=item.resource_type) for item in resource_rows],
         assignments=[],
         occurrences=occurrences,
         rules=[
@@ -500,6 +501,10 @@ def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Sche
             )
             for r in rules
         ],
+        options=SolveOptions(
+            optimization_profile=(project.settings or {}).get("optimization_profile", "balanced"),
+            optimization_weights=(project.settings or {}).get("optimization_weights", {}),
+        ),
     )
 
 
@@ -619,6 +624,30 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
                     }
                 )
     rules = [r for r in problem.rules if r.severity == "hard"]
+    for rule in rules:
+        targeted = [o for o in problem.occurrences if str(rule.selector.get("assignment_id")) == o.assignment_id]
+        if rule.rule_type == "assignment_min_days":
+            minimum = int(rule.parameters["minimum_days"])
+            available_days = len({(next(s for s in problem.slots if s.id == slot_id).project_cycle_week_index, next(s for s in problem.slots if s.id == slot_id).weekday_index) for o in targeted for slot_id in o.candidate_slot_ids})
+            if targeted and available_days < minimum:
+                diagnostics.append({"severity": "error", "code": "minimum_days_exceeds_available_days", "message": "عدد أيام التوزيع المطلوب يتجاوز الأيام المتاحة", "affected_entities": {"assignment": [targeted[0].assignment_id]}, "required": minimum, "available": available_days, "suggested_remediation": "خفّض الحد الأدنى للأيام أو أضف أيامًا صالحة."})
+        if rule.rule_type == "assignment_max_per_day":
+            maximum = int(rule.parameters["maximum"])
+            for week, required_count in Counter(o.project_cycle_week_index for o in targeted).items():
+                weekdays = {next(s for s in problem.slots if s.id == slot_id).weekday_index for o in targeted if o.project_cycle_week_index == week for slot_id in o.candidate_slot_ids}
+                assignment_capacity = maximum * len(weekdays)
+                if required_count > assignment_capacity:
+                    diagnostics.append({"severity": "error", "code": "assignment_daily_max_too_strict", "message": "الحد اليومي لا يتسع لعدد حصص الإسناد", "affected_entities": {"assignment": [str(rule.selector.get("assignment_id"))]}, "required": required_count, "available": assignment_capacity, "shortage": required_count - assignment_capacity, "suggested_remediation": "ارفع الحد اليومي أو أضف يومًا متاحًا للإسناد."})
+        if rule.rule_type == "assignment_require_consecutive_block":
+            size = int(rule.parameters["block_size"])
+            counts = Counter(o.project_cycle_week_index for o in targeted)
+            if any(count % size for count in counts.values()):
+                diagnostics.append({"severity": "error", "code": "consecutive_block_count_mismatch", "message": "عدد حصص الإسناد لا يقبل حجم الكتلة المطلوبة", "affected_entities": {"assignment": [str(rule.selector.get("assignment_id"))]}, "suggested_remediation": "غيّر عدد الحصص أو حجم الكتلة 2/3."})
+        if rule.rule_type in {"assignments_same_time", "assignments_same_day", "assignment_before_assignment"}:
+            ids = [str(x) for x in rule.selector.get("assignment_ids", [])]
+            relationship_counts = [Counter(o.project_cycle_week_index for o in problem.occurrences if o.assignment_id == assignment_id) for assignment_id in ids]
+            if len(relationship_counts) == 2 and relationship_counts[0] != relationship_counts[1]:
+                diagnostics.append({"severity": "error", "code": "relationship_occurrence_count_mismatch", "message": "الإسنادان لا يملكان عدد الوقائع نفسه داخل أسابيع المشروع", "affected_entities": {"assignment": ids}, "suggested_remediation": "وحّد عدد الحصص أو استخدم علاقة لا تتطلب المطابقة واحدًا لواحد."})
     for required_rule in [r for r in rules if r.rule_type == "assignment_required_time"]:
         if any(
             r.rule_type == "assignment_forbidden_time"

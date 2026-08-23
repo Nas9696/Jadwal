@@ -61,6 +61,7 @@ class Entity(BaseModel):
 
 class ResourceEntity(Entity):
     exclusive: bool = True
+    resource_type: str = "room"
 
 
 class LessonOccurrence(BaseModel):
@@ -134,6 +135,7 @@ class SolveOptions(BaseModel):
     time_limit_seconds: Annotated[float, Field(ge=1, le=60)] = 10
     candidate_count: Annotated[int, Field(ge=1, le=5)] = 3
     optimization_profile: str = "balanced"
+    optimization_weights: dict[str, Annotated[int, Field(ge=0, le=1000)]] = {}
     repair: bool = False
     minimize_changes: bool = True
     requested_occurrence_id: str | None = None
@@ -144,6 +146,25 @@ class SolveOptions(BaseModel):
     def repair_request_is_complete(self) -> "SolveOptions":
         if bool(self.requested_occurrence_id) != bool(self.requested_slot_id):
             raise ValueError("requested occurrence and slot must be supplied together")
+        allowed = {
+            "balanced",
+            "teacher_comfort",
+            "student_rhythm",
+            "administration_priorities",
+            "custom",
+        }
+        if self.optimization_profile not in allowed:
+            raise ValueError("unknown_optimization_profile")
+        if self.optimization_profile == "custom" and not self.optimization_weights:
+            raise ValueError("custom_profile_requires_weights")
+        allowed_weights = {
+            "teacher_gaps",
+            "first_period_fairness",
+            "last_period_fairness",
+            "teaching_streaks",
+        }
+        if set(self.optimization_weights) - allowed_weights:
+            raise ValueError("unknown_optimization_weight")
         return self
 
 
@@ -185,6 +206,7 @@ class PenaltyBreakdown(BaseModel):
     violation_count: int
     weight: int
     weighted_penalty: int
+    category: str = "other"
 
 
 class CandidateSolution(BaseModel):

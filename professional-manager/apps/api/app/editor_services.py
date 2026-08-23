@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.models import (
     Resource,
     School,
-    SchedulingRule,
     Section,
     Subject,
     Teacher,
@@ -31,7 +30,8 @@ from app.models import (
     WorkingTimetableEntryTeacher,
 )
 from app.project_services import _project, build_problem
-from pm_scheduler.contracts import ExistingPlacement, SchedulingProblem, SolveOptions, TimeSlot
+from pm_scheduler.contracts import ExistingPlacement, Placement, SchedulingProblem, SolveOptions, TimeSlot
+from pm_scheduler.evaluation import evaluate_schedule
 from pm_scheduler.solver import Scheduler
 
 
@@ -49,6 +49,14 @@ def _working(
     if item is None:
         raise HTTPException(404, detail={"code": "working_timetable_not_found"})
     return item
+
+
+def _working_problem(db: Session, item: WorkingTimetable) -> SchedulingProblem:
+    candidate = db.get(TimetableCandidate, item.source_candidate_id)
+    run = db.get(TimetableSolveRun, candidate.solve_run_id) if candidate else None
+    if run is not None:
+        return SchedulingProblem.model_validate(run.input_snapshot)
+    return build_problem(db, item.tenant_id, item.timetable_project_id)
 
 
 def _check_revision(item: WorkingTimetable, revision: int) -> None:
@@ -340,7 +348,7 @@ def analyze_move(
 ) -> dict[str, Any]:
     item = _working(db, tenant, project_id)
     _check_revision(item, revision)
-    problem = build_problem(db, tenant, project_id)
+    problem = _working_problem(db, item)
     source = _entry(db, item, occurrence_id)
     target = _slot(problem, occurrence_id, target_slot_id)
     facts = _move_facts(db, item, source, target, problem)
@@ -507,7 +515,7 @@ def _move_facts(
         "hard_rule_violations": hard_violations,
         "lock_violations": lock_violations,
         "affected_entries": list(affected.values()),
-        "soft_penalty_delta": _soft_delta(db, item, source, target),
+        "soft_penalty_delta": _soft_delta(db, item, source, target, problem),
     }
 
 
@@ -518,65 +526,28 @@ def _hard_rule_violations(
     target: TimeSlot,
     problem: SchedulingProblem,
 ) -> list[dict[str, Any]]:
-    occurrence = next(x for x in problem.occurrences if x.id == entry.occurrence_id)
-    result = []
-    for rule in db.scalars(
-        select(SchedulingRule).where(
-            SchedulingRule.tenant_id == item.tenant_id,
-            SchedulingRule.timetable_project_id == item.timetable_project_id,
-            SchedulingRule.enabled.is_(True),
-            SchedulingRule.severity == "hard",
-        )
-    ):
-        if not _rule_targets(rule.selector, occurrence):
-            continue
-        matches = _slot_matches(target, rule.parameters)
-        invalid = (rule.rule_type == "assignment_required_time" and not matches) or (
-            (
-                rule.rule_type.endswith("unavailable")
-                or rule.rule_type == "assignment_forbidden_time"
-            )
-            and matches
-        )
-        if invalid:
-            result.append(
-                {"code": "hard_rule_violation", "rule_id": str(rule.id), "label": rule.label}
-            )
-    return result
+    placements = _working_placements(db, item)
+    proposed = [p.model_copy(update={"slot_id": target.id}) if p.occurrence_id == entry.occurrence_id else p for p in placements]
+    before = evaluate_schedule(problem, placements)["hard_violations"]
+    after = evaluate_schedule(problem, proposed)["hard_violations"]
+    baseline = {json.dumps(value, sort_keys=True, default=str) for value in before}
+    return [{"code": "hard_rule_violation", **value} for value in after if "rule_id" in value and json.dumps(value, sort_keys=True, default=str) not in baseline]
 
 
 def _soft_delta(
-    db: Session, item: WorkingTimetable, entry: WorkingTimetableEntry, target: TimeSlot
+    db: Session,
+    item: WorkingTimetable,
+    entry: WorkingTimetableEntry,
+    target: TimeSlot,
+    problem: SchedulingProblem,
 ) -> int:
-    problem = build_problem(db, item.tenant_id, item.timetable_project_id)
-    occurrence = next(x for x in problem.occurrences if x.id == entry.occurrence_id)
-    current = next((x for x in problem.slots if x.id == entry.slot_id), None)
-    delta = 0
-    for rule in db.scalars(
-        select(SchedulingRule).where(
-            SchedulingRule.tenant_id == item.tenant_id,
-            SchedulingRule.timetable_project_id == item.timetable_project_id,
-            SchedulingRule.enabled.is_(True),
-            SchedulingRule.severity == "soft",
-        )
-    ):
-        if not _rule_targets(rule.selector, occurrence):
-            continue
+    placements = _working_placements(db, item)
+    proposed = [p.model_copy(update={"slot_id": target.id}) if p.occurrence_id == entry.occurrence_id else p for p in placements]
+    return int(evaluate_schedule(problem, proposed)["total_weighted_penalty"] - evaluate_schedule(problem, placements)["total_weighted_penalty"])
 
-        def penalty(
-            slot: TimeSlot | None,
-            parameters: dict[str, Any] = rule.parameters,
-            rule_type: str = rule.rule_type,
-            weight: int = rule.weight or 0,
-        ) -> int:
-            if slot is None:
-                return 0
-            matched = _slot_matches(slot, parameters)
-            violated = not matched if rule_type.endswith("preferred_time") else matched
-            return weight if violated else 0
 
-        delta += penalty(target) - penalty(current)
-    return delta
+def _working_placements(db: Session, item: WorkingTimetable) -> list[Placement]:
+    return [Placement(occurrence_id=row.occurrence_id, assignment_id=str(row.assignment_id), slot_id=row.slot_id) for row in db.scalars(select(WorkingTimetableEntry).where(WorkingTimetableEntry.tenant_id == item.tenant_id, WorkingTimetableEntry.working_timetable_id == item.id))]
 
 
 def apply_move(
@@ -621,7 +592,7 @@ def apply_swap(
     _check_revision(item, revision)
     first = _entry(db, item, first_id)
     second = _entry(db, item, second_id)
-    problem = build_problem(db, tenant, project_id)
+    problem = _working_problem(db, item)
     first_target = _slot(problem, first_id, second.slot_id)
     second_target = _slot(problem, second_id, first.slot_id)
     first_facts = _move_facts(db, item, first, first_target, problem, ignore={second_id})
@@ -865,7 +836,7 @@ def repair_preview(
     item = _working(db, tenant, project_id)
     _check_revision(item, payload.revision)
     # Validate the requested target even when the direct move currently conflicts.
-    base = build_problem(db, tenant, project_id)
+    base = _working_problem(db, item)
     _slot(base, payload.occurrence_id, payload.target_slot_id)
     entries = list(
         db.scalars(
@@ -896,6 +867,8 @@ def repair_preview(
                 seed=0,
                 time_limit_seconds=payload.time_limit_seconds,
                 candidate_count=1,
+                optimization_profile=base.options.optimization_profile,
+                optimization_weights=base.options.optimization_weights,
                 repair=True,
                 minimize_changes=True,
                 requested_occurrence_id=payload.occurrence_id,
@@ -953,32 +926,9 @@ def _current_soft_penalty(
     problem: SchedulingProblem,
     entries: list[WorkingTimetableEntry],
 ) -> int:
-    occurrences = {occurrence.id: occurrence for occurrence in problem.occurrences}
-    slots = {slot.id: slot for slot in problem.slots}
-    total = 0
-    rules = list(
-        db.scalars(
-            select(SchedulingRule).where(
-                SchedulingRule.tenant_id == item.tenant_id,
-                SchedulingRule.timetable_project_id == item.timetable_project_id,
-                SchedulingRule.enabled.is_(True),
-                SchedulingRule.severity == "soft",
-            )
-        )
-    )
-    for entry in entries:
-        occurrence = occurrences.get(entry.occurrence_id)
-        slot = slots.get(entry.slot_id)
-        if occurrence is None or slot is None:
-            continue
-        for rule in rules:
-            if not _rule_targets(rule.selector, occurrence):
-                continue
-            matched = _slot_matches(slot, rule.parameters)
-            violated = not matched if rule.rule_type.endswith("preferred_time") else matched
-            if violated:
-                total += rule.weight or 0
-    return total
+    del db, item
+    placements = [Placement(occurrence_id=entry.occurrence_id, assignment_id=str(entry.assignment_id), slot_id=entry.slot_id) for entry in entries]
+    return int(evaluate_schedule(problem, placements)["total_weighted_penalty"])
 
 
 def apply_repair(
@@ -1027,7 +977,7 @@ def apply_repair(
 
 
 def _entry_is_locked(db: Session, item: WorkingTimetable, entry: WorkingTimetableEntry) -> bool:
-    problem = build_problem(db, item.tenant_id, item.timetable_project_id)
+    problem = _working_problem(db, item)
     slot = next(x for x in problem.slots if x.id == entry.slot_id)
     teachers = set(
         _ids(

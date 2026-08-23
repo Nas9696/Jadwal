@@ -8,6 +8,8 @@ class SolveRequest(BaseModel):
     candidate_count: int = Field(default=3, ge=1, le=5)
     time_limit_seconds: int = Field(default=10, ge=1, le=60)
     seed: int = 0
+    optimization_profile: Literal["balanced", "teacher_comfort", "student_rhythm", "administration_priorities", "custom"] = "balanced"
+    optimization_weights: dict[str, int] = {}
 
 
 class SolveRunRead(BaseModel):

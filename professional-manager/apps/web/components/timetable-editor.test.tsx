@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { projectApi } from "@/lib/project-api";
 import { TimetableEditor } from "./timetable-editor";
 
-vi.mock("@/lib/project-api", () => ({ projectApi: { deriveWorking: vi.fn(), problem: vi.fn(), analyzeMove: vi.fn(), applyMove: vi.fn(), applySwap: vi.fn(), undo: vi.fn(), redo: vi.fn(), lockOccurrence: vi.fn(), unlock: vi.fn(), working: vi.fn(), repairPreview: vi.fn(), repairApply: vi.fn(), snapshots: vi.fn(), createSnapshot: vi.fn(), restoreSnapshot: vi.fn() } }));
+vi.mock("@/lib/project-api", () => ({ projectApi: { deriveWorking: vi.fn(), problem: vi.fn(), analyzeMove: vi.fn(), applyMove: vi.fn(), applySwap: vi.fn(), undo: vi.fn(), redo: vi.fn(), lockOccurrence: vi.fn(), unlock: vi.fn(), working: vi.fn(), repairPreview: vi.fn(), repairApply: vi.fn(), snapshots: vi.fn(), createSnapshot: vi.fn(), restoreSnapshot: vi.fn(),workingQuality:vi.fn(),workingExplanation:vi.fn(),compareQuality:vi.fn(),audit:vi.fn() } }));
 const entry = { id: "e1", occurrence_id: "o1", slot_id: "s1", project_cycle_week_index: 0, weekday_index: 0, starts_at_minute: 480, ends_at_minute: 525, school: { id: "school", name_ar: "النور" }, subject: { id: "sub", name_ar: "رياضيات" }, teachers: [{ id: "t1", name_ar: "أحمد" }], sections: [{ id: "sec", name_ar: "أ" }], resources: [] };
 const candidate = { id: "c1", rank: 1, solver_status: "optimal", total_penalty: 0, penalty_breakdown: [], solve_time_ms: 10, diversity_count: 0, entries: [entry] };
 const table = { id: "w1", project_id: "p1", source_candidate_id: "c1", name: "نسخة العمل", version_number: 1, revision: 1, history_cursor: 0, status: "working", can_undo: false, can_redo: false, entries: [entry], locks: [] };
@@ -33,5 +33,10 @@ describe("professional timetable editor", () => {
     fireEvent.click(screen.getByRole("button", { name: "إصلاح تلقائي بأقل تغييرات" }));
     expect(await screen.findByText("معاينة فقط — لا توجد أي كتابة في قاعدة البيانات")).toBeInTheDocument();
     expect(screen.getByText("2 تغييرات مقترحة")).toBeInTheDocument();
+  });
+
+  it("shows working quality, why-here facts, and version comparison",async()=>{
+    vi.mocked(projectApi.workingQuality).mockResolvedValue({hard_violations:[],total_weighted_penalty:7,penalty_breakdown:[],teacher_gaps:{t1:1},teacher_gap_total:1,first_period_distribution:{t1:1},last_period_distribution:{t1:0},consecutive_streaks:[],distribution_violations:[],source:{type:"working"}});vi.mocked(projectApi.compareQuality).mockResolvedValue({weighted_penalty_delta:7,teacher_gap_delta:1});vi.mocked(projectApi.workingExplanation).mockResolvedValue({occurrence_id:"o1",chosen_slot:slots[0],mandatory_rule_facts:[],preference_rule_facts:[],entity_facts:{teacher_ids:["t1"]},alternatives:[{slot:slots[1],status:"blocked",blocking_facts:[{code:"teacher_conflict"}],penalty_delta:0}]});
+    render(<TimetableEditor projectId="p1" candidate={candidate}/>);fireEvent.click(screen.getByRole("button",{name:"فتح محرر الجدول"}));await screen.findByText("رياضيات");fireEvent.click(screen.getByRole("button",{name:"جودة الجدول"}));expect(await screen.findByText("الجزاء الموزون: 7")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"لماذا هنا؟"}));expect(await screen.findByText(/لا يمكن النقل/)).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"مقارنة البديل\/الإصدار"}));expect(await screen.findByText("فرق الجزاء: 7")).toBeInTheDocument();
   });
 });

@@ -32,7 +32,7 @@ ACTIVE_STATUSES = ("queued", "running")
 
 def problem_fingerprint(problem: SchedulingProblem) -> str:
     canonical = json.dumps(
-        problem.model_dump(mode="json", exclude={"options"}),
+        problem.model_dump(mode="json"),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -65,6 +65,8 @@ def create_solve_run(
                 seed=payload.seed,
                 time_limit_seconds=payload.time_limit_seconds,
                 candidate_count=payload.candidate_count,
+                optimization_profile=payload.optimization_profile,
+                optimization_weights=payload.optimization_weights,
             )
         }
     )

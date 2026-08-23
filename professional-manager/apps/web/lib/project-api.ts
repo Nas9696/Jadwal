@@ -5,7 +5,7 @@ export type Project = { id: string; name_ar: string; description?: string; statu
 export type Rule = { id: string; label: string; description?: string; rule_type: string; severity: "hard" | "soft"; weight: number | null; selector: Record<string, unknown>; parameters: Record<string, unknown>; enabled: boolean };
 export type Diagnostic = { code: string; message?: string; message_key?: string };
 export type Preflight = { readiness: string; errors: number; warnings: number; diagnostics: Diagnostic[] };
-export type Penalty = { rule_id: string; rule_type: string; violation_count: number; weight: number; weighted_penalty: number };
+export type Penalty = { rule_id: string; rule_type: string; violation_count: number; weight: number; weighted_penalty: number; category?:string };
 export type CandidateSummary = { id: string; rank: number; solver_status: string; total_penalty: number; penalty_breakdown: Penalty[]; solve_time_ms: number; diversity_count: number };
 export type SolveRun = { id: string; project_id: string; status: "queued" | "running" | "completed" | "infeasible" | "unknown" | "failed"; input_fingerprint: string; solver_status: string | null; diagnostics: Diagnostic[]; candidates: CandidateSummary[] };
 type Label = { id: string; name_ar: string };
@@ -35,6 +35,8 @@ export type TimetableSnapshot = { id: string; name: string; source_revision: num
 export type AuditEvent = { id: string; revision: number; operation_type: string; summary: string; created_at: string };
 export type SnapshotComparison = { snapshot_id: string; source_revision: number; current_revision: number; changed_occurrences: number; changes: Array<{ occurrence_id: string; snapshot: { slot_id: string }; current: { slot_id: string } | null }> };
 export type ProjectSlot = { id: string; school_id: string; project_cycle_week_index: number; weekday_index: number; starts_at_minute: number; ends_at_minute: number; attendance_mode: string };
+export type QualityReport = { hard_violations: Array<Record<string, unknown>>; total_weighted_penalty: number; penalty_breakdown: Penalty[]; teacher_gaps: Record<string, number>; teacher_gap_total: number; first_period_distribution: Record<string, number>; last_period_distribution: Record<string, number>; consecutive_streaks: Array<{teacher_id:string;maximum_streak:number}>; distribution_violations: Array<Record<string, unknown>>; source: Record<string, unknown> };
+export type PlacementExplanation = { occurrence_id:string; chosen_slot:ProjectSlot; mandatory_rule_facts:Array<Record<string,unknown>>; preference_rule_facts:Array<Record<string,unknown>>; entity_facts:Record<string,string[]>; alternatives:Array<{slot:ProjectSlot;status:"blocked"|"valid"|"valid_but_worse";blocking_facts:Array<Record<string,unknown>>;penalty_delta:number}> };
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { ...options, headers: { "Content-Type": "application/json", "X-Tenant-ID": TENANT_ID, ...options?.headers } });
@@ -57,12 +59,17 @@ export const projectApi = {
   duplicateRule: (id: string, ruleId: string) => req<Rule>(`/timetable-projects/${id}/rules/${ruleId}/duplicate`, { method: "POST" }),
   removeRule: (id: string, ruleId: string) => req<void>(`/timetable-projects/${id}/rules/${ruleId}`, { method: "DELETE" }),
   preflight: (id: string) => req<Preflight>(`/timetable-projects/${id}/preflight`, { method: "POST" }),
-  solve: (id: string, payload = { candidate_count: 3, time_limit_seconds: 10, seed: 0 }) => req<SolveRun>(`/timetable-projects/${id}/solve`, { method: "POST", body: JSON.stringify(payload) }),
+  solve: (id: string, payload: object = { candidate_count: 3, time_limit_seconds: 10, seed: 0, optimization_profile: "balanced" }) => req<SolveRun>(`/timetable-projects/${id}/solve`, { method: "POST", body: JSON.stringify(payload) }),
   solveRun: (projectId: string, runId: string) => req<SolveRun>(`/timetable-projects/${projectId}/solve-runs/${runId}`),
   candidate: (projectId: string, candidateId: string) => req<CandidateDetail>(`/timetable-projects/${projectId}/candidates/${candidateId}`),
+  candidateQuality: (projectId:string,candidateId:string)=>req<QualityReport>(`/timetable-projects/${projectId}/candidates/${candidateId}/quality`),
+  candidateExplanation: (projectId:string,candidateId:string,occurrenceId:string)=>req<PlacementExplanation>(`/timetable-projects/${projectId}/candidates/${candidateId}/explanations?occurrence_id=${encodeURIComponent(occurrenceId)}`),
   problem: (projectId: string) => req<{ slots: ProjectSlot[] }>(`/timetable-projects/${projectId}/problem`),
   deriveWorking: (projectId: string, candidateId: string) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/from-candidate/${candidateId}`, { method: "POST" }),
   working: (projectId: string) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable`),
+  workingQuality: (projectId:string)=>req<QualityReport>(`/timetable-projects/${projectId}/working-timetable/quality`),
+  workingExplanation: (projectId:string,occurrenceId:string)=>req<PlacementExplanation>(`/timetable-projects/${projectId}/working-timetable/explanations?occurrence_id=${encodeURIComponent(occurrenceId)}`),
+  compareQuality: (projectId:string,candidateId:string)=>req<Record<string,unknown>>(`/timetable-projects/${projectId}/working-timetable/quality/compare/${candidateId}`),
   analyzeMove: (projectId: string, payload: object) => req<MoveAnalysis>(`/timetable-projects/${projectId}/working-timetable/moves/analyze`, { method: "POST", body: JSON.stringify(payload) }),
   applyMove: (projectId: string, payload: object) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/moves/apply`, { method: "POST", body: JSON.stringify(payload) }),
   applySwap: (projectId: string, payload: object) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/swaps/apply`, { method: "POST", body: JSON.stringify(payload) }),

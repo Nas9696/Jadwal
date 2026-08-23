@@ -168,3 +168,29 @@ python -m pytest
 - التنفيذ الخلفي الحالي داخل عملية API ومناسب للمرحلة الأولى؛ يلزم worker queue منفصل قبل التوسع الأفقي للإنتاج.
 - مبدّل اللغة يثبت آلية الاتجاه واللغة؛ استكمال ترجمة كل النصوص يأتي مع نظام localization الأوسع.
 - لا يوجد scraping أو تكامل غير رسمي مع نور أو مدرستي.
+# PM-004A — Advanced rules, quality and explainability
+
+The scheduling service now compiles the typed `SchedulingRule` catalog into
+CP-SAT constraints/objective terms for daily distribution, real-time
+consecutive blocks and gaps, assignment relationships, fixed assignment
+resource requirements/preferences, and server-owned fairness profiles. The
+available profiles are `balanced`, `teacher_comfort`, `student_rhythm`,
+`administration_priorities`, and `custom`; custom weights are explicit in the
+solve contract and all profile data participates in the problem fingerprint.
+
+Quality is reported as facts, never as a synthetic percentage. Candidate and
+working-timetable reports include hard violations, weighted penalty and its
+breakdown, teacher gaps, first/last-period distributions, teaching streaks,
+and distribution violations. Placement explanations enumerate the chosen
+time, applicable hard/soft rules, blocked alternatives with their facts, and
+valid alternatives with penalty deltas. Working-timetable blocking reasons
+reuse the PM-003C move-analysis service.
+
+Relevant versioned endpoints:
+
+- `GET /api/v1/timetable-projects/rule-catalog`
+- `GET /api/v1/timetable-projects/{project}/candidates/{candidate}/quality`
+- `GET /api/v1/timetable-projects/{project}/candidates/{candidate}/explanations?occurrence_id=...`
+- `GET /api/v1/timetable-projects/{project}/working-timetable/quality`
+- `GET /api/v1/timetable-projects/{project}/working-timetable/quality/compare/{candidate}`
+- `GET /api/v1/timetable-projects/{project}/working-timetable/explanations?occurrence_id=...`

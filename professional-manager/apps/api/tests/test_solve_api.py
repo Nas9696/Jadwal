@@ -193,6 +193,10 @@ def test_fingerprint_is_stable_and_changes_with_relevant_slot_time(session: Sess
         update={"slots": [first.slots[0].model_copy(update={"starts_at_minute": 481}), *first.slots[1:]]}
     )
     assert problem_fingerprint(first) != problem_fingerprint(changed)
+    profiled = first.model_copy(
+        update={"options": first.options.model_copy(update={"optimization_profile": "teacher_comfort"})}
+    )
+    assert problem_fingerprint(first) != problem_fingerprint(profiled)
 
 
 def test_only_one_active_run_is_allowed(session: Session) -> None:
@@ -252,3 +256,36 @@ def test_solve_request_limits_are_bounded(client: TestClient) -> None:
             ).status_code
             == 422
         )
+
+
+def test_advanced_rule_contract_is_typed_and_project_scoped(
+    client: TestClient, session: Session
+) -> None:
+    project = ready_project(session)
+    built = build_problem(session, uuid.UUID(TEST_TENANT), project.id)
+    assignment_id = built.occurrences[0].assignment_id
+    valid = client.post(
+        f"/api/v1/timetable-projects/{project.id}/rules",
+        headers=HEADERS,
+        json={
+            "label": "حد يومي",
+            "rule_type": "assignment_max_per_day",
+            "severity": "hard",
+            "selector": {"assignment_id": assignment_id},
+            "parameters": {"maximum": 2},
+        },
+    )
+    assert valid.status_code == 201, valid.text
+    invalid = client.post(
+        f"/api/v1/timetable-projects/{project.id}/rules",
+        headers=HEADERS,
+        json={
+            "label": "حد غير صالح",
+            "rule_type": "assignment_max_per_day",
+            "severity": "hard",
+            "selector": {"assignment_id": assignment_id},
+            "parameters": {"maximum": 0},
+        },
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()["detail"]["code"] == "invalid_rule_parameters"
