@@ -14,6 +14,7 @@ describe("Arabic app shell", () => {
   it("shows setup navigation and a real school selector", async () => {
     render(<AppShell><div>المحتوى</div></AppShell>);
     expect(screen.getByRole("navigation", { name: "التنقل الرئيسي" })).toHaveTextContent("إعداد المدرسة");
+    expect(screen.getByRole("navigation", { name: "التنقل الرئيسي" })).toHaveTextContent("التقارير والطباعة");
     expect(document.documentElement.dir).toBe("rtl");
     await waitFor(() => expect(screen.getByRole("combobox", { name: "اختيار المدرسة" })).toHaveValue("s1"));
     expect(screen.getByRole("link", { name: "إعداد المدرسة" })).toHaveClass("active");

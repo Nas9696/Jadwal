@@ -206,3 +206,21 @@ Relevant versioned endpoints:
 - `POST /api/v1/timetable-projects/{project}/assistant/parse`
 - `POST /api/v1/timetable-projects/{project}/assistant/confirm`
 - `GET /api/v1/timetable-projects/{project}/working-timetable/explanations?occurrence_id=...`
+
+## PM-006A — تقارير الجداول والتصدير
+
+توفّر صفحة `/reports` تقارير الجدول العام والشعبة والمعلم canonical عبر مدارس المشروع،
+والمادة والمورد، إضافة إلى البدلاء اليومي والانتظار والحمولة من حالة PM-005A الفعلية.
+المصدر الافتراضي هو `WorkingTimetable` الحالية، وتحمل كل معاينة metadata للنسخة وrevision؛
+أما المرشح فلا يستخدم إلا بطلب صريح. يتطلب التصدير من نسخة العمل `expected_revision`
+ويرفض الخادم التصدير عند تغيّرها أو عند وجود احتياجات بدلاء stale.
+
+- `GET /api/v1/timetable-projects/{project}/reports/options`
+- `POST /api/v1/timetable-projects/{project}/reports/preview`
+- `POST /api/v1/timetable-projects/{project}/reports/export`
+
+ينتج الخادم PDF حقيقيًا بخط عربي مضمّن ومعالجة RTL، وXLSX OpenXML حقيقيًا مع ورقة
+metadata مخفية، وPNG حقيقيًا. إذا تجاوز PNG صفحة واحدة يعود ملف ZIP مرقّم الصفحات مع
+`manifest.json` بدل قص المحتوى. الشعارات مقيدة بـPNG/JPEG موثّقين وبحدود للحجم والأبعاد،
+وQR يُنشأ من payload الفعلي. التوليد يتم في الذاكرة بأسماء تنزيل عشوائية آمنة، لذلك لا
+تبقى ملفات مؤقتة على الخادم.
