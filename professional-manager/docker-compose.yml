@@ -14,7 +14,9 @@ services:
       retries: 10
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://professional_manager:professional_manager@postgres:5432/professional_manager}
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:3000}
@@ -41,4 +43,3 @@ services:
 
 volumes:
   professional_manager_data:
-

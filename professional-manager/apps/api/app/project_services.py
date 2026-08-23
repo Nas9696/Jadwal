@@ -4,8 +4,6 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-
 from app.models import (
     AcademicYear,
     Grade,
@@ -29,7 +27,15 @@ from app.models import (
     WeekPattern,
 )
 from app.project_schemas import ProjectInput, RuleInput
-from pm_scheduler.contracts import LocalTimeSlot, TimeSlot
+from pm_scheduler.contracts import (
+    Entity,
+    LessonOccurrence,
+    LocalTimeSlot,
+    ResourceEntity,
+    SchedulingProblem,
+    SchedulingRule as SolverRule,
+    TimeSlot,
+)
 from pm_scheduler.cycle import expand_project_slots
 
 MAX_CYCLE = 12
@@ -44,25 +50,6 @@ RULE_REGISTRY = {
     "assignment_preferred_time": ("assignment_id", {"soft"}, "وقت مفضل للإسناد"),
     "assignment_avoided_time": ("assignment_id", {"soft"}, "وقت غير مفضل للإسناد"),
 }
-
-
-class Occurrence(BaseModel):
-    id: str
-    assignment_id: str
-    project_cycle_week_index: int
-    teacher_ids: list[str]
-    section_ids: list[str]
-    resource_ids: list[str]
-    candidate_slot_ids: list[str]
-
-
-class Problem(BaseModel):
-    project_id: str
-    project_cycle_length: int
-    school_ids: list[str]
-    slots: list[TimeSlot]
-    occurrences: list[Occurrence]
-    rules: list[dict[str, Any]]
 
 
 def _project(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> TimetableProject:
@@ -272,7 +259,7 @@ def _matches(slot: TimeSlot, params: dict[str, Any]) -> bool:
     ) and (not params.get("slot_id") or slot.id == params["slot_id"])
 
 
-def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Problem:
+def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> SchedulingProblem:
     project = _project(db, tenant, project_id)
     scopes = list(
         db.scalars(
@@ -282,11 +269,16 @@ def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Prob
         )
     )
     if not scopes:
-        return Problem(
+        return SchedulingProblem(
+            problem_id=str(project.id),
             project_id=str(project.id),
             project_cycle_length=1,
             school_ids=[],
             slots=[],
+            teachers=[],
+            sections=[],
+            resources=[],
+            assignments=[],
             occurrences=[],
             rules=[],
         )
@@ -459,9 +451,11 @@ def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Prob
                 week_slots = sorted(s.id for s in candidates if s.project_cycle_week_index == week)
                 for n in range(a.weekly_occurrences):
                     occurrences.append(
-                        Occurrence(
+                        LessonOccurrence(
                             id=f"{a.id}@project-week-{week}#occurrence-{n}",
                             assignment_id=str(a.id),
+                            school_id=str(a.school_id),
+                            subject_id=str(a.subject_id),
                             project_cycle_week_index=week,
                             teacher_ids=teachers,
                             section_ids=sections,
@@ -469,21 +463,41 @@ def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Prob
                             candidate_slot_ids=week_slots,
                         )
                     )
-    return Problem(
+    teacher_ids = sorted({item for occurrence in occurrences for item in occurrence.teacher_ids})
+    section_ids = sorted({item for occurrence in occurrences for item in occurrence.section_ids})
+    resource_ids = sorted({item for occurrence in occurrences for item in occurrence.resource_ids})
+    resource_rows = (
+        list(
+            db.scalars(
+                select(Resource).where(
+                    Resource.tenant_id == tenant,
+                    Resource.id.in_([uuid.UUID(item) for item in resource_ids]),
+                )
+            )
+        )
+        if resource_ids
+        else []
+    )
+    return SchedulingProblem(
+        problem_id=str(project.id),
         project_id=str(project.id),
         project_cycle_length=cycle,
         school_ids=sorted(str(x.school_id) for x in scopes),
         slots=sorted(slots, key=lambda s: s.id),
+        teachers=[Entity(id=item) for item in teacher_ids],
+        sections=[Entity(id=item) for item in section_ids],
+        resources=[ResourceEntity(id=str(item.id), exclusive=item.exclusive) for item in resource_rows],
+        assignments=[],
         occurrences=occurrences,
         rules=[
-            {
-                "id": str(r.id),
-                "rule_type": r.rule_type,
-                "severity": r.severity,
-                "weight": r.weight,
-                "selector": r.selector,
-                "parameters": r.parameters,
-            }
+            SolverRule(
+                id=str(r.id),
+                rule_type=r.rule_type,
+                severity=r.severity,
+                weight=r.weight,
+                selector=r.selector,
+                parameters=r.parameters,
+            )
             for r in rules
         ],
     )
@@ -604,12 +618,12 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
                         "suggested_remediation": "راجع الطلب والقواعد والأوقات المتاحة.",
                     }
                 )
-    rules = [r for r in problem.rules if r["severity"] == "hard"]
-    for required_rule in [r for r in rules if r["rule_type"] == "assignment_required_time"]:
+    rules = [r for r in problem.rules if r.severity == "hard"]
+    for required_rule in [r for r in rules if r.rule_type == "assignment_required_time"]:
         if any(
-            r["rule_type"] == "assignment_forbidden_time"
-            and r["selector"] == required_rule["selector"]
-            and r["parameters"] == required_rule["parameters"]
+            r.rule_type == "assignment_forbidden_time"
+            and r.selector == required_rule.selector
+            and r.parameters == required_rule.parameters
             for r in rules
         ):
             diagnostics.append(
@@ -618,7 +632,7 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
                     "code": "required_forbidden_contradiction",
                     "message": "وقت مطلوب وممنوع للإسناد نفسه",
                     "affected_entities": {
-                        "assignment": [str(required_rule["selector"].get("assignment_id"))]
+                        "assignment": [str(required_rule.selector.get("assignment_id"))]
                     },
                     "suggested_remediation": "عطّل إحدى القاعدتين.",
                 }

@@ -10,7 +10,7 @@ from pm_scheduler.contracts import (
     TimeSlot,
     slots_overlap,
 )
-from pm_scheduler.solver import Scheduler, SolverNotImplementedError
+from pm_scheduler.solver import Scheduler
 
 def test_soft_constraint_requires_weight() -> None:
     with pytest.raises(ValidationError):
@@ -20,10 +20,11 @@ def test_solve_options_are_bounded() -> None:
     with pytest.raises(ValidationError):
         SolveOptions(candidate_count=0)
 
-def test_cp_sat_scaffold_does_not_claim_a_fake_solution() -> None:
+def test_cp_sat_reports_empty_problem_as_infeasible() -> None:
     problem = SchedulingProblem(problem_id="demo", slots=[], teachers=[], sections=[], assignments=[])
-    with pytest.raises(SolverNotImplementedError, match="not implemented in PM-001"):
-        Scheduler().solve(problem)
+    result = Scheduler().solve(problem)
+    assert result.status == "infeasible"
+    assert not result.feasible
 
 
 def test_shared_teacher_identity_is_preserved_across_school_assignments() -> None:

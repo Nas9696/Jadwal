@@ -1,6 +1,6 @@
 import uuid
 from typing import Annotated, Any
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -14,6 +14,14 @@ from app.project_services import (
     save_project,
     save_rule,
     serialize_project,
+)
+from app.solve_schemas import SolveRequest
+from app.solve_services import (
+    create_solve_run,
+    execute_solve_run,
+    get_run,
+    serialize_candidate,
+    serialize_run,
 )
 from app.tenant import tenant_context
 
@@ -192,3 +200,36 @@ def problem(
     db: Annotated[Session, Depends(get_db)],
 ) -> Any:
     return build_problem(db, tenant, project_id)
+
+
+@router.post("/{project_id}/solve", status_code=202)
+def start_solve(
+    project_id: uuid.UUID,
+    payload: SolveRequest,
+    background_tasks: BackgroundTasks,
+    tenant: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    run = create_solve_run(db, tenant, project_id, payload)
+    background_tasks.add_task(execute_solve_run, db.get_bind(), run.id)
+    return serialize_run(db, run)
+
+
+@router.get("/{project_id}/solve-runs/{run_id}")
+def solve_run(
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    tenant: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    return serialize_run(db, get_run(db, tenant, project_id, run_id))
+
+
+@router.get("/{project_id}/candidates/{candidate_id}")
+def candidate_detail(
+    project_id: uuid.UUID,
+    candidate_id: uuid.UUID,
+    tenant: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    return serialize_candidate(db, tenant, project_id, candidate_id)

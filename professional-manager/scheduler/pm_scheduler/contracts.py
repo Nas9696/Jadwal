@@ -8,9 +8,11 @@ class Severity(StrEnum):
     SOFT = "soft"
 
 class SolveStatus(StrEnum):
+    OPTIMAL = "optimal"
     FEASIBLE = "feasible"
     INFEASIBLE = "infeasible"
     UNKNOWN = "unknown"
+    FAILED = "failed"
     NOT_RUN = "not_run"
 
 class LocalTimeSlot(BaseModel):
@@ -52,6 +54,37 @@ class Entity(BaseModel):
     id: str
     available_slot_ids: set[str] | None = None
 
+
+class ResourceEntity(Entity):
+    exclusive: bool = True
+
+
+class LessonOccurrence(BaseModel):
+    id: str
+    assignment_id: str
+    school_id: str
+    subject_id: str
+    project_cycle_week_index: Annotated[int, Field(ge=0)]
+    teacher_ids: list[str]
+    section_ids: list[str]
+    resource_ids: list[str] = []
+    candidate_slot_ids: list[str]
+
+
+class SchedulingRule(BaseModel):
+    id: str
+    rule_type: str
+    severity: Severity
+    weight: Annotated[int | None, Field(gt=0)] = None
+    selector: dict[str, Any]
+    parameters: dict[str, Any]
+
+    @model_validator(mode="after")
+    def soft_requires_weight(self) -> "SchedulingRule":
+        if self.severity == Severity.SOFT and self.weight is None:
+            raise ValueError("soft constraints require a positive weight")
+        return self
+
 class Assignment(BaseModel):
     id: str
     school_id: str
@@ -89,21 +122,24 @@ class ExistingPlacement(BaseModel):
 
 class SolveOptions(BaseModel):
     seed: int = 0
-    time_limit_seconds: Annotated[float, Field(gt=0, le=3600)] = 30
-    candidate_count: Annotated[int, Field(ge=1, le=20)] = 3
+    time_limit_seconds: Annotated[float, Field(ge=1, le=60)] = 10
+    candidate_count: Annotated[int, Field(ge=1, le=5)] = 3
     optimization_profile: str = "balanced"
     repair: bool = False
     minimize_changes: bool = True
 
 class SchedulingProblem(BaseModel):
     problem_id: str
+    project_id: str | None = None
     school_ids: list[str] = []
     project_cycle_length: Annotated[int, Field(ge=1)] = 1
     slots: list[TimeSlot]
     teachers: list[Entity]
     sections: list[Entity]
-    resources: list[Entity] = []
-    assignments: list[Assignment]
+    resources: list[ResourceEntity] = []
+    assignments: list[Assignment] = []
+    occurrences: list[LessonOccurrence] = []
+    rules: list[SchedulingRule] = []
     constraints: list[Constraint] = []
     locks: list[Lock] = []
     existing_timetable: list[ExistingPlacement] = []
@@ -121,15 +157,22 @@ class Placement(BaseModel):
     slot_id: str
     resource_ids: list[str] = []
 
+
+class PenaltyBreakdown(BaseModel):
+    rule_id: str
+    rule_type: str
+    violation_count: int
+    weight: int
+    weighted_penalty: int
+
 class CandidateSolution(BaseModel):
     id: str
     placements: list[Placement]
-    score: float
-    normalized_quality: float
-    score_breakdown: dict[str, float]
-    violations: list[Violation]
-    unsatisfied_preferences: list[Violation]
-    diversity_hints: list[str] = []
+    solver_status: SolveStatus
+    total_penalty: int
+    penalty_breakdown: list[PenaltyBreakdown] = []
+    solve_time_seconds: float = 0
+    diversity_count: int = 0
 
 class Diagnostic(BaseModel):
     code: str

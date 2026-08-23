@@ -6,13 +6,12 @@ from pm_scheduler.cycle import (
     expand_project_slots,
     project_cycle_length,
 )
-from pm_scheduler.solver import Scheduler, SolverNotImplementedError
+from pm_scheduler.solver import Scheduler
 
 __all__ = [
     "Scheduler",
     "SchedulingProblem",
     "SolveResult",
-    "SolverNotImplementedError",
     "TimeSlot",
     "LocalTimeSlot",
     "slots_overlap",

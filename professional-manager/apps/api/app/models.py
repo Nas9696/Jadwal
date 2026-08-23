@@ -483,3 +483,109 @@ class SchedulingRule(IdMixin, TenantScoped, Timestamped, Base):
         CheckConstraint("severity IN ('hard','soft')"),
         CheckConstraint("weight IS NULL OR weight > 0"),
     )
+
+
+class TimetableSolveRun(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_solve_runs"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    input_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)
+    requested_candidates: Mapped[int] = mapped_column(Integer, default=3)
+    time_limit_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    seed: Mapped[int] = mapped_column(Integer, default=0)
+    solver_status: Mapped[str | None] = mapped_column(String(30))
+    solver_name: Mapped[str | None] = mapped_column(String(100))
+    solver_version: Mapped[str | None] = mapped_column(String(50))
+    diagnostics: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("requested_candidates >= 1 AND requested_candidates <= 5"),
+        CheckConstraint("time_limit_seconds >= 1 AND time_limit_seconds <= 60"),
+        Index(
+            "uq_active_solve_run_per_project",
+            "tenant_id",
+            "timetable_project_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued','running')"),
+            sqlite_where=text("status IN ('queued','running')"),
+        ),
+    )
+
+
+class TimetableCandidate(IdMixin, TenantScoped, Base):
+    __tablename__ = "timetable_candidates"
+    solve_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_solve_runs.id", ondelete="CASCADE"), index=True
+    )
+    rank: Mapped[int] = mapped_column(Integer)
+    solver_status: Mapped[str] = mapped_column(String(30))
+    total_penalty: Mapped[int] = mapped_column(Integer, default=0)
+    penalty_breakdown: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    solve_time_ms: Mapped[int] = mapped_column(Integer, default=0)
+    diversity_count: Mapped[int] = mapped_column(Integer, default=0)
+    __table_args__ = (UniqueConstraint("tenant_id", "solve_run_id", "rank"),)
+
+
+class TimetableEntry(IdMixin, TenantScoped, Base):
+    __tablename__ = "timetable_entries"
+    candidate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_candidates.id", ondelete="CASCADE"), index=True
+    )
+    occurrence_id: Mapped[str] = mapped_column(String(220))
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teaching_assignments.id", ondelete="RESTRICT"), index=True
+    )
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("subjects.id", ondelete="RESTRICT"), index=True
+    )
+    slot_id: Mapped[str] = mapped_column(String(220))
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="RESTRICT"), index=True
+    )
+    project_cycle_week_index: Mapped[int] = mapped_column(Integer)
+    weekday_index: Mapped[int] = mapped_column(Integer)
+    starts_at_minute: Mapped[int] = mapped_column(Integer)
+    ends_at_minute: Mapped[int] = mapped_column(Integer)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "candidate_id", "occurrence_id"),
+        CheckConstraint("project_cycle_week_index >= 0"),
+        CheckConstraint("weekday_index >= 0 AND weekday_index <= 6"),
+        CheckConstraint("starts_at_minute < ends_at_minute"),
+    )
+
+
+class TimetableEntryTeacher(IdMixin, TenantScoped, Base):
+    __tablename__ = "timetable_entry_teachers"
+    timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_entries.id", ondelete="CASCADE"), index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (UniqueConstraint("tenant_id", "timetable_entry_id", "teacher_id"),)
+
+
+class TimetableEntrySection(IdMixin, TenantScoped, Base):
+    __tablename__ = "timetable_entry_sections"
+    timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_entries.id", ondelete="CASCADE"), index=True
+    )
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sections.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (UniqueConstraint("tenant_id", "timetable_entry_id", "section_id"),)
+
+
+class TimetableEntryResource(IdMixin, TenantScoped, Base):
+    __tablename__ = "timetable_entry_resources"
+    timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_entries.id", ondelete="CASCADE"), index=True
+    )
+    resource_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("resources.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (UniqueConstraint("tenant_id", "timetable_entry_id", "resource_id"),)

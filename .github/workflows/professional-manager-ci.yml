@@ -47,12 +47,12 @@ jobs:
       - run: pip install -e scheduler
       - name: Wait for PostgreSQL
         run: until pg_isready -h localhost -p 5432 -U professional_manager -d professional_manager_ci; do sleep 2; done
-      - name: Migrate empty PostgreSQL database through Alembic head
+      - name: Migrate empty PostgreSQL database through Alembic 0001 to 0007
         run: alembic -c apps/api/alembic.ini upgrade head
       - name: Seed PostgreSQL with foreign keys enforced
         run: python -m app.seed
       - name: Assert seeded PostgreSQL integrity
-        run: python -c "from sqlalchemy import create_engine,text; from app.config import settings; e=create_engine(settings.database_url); c=e.connect(); assert c.scalar(text('select count(*) from tenants')) >= 1; assert c.scalar(text('select count(*) from schools')) >= 1; assert c.scalar(text('select count(*) from terms')) >= 1; assert c.scalar(text('select count(*) from alembic_version where version_num = :v'), {'v':'0006_pm003a_projects_rules'}) == 1; c.close()"
+        run: python -c "from sqlalchemy import create_engine,text; from app.config import settings; e=create_engine(settings.database_url); c=e.connect(); assert c.scalar(text('select count(*) from tenants')) >= 1; assert c.scalar(text('select count(*) from schools')) >= 1; assert c.scalar(text('select count(*) from terms')) >= 1; assert c.scalar(text('select count(*) from alembic_version where version_num = :v'), {'v':'0007_pm003b_solve_runs'}) == 1; assert c.scalar(text(\"select count(*) from information_schema.tables where table_name = 'timetable_entries'\")) == 1; c.close()"
       - run: ruff check apps/api scheduler
       - run: mypy apps/api/app scheduler/pm_scheduler
       - run: pytest

@@ -77,7 +77,7 @@
 
 - `apps/web`: Next.js وTypeScript، واجهة عربية RTL افتراضية، مبدّل لغة أولي، حالات تحميل/خطأ، واتصال بـ API health.
 - `apps/api`: FastAPI وPydantic v2 وSQLAlchemy 2، API بإصدار `/api/v1`، إعدادات بيئة وعزل أولي للمستأجر عبر `X-Tenant-ID`.
-- `scheduler`: عقود typed مستقلة للحل والإصلاح والتشخيص والبدائل. حدّ CP-SAT موجود، لكن نموذج OR-Tools غير منفذ في PM-001 ولا يرجع نتائج وهمية.
+- `scheduler`: عقود typed مستقلة ومحرك Google OR-Tools CP-SAT فعلي للتوليد، مع قيود التصادم والقواعد الزمنية والبدائل والجزاءات.
 - PostgreSQL وAlembic ومهاجرة تأسيسية وبيانات عرض عربية آمنة لإعادة التشغيل.
 - اختبارات API وعزل مستأجر، اختبارات عقود Scheduler، واختبار RTL للواجهة.
 
@@ -130,6 +130,18 @@ python -m mypy apps/api/app scheduler/pm_scheduler
 python -m pytest
 ```
 
+## PM-003B — توليد مرشحات فعلية بـ CP-SAT
+
+المشروع الجاهز يستطيع توليد بديل إلى خمسة بدائل محفوظة (ثلاثة افتراضيًا) عبر:
+
+- `POST /api/v1/timetable-projects/{project_id}/solve`
+- `GET /api/v1/timetable-projects/{project_id}/solve-runs/{run_id}`
+- `GET /api/v1/timetable-projects/{project_id}/candidates/{candidate_id}`
+
+يبني الخادم `SchedulingProblem` authoritative ويحسب بصمة SHA-256 حتمية من JSON canonical. يضع CP-SAT كل occurrence مرة واحدة بالضبط، ويمنع تصادم المعلم والشعبة والمورد الحصري وفق أسبوع المشروع واليوم الموحد والفترة الزمنية الحقيقية نصف المفتوحة. القواعد hard لا تُخرق، والقواعد soft الزمنية تدخل objective بأوزانها وتعود في penalty breakdown قابل للتتبع.
+
+تضيف المهاجرة `0007_pm003b_solve_runs` جداول relational لـ `TimetableSolveRun` و`TimetableCandidate` و`TimetableEntry` وروابط entry بالمعلمين والشعب والموارد. التنفيذ الخلفي الحالي seam داخل التطبيق وقابل للاستبدال لاحقًا بعامل مهام مستقل دون تغيير عقد scheduler. لا تشمل هذه المرحلة التحرير بالسحب أو الإصلاح أو الأقفال أو PM-003C.
+
 ## مخطط البيانات في PM-001
 
 المهاجرة الأولى تنشئ: tenant، user، tenant_membership، school_complex، school، academic_year، term، teacher، teacher_school_membership، subject، stage، grade، section، resource (غرفة/معمل/مورد)، week_pattern، period_template، teaching_assignment، teaching_assignment_teacher، rule، timetable_project، timetable_project_school. كل سجل متغير في النطاق يحمل `tenant_id`، وتتحقق استعلامات API منه على الخادم. عضوية المستخدم تفصل الهوية العالمية عن دوره وصلاحياته داخل كل مستأجر.
@@ -145,6 +157,6 @@ python -m pytest
 ## حدود المرحلة الحالية
 
 - المصادقة وRBAC الكاملان ضمن المراحل اللاحقة؛ هيدر المستأجر الحالي أساس واختبار عزل، وليس بديلًا عن هوية موثقة.
-- محرك CP-SAT الفعلي والـ preflight والوظائف غير المتزامنة ليست مدّعاة في هذه المهمة. العقود مهيأة لها فقط.
+- التنفيذ الخلفي الحالي داخل عملية API ومناسب للمرحلة الأولى؛ يلزم worker queue منفصل قبل التوسع الأفقي للإنتاج.
 - مبدّل اللغة يثبت آلية الاتجاه واللغة؛ استكمال ترجمة كل النصوص يأتي مع نظام localization الأوسع.
 - لا يوجد scraping أو تكامل غير رسمي مع نور أو مدرستي.

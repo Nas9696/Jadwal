@@ -154,33 +154,35 @@ def seed() -> None:
                 patterns.append(pattern)
                 db.add(pattern)
         db.flush()
-        day = SchoolDay(
-            tenant_id=DEMO_TENANT_ID,
-            school_id=DEMO_SCHOOL_ID,
-            shift_id=shift.id,
-            week_pattern_id=patterns[0].id,
-            weekday_index=0,
-            label_ar="الأحد",
-        )
-        db.add(day)
-        db.flush()
-        db.add(
-            PeriodTemplate(
+        for pattern in patterns[:3]:
+            day = SchoolDay(
                 tenant_id=DEMO_TENANT_ID,
                 school_id=DEMO_SCHOOL_ID,
                 shift_id=shift.id,
-                school_day_id=day.id,
-                week_pattern_id=patterns[0].id,
+                week_pattern_id=pattern.id,
                 weekday_index=0,
-                block_order=0,
-                period_number=1,
-                label_ar="الحصة الأولى",
-                starts_at=time(8, 0),
-                ends_at=time(8, 45),
-                block_type="lesson",
-                schedulable=True,
+                label_ar="الأحد",
             )
-        )
+            db.add(day)
+            db.flush()
+            for index, hour in enumerate((8, 9, 10, 11), 1):
+                db.add(
+                    PeriodTemplate(
+                        tenant_id=DEMO_TENANT_ID,
+                        school_id=DEMO_SCHOOL_ID,
+                        shift_id=shift.id,
+                        school_day_id=day.id,
+                        week_pattern_id=pattern.id,
+                        weekday_index=0,
+                        block_order=index,
+                        period_number=index,
+                        label_ar=f"الحصة {index}",
+                        starts_at=time(hour, 0),
+                        ends_at=time(hour, 45),
+                        block_type="lesson",
+                        schedulable=True,
+                    )
+                )
         teachers = []
         for code, name, specialty in [
             ("T001", "أحمد العتيبي", "الرياضيات"),
