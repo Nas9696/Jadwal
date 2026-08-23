@@ -108,9 +108,11 @@ class Teacher(IdMixin, TenantScoped, Timestamped, Base):
     __tablename__ = "teachers"
     canonical_code: Mapped[str] = mapped_column(String(50))
     name_ar: Mapped[str] = mapped_column(String(200))
+    name_en: Mapped[str | None] = mapped_column(String(200))
     specialty_reference: Mapped[str | None] = mapped_column(String(150))
     base_workload: Mapped[int] = mapped_column(Integer, default=0)
     teaching_workload_limit: Mapped[int] = mapped_column(Integer, default=24)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     __table_args__ = (UniqueConstraint("tenant_id", "canonical_code"),)
 
 
@@ -136,6 +138,11 @@ class Subject(IdMixin, TenantScoped, Base):
     code: Mapped[str] = mapped_column(String(50))
     name_ar: Mapped[str] = mapped_column(String(150))
     name_en: Mapped[str | None] = mapped_column(String(150))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "school_id", "code"),
+        UniqueConstraint("tenant_id", "school_id", "name_ar"),
+    )
 
 class Stage(IdMixin, TenantScoped, Base):
     __tablename__ = "stages"
@@ -165,10 +172,32 @@ class Section(IdMixin, TenantScoped, Base):
 class Resource(IdMixin, TenantScoped, Base):
     __tablename__ = "resources"
     school_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(50))
     name_ar: Mapped[str] = mapped_column(String(150))
     resource_type: Mapped[str] = mapped_column(String(40), default="room")
     capacity: Mapped[int | None] = mapped_column(Integer)
     exclusive: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    __table_args__ = (UniqueConstraint("tenant_id", "school_id", "code"),)
+
+
+class CurriculumRequirement(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "curriculum_requirements"
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="CASCADE"), index=True
+    )
+    grade_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("grades.id", ondelete="RESTRICT"), index=True
+    )
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("subjects.id", ondelete="RESTRICT"), index=True
+    )
+    weekly_occurrences: Mapped[int] = mapped_column(Integer)
+    notes: Mapped[str | None] = mapped_column(String(300))
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "school_id", "grade_id", "subject_id"),
+        CheckConstraint("weekly_occurrences > 0"),
+    )
 
 class WeekPattern(IdMixin, TenantScoped, Base):
     __tablename__ = "week_patterns"

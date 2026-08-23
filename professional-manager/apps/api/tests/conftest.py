@@ -69,8 +69,8 @@ def session() -> Session:
             Teacher(id=uuid.UUID(OTHER_TEACHER), tenant_id=uuid.UUID(OTHER_TENANT), canonical_code="T1", name_ar="معلم آخر"),
             Subject(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(FIRST_SCHOOL), code="M1", name_ar="رياضيات"),
             Subject(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(SECOND_SCHOOL), code="M2", name_ar="علوم"),
-            Resource(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(FIRST_SCHOOL), name_ar="معمل أول"),
-            Resource(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(SECOND_SCHOOL), name_ar="معمل ثان"),
+            Resource(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(FIRST_SCHOOL), code="LAB-1", name_ar="معمل أول"),
+            Resource(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(SECOND_SCHOOL), code="LAB-2", name_ar="معمل ثان"),
         ])
         stage = Stage(tenant_id=uuid.UUID(TEST_TENANT), school_id=uuid.UUID(FIRST_SCHOOL), code="P", name_ar="ابتدائي")
         db.add(stage)

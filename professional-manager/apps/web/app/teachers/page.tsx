@@ -1,1 +1,2 @@
-import { ComingSoon } from "@/components/coming-soon"; export default function Page(){ return <ComingSoon title="المعلمون"/>; }
+import { TeachersWorkspace } from "@/components/teachers-workspace";
+export default function Page(){ return <TeachersWorkspace/>; }

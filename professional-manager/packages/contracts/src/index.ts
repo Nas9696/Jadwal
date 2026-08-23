@@ -24,6 +24,59 @@ export interface TeacherSchoolMembership {
   is_active: boolean;
 }
 
+export interface CanonicalTeacher {
+  id: string;
+  tenant_id: string;
+  canonical_code: string;
+  name_ar: string;
+  name_en: string | null;
+  specialty_reference: string | null;
+  base_workload: number;
+  teaching_workload_limit: number;
+  is_active: boolean;
+}
+
+export interface SchoolSubject {
+  id: string;
+  tenant_id: string;
+  school_id: string;
+  code: string;
+  name_ar: string;
+  name_en: string | null;
+  is_active: boolean;
+}
+
+export interface CurriculumRequirement {
+  id: string;
+  tenant_id: string;
+  school_id: string;
+  grade_id: string;
+  subject_id: string;
+  weekly_occurrences: number;
+  notes: string | null;
+}
+
+export type ResourceType =
+  | "classroom"
+  | "science_lab"
+  | "computer_lab"
+  | "gym"
+  | "learning_resources"
+  | "playground"
+  | "other";
+
+export interface SchoolResource {
+  id: string;
+  tenant_id: string;
+  school_id: string;
+  code: string;
+  name_ar: string;
+  resource_type: ResourceType;
+  capacity: number | null;
+  exclusive: boolean;
+  is_active: boolean;
+}
+
 export interface TimetableProject {
   id: string;
   tenant_id: string;
