@@ -21,10 +21,12 @@ from pm_scheduler.contracts import (
 
 ORTOOLS_VERSION = version("ortools")
 
+
 class SolverBackend(ABC):
     @abstractmethod
     def solve(self, problem: SchedulingProblem) -> SolveResult:
         """Solve or repair a validated scheduling problem."""
+
 
 class CpSatBackend(SolverBackend):
     """First production CP-SAT placement backend."""
@@ -68,6 +70,24 @@ class CpSatBackend(SolverBackend):
                 )
             model.add_exactly_one(variables)
 
+        existing_by_occurrence = {
+            placement.occurrence_id: placement.slot_id for placement in problem.existing_timetable
+        }
+        if problem.options.repair:
+            requested_occurrence = problem.options.requested_occurrence_id
+            requested_slot = problem.options.requested_slot_id
+            if requested_occurrence and requested_slot:
+                requested_variable = decision.get((requested_occurrence, requested_slot))
+                if requested_variable is None:
+                    return _infeasible("repair_target_not_available", [requested_occurrence])
+                model.add(requested_variable == 1)
+            for occurrence_id in problem.options.locked_occurrence_ids:
+                current_slot = existing_by_occurrence.get(occurrence_id)
+                locked_variable = decision.get((occurrence_id, current_slot or ""))
+                if locked_variable is None:
+                    return _infeasible("locked_occurrence_without_current_slot", [occurrence_id])
+                model.add(locked_variable == 1)
+
         for rule in problem.rules:
             if rule.severity != "hard":
                 continue
@@ -82,7 +102,10 @@ class CpSatBackend(SolverBackend):
                 ]
                 if rule.rule_type == "assignment_required_time":
                     model.add(sum(matching) == 1)
-                elif rule.rule_type.endswith("unavailable") or rule.rule_type == "assignment_forbidden_time":
+                elif (
+                    rule.rule_type.endswith("unavailable")
+                    or rule.rule_type == "assignment_forbidden_time"
+                ):
                     for variable in matching:
                         model.add(variable == 0)
 
@@ -137,7 +160,50 @@ class CpSatBackend(SolverBackend):
             else:
                 model.add(penalty == sum(matched_variables))
             soft_terms.append((rule, penalty))
-        model.minimize(sum((rule.weight or 0) * variable for rule, variable in soft_terms))
+        soft_objective = sum((rule.weight or 0) * variable for rule, variable in soft_terms)
+        if problem.options.repair and problem.options.minimize_changes:
+            changed_terms = []
+            displacement_terms = []
+            for occurrence in problem.occurrences:
+                current_slot_id = existing_by_occurrence.get(occurrence.id)
+                existing_slot = slot_by_id.get(current_slot_id or "")
+                current_variable = decision.get((occurrence.id, current_slot_id or ""))
+                if current_variable is not None:
+                    changed_terms.append(1 - current_variable)
+                if existing_slot is not None:
+                    for slot_id in occurrence.candidate_slot_ids:
+                        displacement_variable = decision.get((occurrence.id, slot_id))
+                        slot = slot_by_id.get(slot_id)
+                        if displacement_variable is None or slot is None:
+                            continue
+                        distance = (
+                            abs(
+                                slot.project_cycle_week_index
+                                - existing_slot.project_cycle_week_index
+                            )
+                            * 7
+                            * 1440
+                            + abs(slot.weekday_index - existing_slot.weekday_index) * 1440
+                            + abs(slot.starts_at_minute - existing_slot.starts_at_minute)
+                        )
+                        displacement_terms.append(distance * displacement_variable)
+            # Strict hierarchy: one extra move costs more than every possible
+            # displacement and soft penalty in the bounded problem.
+            displacement_bound = max(
+                1, len(problem.occurrences) * 7 * 1440 * max(1, problem.project_cycle_length)
+            )
+            soft_bound = max(
+                1, sum((rule.weight or 0) * len(problem.occurrences) for rule, _ in soft_terms)
+            )
+            displacement_weight = soft_bound + 1
+            changed_weight = displacement_bound * displacement_weight + soft_bound + 1
+            model.minimize(
+                changed_weight * sum(changed_terms)
+                + displacement_weight * sum(displacement_terms)
+                + soft_objective
+            )
+        else:
+            model.minimize(soft_objective)
 
         candidates: list[CandidateSolution] = []
         best_signature: set[tuple[str, str]] | None = None
@@ -155,7 +221,9 @@ class CpSatBackend(SolverBackend):
                     SolveStatus.INFEASIBLE if status == cp_model.INFEASIBLE else SolveStatus.UNKNOWN
                 )
                 break
-            solver_status = SolveStatus.OPTIMAL if status == cp_model.OPTIMAL else SolveStatus.FEASIBLE
+            solver_status = (
+                SolveStatus.OPTIMAL if status == cp_model.OPTIMAL else SolveStatus.FEASIBLE
+            )
             terminal_status = solver_status
             placements = []
             signature: set[tuple[str, str]] = set()
@@ -195,7 +263,9 @@ class CpSatBackend(SolverBackend):
                     penalty_breakdown=breakdown,
                     solve_time_seconds=monotonic() - started,
                     diversity_count=(
-                        0 if best_signature is None else len(best_signature.symmetric_difference(signature)) // 2
+                        0
+                        if best_signature is None
+                        else len(best_signature.symmetric_difference(signature)) // 2
                     ),
                 )
             )
@@ -212,7 +282,11 @@ class CpSatBackend(SolverBackend):
                 solver_name="Google OR-Tools CP-SAT",
                 solver_version=ORTOOLS_VERSION,
             )
-        diagnostic = "solver_infeasible" if terminal_status == SolveStatus.INFEASIBLE else "solver_time_limit"
+        diagnostic = (
+            "solver_infeasible"
+            if terminal_status == SolveStatus.INFEASIBLE
+            else "solver_time_limit"
+        )
         return SolveResult(
             status=terminal_status,
             feasible=False,
@@ -246,9 +320,21 @@ def _rule_targets(rule: SchedulingRule, occurrence: LessonOccurrence) -> bool:
     }
     return any(str(rule.selector.get(key)) in ids for key, ids in values.items())
 
+
 class Scheduler:
     def __init__(self, backend: SolverBackend | None = None) -> None:
         self._backend = backend or CpSatBackend()
 
     def solve(self, problem: SchedulingProblem) -> SolveResult:
         return self._backend.solve(problem)
+
+
+def _infeasible(code: str, affected: list[str]) -> SolveResult:
+    return SolveResult(
+        status=SolveStatus.INFEASIBLE,
+        feasible=False,
+        candidates=[],
+        diagnostics=[Diagnostic(code=code, message_key=code, affected_entity_ids=affected)],
+        solver_name="Google OR-Tools CP-SAT",
+        solver_version=ORTOOLS_VERSION,
+    )

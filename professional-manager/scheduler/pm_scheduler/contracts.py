@@ -3,9 +3,11 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, model_validator
 
+
 class Severity(StrEnum):
     HARD = "hard"
     SOFT = "soft"
+
 
 class SolveStatus(StrEnum):
     OPTIMAL = "optimal"
@@ -14,6 +16,7 @@ class SolveStatus(StrEnum):
     UNKNOWN = "unknown"
     FAILED = "failed"
     NOT_RUN = "not_run"
+
 
 class LocalTimeSlot(BaseModel):
     id: str
@@ -50,6 +53,7 @@ def slots_overlap(left: TimeSlot, right: TimeSlot) -> bool:
         < min(left.ends_at_minute, right.ends_at_minute)
     )
 
+
 class Entity(BaseModel):
     id: str
     available_slot_ids: set[str] | None = None
@@ -85,6 +89,7 @@ class SchedulingRule(BaseModel):
             raise ValueError("soft constraints require a positive weight")
         return self
 
+
 class Assignment(BaseModel):
     id: str
     school_id: str
@@ -93,6 +98,7 @@ class Assignment(BaseModel):
     subject_id: str
     occurrence_count: Annotated[int, Field(gt=0)]
     resource_ids: list[str] = []
+
 
 class Constraint(BaseModel):
     id: str
@@ -109,16 +115,19 @@ class Constraint(BaseModel):
             raise ValueError("soft constraints require a positive weight")
         return self
 
+
 class Lock(BaseModel):
     target_type: str
     target_ids: list[str]
     slot_ids: list[str] = []
+
 
 class ExistingPlacement(BaseModel):
     occurrence_id: str
     assignment_id: str
     slot_id: str
     resource_ids: list[str] = []
+
 
 class SolveOptions(BaseModel):
     seed: int = 0
@@ -127,6 +136,16 @@ class SolveOptions(BaseModel):
     optimization_profile: str = "balanced"
     repair: bool = False
     minimize_changes: bool = True
+    requested_occurrence_id: str | None = None
+    requested_slot_id: str | None = None
+    locked_occurrence_ids: list[str] = []
+
+    @model_validator(mode="after")
+    def repair_request_is_complete(self) -> "SolveOptions":
+        if bool(self.requested_occurrence_id) != bool(self.requested_slot_id):
+            raise ValueError("requested occurrence and slot must be supplied together")
+        return self
+
 
 class SchedulingProblem(BaseModel):
     problem_id: str
@@ -145,11 +164,13 @@ class SchedulingProblem(BaseModel):
     existing_timetable: list[ExistingPlacement] = []
     options: SolveOptions = SolveOptions()
 
+
 class Violation(BaseModel):
     constraint_id: str
     message_key: str
     affected_entity_ids: list[str]
     penalty: int = 0
+
 
 class Placement(BaseModel):
     occurrence_id: str
@@ -165,6 +186,7 @@ class PenaltyBreakdown(BaseModel):
     weight: int
     weighted_penalty: int
 
+
 class CandidateSolution(BaseModel):
     id: str
     placements: list[Placement]
@@ -174,11 +196,13 @@ class CandidateSolution(BaseModel):
     solve_time_seconds: float = 0
     diversity_count: int = 0
 
+
 class Diagnostic(BaseModel):
     code: str
     message_key: str
     affected_entity_ids: list[str] = []
     suggested_relaxations: list[str] = []
+
 
 class SolveResult(BaseModel):
     status: SolveStatus

@@ -1,4 +1,5 @@
 from pm_scheduler.contracts import (
+    ExistingPlacement,
     LessonOccurrence,
     ResourceEntity,
     SchedulingProblem,
@@ -300,3 +301,38 @@ def test_proven_infeasible_is_distinct_from_unknown_time_limit() -> None:
         solver_module.cp_model.CpSolver = original
     assert unknown.status == "unknown"
     assert unknown.diagnostics[0].code == "solver_time_limit"
+
+
+def test_repair_honors_requested_move_and_changes_minimum_occurrences() -> None:
+    slots = [slot("s1", "school-a", 480, 525), slot("s2", "school-a", 530, 575), slot("s3", "school-a", 580, 625)]
+    occurrences = [
+        occurrence("o1", "a1", "school-a", ["s1", "s2", "s3"], teachers=["t1"]),
+        occurrence("o2", "a2", "school-a", ["s1", "s2", "s3"], teachers=["t1"]),
+        occurrence("o3", "a3", "school-a", ["s1", "s2", "s3"], teachers=["t1"]),
+    ]
+    fixture = problem(slots, occurrences)
+    fixture.existing_timetable = [
+        ExistingPlacement(occurrence_id="o1", assignment_id="a1", slot_id="s1"),
+        ExistingPlacement(occurrence_id="o2", assignment_id="a2", slot_id="s2"),
+        ExistingPlacement(occurrence_id="o3", assignment_id="a3", slot_id="s3"),
+    ]
+    fixture.options = SolveOptions(repair=True, candidate_count=1, time_limit_seconds=2, requested_occurrence_id="o1", requested_slot_id="s2")
+    result = Scheduler().solve(fixture)
+    assert result.feasible
+    repaired = selected(result)
+    assert repaired["o1"] == "s2"
+    assert sum(repaired[key] != {"o1": "s1", "o2": "s2", "o3": "s3"}[key] for key in repaired) == 2
+
+
+def test_repair_respects_locked_occurrence() -> None:
+    slots = [slot("s1", "school-a", 480, 525), slot("s2", "school-a", 530, 575), slot("s3", "school-a", 580, 625)]
+    occurrences = [
+        occurrence("o1", "a1", "school-a", ["s1", "s2", "s3"], teachers=["t1"]),
+        occurrence("o2", "a2", "school-a", ["s1", "s2", "s3"], teachers=["t1"]),
+        occurrence("o3", "a3", "school-a", ["s1", "s2", "s3"], teachers=["t1"]),
+    ]
+    fixture = problem(slots, occurrences)
+    fixture.existing_timetable = [ExistingPlacement(occurrence_id=f"o{i}", assignment_id=f"a{i}", slot_id=f"s{i}") for i in range(1, 4)]
+    fixture.options = SolveOptions(repair=True, candidate_count=1, time_limit_seconds=2, requested_occurrence_id="o1", requested_slot_id="s2", locked_occurrence_ids=["o3"])
+    repaired = selected(Scheduler().solve(fixture))
+    assert repaired["o3"] == "s3"

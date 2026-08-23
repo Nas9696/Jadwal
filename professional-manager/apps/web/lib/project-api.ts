@@ -11,12 +11,36 @@ export type SolveRun = { id: string; project_id: string; status: "queued" | "run
 type Label = { id: string; name_ar: string };
 export type TimetableEntry = { id: string; occurrence_id: string; slot_id: string; project_cycle_week_index: number; weekday_index: number; starts_at_minute: number; ends_at_minute: number; school: Label; subject: Label; teachers: Label[]; sections: Label[]; resources: Label[] };
 export type CandidateDetail = CandidateSummary & { entries: TimetableEntry[] };
+export type EditorLock = { id: string; lock_type: string; occurrence_id?: string; label: string };
+export type WorkingTimetable = {
+  id: string; project_id: string; source_candidate_id: string; name: string;
+  version_number: number; revision: number; history_cursor: number; status: string;
+  change_summary?: string; can_undo: boolean; can_redo: boolean;
+  entries: TimetableEntry[]; locks: EditorLock[];
+};
+export type MoveAnalysis = {
+  revision: number; occurrence_id: string; source_slot_id: string; valid: boolean;
+  target_slot: { id: string; project_cycle_week_index: number; weekday_index: number; starts_at_minute: number; ends_at_minute: number };
+  violations: Array<{ code: string; occurrence_id?: string }>;
+  teacher_conflicts: Array<{ occurrence_id: string }>;
+  section_conflicts: Array<{ occurrence_id: string }>;
+  resource_conflicts: Array<{ occurrence_id: string }>;
+  hard_rule_violations: Array<{ code: string; label?: string }>;
+  lock_violations: EditorLock[]; affected_entries: Array<{ occurrence_id: string }>;
+  soft_penalty_delta: number; swap_candidates: Array<{ occurrence_id: string; slot_id: string }>;
+  alternative_slots: Array<{ id: string; project_cycle_week_index: number; weekday_index: number; starts_at_minute: number; ends_at_minute: number }>;
+};
+export type RepairPreview = { revision: number; occurrence_id: string; target_slot_id: string; fingerprint: string; total_moved_occurrences: number; penalty_before: number; penalty_after: number; changes: Array<{ occurrence_id: string; from: { slot_id: string }; to: { slot_id: string }; reason: string }> };
+export type TimetableSnapshot = { id: string; name: string; source_revision: number; changed_occurrences: number; created_at: string };
+export type AuditEvent = { id: string; revision: number; operation_type: string; summary: string; created_at: string };
+export type SnapshotComparison = { snapshot_id: string; source_revision: number; current_revision: number; changed_occurrences: number; changes: Array<{ occurrence_id: string; snapshot: { slot_id: string }; current: { slot_id: string } | null }> };
+export type ProjectSlot = { id: string; school_id: string; project_cycle_week_index: number; weekday_index: number; starts_at_minute: number; ends_at_minute: number; attendance_mode: string };
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { ...options, headers: { "Content-Type": "application/json", "X-Tenant-ID": TENANT_ID, ...options?.headers } });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    const messages: Record<string, string> = { preflight_blocked: "أكمل أخطاء فحص الجاهزية قبل توليد الجدول.", solve_run_already_active: "يوجد توليد جارٍ لهذا المشروع بالفعل.", invalid_cycle_phase_offset: "محاذاة دورة المدرسة خارج النطاق المتاح." };
+    const messages: Record<string, string> = { preflight_blocked: "أكمل أخطاء فحص الجاهزية قبل توليد الجدول.", solve_run_already_active: "يوجد توليد جارٍ لهذا المشروع بالفعل.", invalid_cycle_phase_offset: "محاذاة دورة المدرسة خارج النطاق المتاح.", timetable_version_conflict: "تغير الجدول منذ فتحه. أعد التحميل والتحليل.", move_conflict: "النقل غير آمن؛ راجع لوحة التعارضات.", swap_conflict: "لا يمكن تنفيذ التبديل دون تعارض.", repair_infeasible: "تعذر إيجاد إصلاح يحترم القيود والأقفال." };
     throw new Error(messages[body?.detail?.code] ?? "تعذر تنفيذ العملية. راجع نطاق المشروع والقاعدة.");
   }
   return response.status === 204 ? (undefined as T) : response.json();
@@ -36,4 +60,21 @@ export const projectApi = {
   solve: (id: string, payload = { candidate_count: 3, time_limit_seconds: 10, seed: 0 }) => req<SolveRun>(`/timetable-projects/${id}/solve`, { method: "POST", body: JSON.stringify(payload) }),
   solveRun: (projectId: string, runId: string) => req<SolveRun>(`/timetable-projects/${projectId}/solve-runs/${runId}`),
   candidate: (projectId: string, candidateId: string) => req<CandidateDetail>(`/timetable-projects/${projectId}/candidates/${candidateId}`),
+  problem: (projectId: string) => req<{ slots: ProjectSlot[] }>(`/timetable-projects/${projectId}/problem`),
+  deriveWorking: (projectId: string, candidateId: string) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/from-candidate/${candidateId}`, { method: "POST" }),
+  working: (projectId: string) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable`),
+  analyzeMove: (projectId: string, payload: object) => req<MoveAnalysis>(`/timetable-projects/${projectId}/working-timetable/moves/analyze`, { method: "POST", body: JSON.stringify(payload) }),
+  applyMove: (projectId: string, payload: object) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/moves/apply`, { method: "POST", body: JSON.stringify(payload) }),
+  applySwap: (projectId: string, payload: object) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/swaps/apply`, { method: "POST", body: JSON.stringify(payload) }),
+  undo: (projectId: string, revision: number) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/undo`, { method: "POST", body: JSON.stringify({ revision }) }),
+  redo: (projectId: string, revision: number) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/redo`, { method: "POST", body: JSON.stringify({ revision }) }),
+  lockOccurrence: (projectId: string, occurrenceId: string, revision: number) => req<{ lock: EditorLock; revision: number }>(`/timetable-projects/${projectId}/working-timetable/locks`, { method: "POST", body: JSON.stringify({ revision, lock_type: "occurrence", occurrence_id: occurrenceId, label: "قفل الحصة" }) }),
+  unlock: (projectId: string, lockId: string, revision: number) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/locks/${lockId}?revision=${revision}`, { method: "DELETE" }),
+  repairPreview: (projectId: string, payload: object) => req<RepairPreview>(`/timetable-projects/${projectId}/working-timetable/repair/preview`, { method: "POST", body: JSON.stringify(payload) }),
+  repairApply: (projectId: string, payload: object) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/repair/apply`, { method: "POST", body: JSON.stringify(payload) }),
+  snapshots: (projectId: string) => req<TimetableSnapshot[]>(`/timetable-projects/${projectId}/working-timetable/snapshots`),
+  audit: (projectId: string) => req<AuditEvent[]>(`/timetable-projects/${projectId}/working-timetable/audit`),
+  compareSnapshot: (projectId: string, snapshotId: string) => req<SnapshotComparison>(`/timetable-projects/${projectId}/working-timetable/snapshots/${snapshotId}/compare`),
+  createSnapshot: (projectId: string, name: string, revision: number) => req<TimetableSnapshot>(`/timetable-projects/${projectId}/working-timetable/snapshots`, { method: "POST", body: JSON.stringify({ name, revision }) }),
+  restoreSnapshot: (projectId: string, snapshotId: string, revision: number) => req<WorkingTimetable>(`/timetable-projects/${projectId}/working-timetable/snapshots/${snapshotId}/restore`, { method: "POST", body: JSON.stringify({ revision }) }),
 };

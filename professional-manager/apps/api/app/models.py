@@ -589,3 +589,188 @@ class TimetableEntryResource(IdMixin, TenantScoped, Base):
         ForeignKey("resources.id", ondelete="RESTRICT"), index=True
     )
     __table_args__ = (UniqueConstraint("tenant_id", "timetable_entry_id", "resource_id"),)
+
+
+class WorkingTimetable(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "working_timetables"
+    timetable_project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_projects.id", ondelete="CASCADE"), index=True
+    )
+    source_candidate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("timetable_candidates.id", ondelete="RESTRICT"), index=True
+    )
+    parent_timetable_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="SET NULL"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200), default="نسخة العمل")
+    version_number: Mapped[int] = mapped_column(Integer, default=1)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    history_cursor: Mapped[int] = mapped_column(Integer, default=0)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(30), default="working")
+    created_by: Mapped[str | None] = mapped_column(String(200))
+    change_summary: Mapped[str | None] = mapped_column(String(500))
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "timetable_project_id", "version_number"),
+        Index(
+            "uq_current_working_timetable_per_project",
+            "tenant_id",
+            "timetable_project_id",
+            unique=True,
+            postgresql_where=text("is_current = true"),
+            sqlite_where=text("is_current = 1"),
+        ),
+        CheckConstraint("revision > 0"),
+        CheckConstraint("history_cursor >= 0"),
+    )
+
+
+class WorkingTimetableEntry(IdMixin, TenantScoped, Base):
+    __tablename__ = "working_timetable_entries"
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="CASCADE"), index=True
+    )
+    source_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("timetable_entries.id", ondelete="SET NULL"), index=True
+    )
+    occurrence_id: Mapped[str] = mapped_column(String(220))
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teaching_assignments.id", ondelete="RESTRICT"), index=True
+    )
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("subjects.id", ondelete="RESTRICT"), index=True
+    )
+    slot_id: Mapped[str] = mapped_column(String(220))
+    school_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schools.id", ondelete="RESTRICT"), index=True
+    )
+    project_cycle_week_index: Mapped[int] = mapped_column(Integer)
+    weekday_index: Mapped[int] = mapped_column(Integer)
+    starts_at_minute: Mapped[int] = mapped_column(Integer)
+    ends_at_minute: Mapped[int] = mapped_column(Integer)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "working_timetable_id", "occurrence_id"),
+        CheckConstraint("project_cycle_week_index >= 0"),
+        CheckConstraint("weekday_index >= 0 AND weekday_index <= 6"),
+        CheckConstraint("starts_at_minute < ends_at_minute"),
+    )
+
+
+class WorkingTimetableEntryTeacher(IdMixin, TenantScoped, Base):
+    __tablename__ = "working_timetable_entry_teachers"
+    working_timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetable_entries.id", ondelete="CASCADE"), index=True
+    )
+    teacher_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teachers.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "working_timetable_entry_id", "teacher_id"),
+    )
+
+
+class WorkingTimetableEntrySection(IdMixin, TenantScoped, Base):
+    __tablename__ = "working_timetable_entry_sections"
+    working_timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetable_entries.id", ondelete="CASCADE"), index=True
+    )
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sections.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "working_timetable_entry_id", "section_id"),
+    )
+
+
+class WorkingTimetableEntryResource(IdMixin, TenantScoped, Base):
+    __tablename__ = "working_timetable_entry_resources"
+    working_timetable_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetable_entries.id", ondelete="CASCADE"), index=True
+    )
+    resource_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("resources.id", ondelete="RESTRICT"), index=True
+    )
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "working_timetable_entry_id", "resource_id"),
+    )
+
+
+class TimetableEditLock(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_edit_locks"
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="CASCADE"), index=True
+    )
+    lock_type: Mapped[str] = mapped_column(String(30), index=True)
+    occurrence_id: Mapped[str | None] = mapped_column(String(220))
+    teacher_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teachers.id", ondelete="RESTRICT"))
+    section_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sections.id", ondelete="RESTRICT"))
+    school_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("schools.id", ondelete="RESTRICT"))
+    project_cycle_week_index: Mapped[int | None] = mapped_column(Integer)
+    weekday_index: Mapped[int | None] = mapped_column(Integer)
+    starts_at_minute: Mapped[int | None] = mapped_column(Integer)
+    ends_at_minute: Mapped[int | None] = mapped_column(Integer)
+    label: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[str | None] = mapped_column(String(200))
+    __table_args__ = (
+        CheckConstraint(
+            "lock_type IN ('occurrence','teacher','section','day','time_range','week','region')"
+        ),
+        CheckConstraint("weekday_index IS NULL OR (weekday_index >= 0 AND weekday_index <= 6)"),
+        CheckConstraint("project_cycle_week_index IS NULL OR project_cycle_week_index >= 0"),
+        CheckConstraint(
+            "starts_at_minute IS NULL OR ends_at_minute IS NULL OR starts_at_minute < ends_at_minute"
+        ),
+    )
+
+
+class TimetableEditChange(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_edit_changes"
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+    operation_type: Mapped[str] = mapped_column(String(30))
+    before_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    after_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    summary: Mapped[str] = mapped_column(String(500))
+    __table_args__ = (UniqueConstraint("tenant_id", "working_timetable_id", "sequence"),)
+
+
+class TimetableAuditEvent(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_audit_events"
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    operation_type: Mapped[str] = mapped_column(String(30))
+    before_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    after_data: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(String(500))
+    actor_reference: Mapped[str | None] = mapped_column(String(200))
+
+
+class TimetableSnapshot(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_snapshots"
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    source_revision: Mapped[int] = mapped_column(Integer)
+    entries_snapshot: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    created_by: Mapped[str | None] = mapped_column(String(200))
+
+
+class TimetableRepairPreview(IdMixin, TenantScoped, Timestamped, Base):
+    __tablename__ = "timetable_repair_previews"
+    working_timetable_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("working_timetables.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    occurrence_id: Mapped[str] = mapped_column(String(220))
+    target_slot_id: Mapped[str] = mapped_column(String(220))
+    changes: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    total_moved_occurrences: Mapped[int] = mapped_column(Integer)
+    penalty_before: Mapped[int] = mapped_column(Integer, default=0)
+    penalty_after: Mapped[int] = mapped_column(Integer, default=0)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

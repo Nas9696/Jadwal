@@ -34,6 +34,7 @@ from app.master_router import router as master_router
 from app.assignment_router import router as assignment_router
 from app.import_router import router as import_router
 from app.project_router import router as project_router
+from app.editor_router import router as editor_router
 
 app = FastAPI(
     title=settings.app_name,
@@ -53,6 +54,7 @@ app.include_router(master_router)
 app.include_router(assignment_router)
 app.include_router(import_router)
 app.include_router(project_router)
+app.include_router(editor_router)
 
 
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["system"])

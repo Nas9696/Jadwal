@@ -11,6 +11,7 @@ import {
   type Rule,
   type SolveRun,
 } from "@/lib/project-api";
+import { TimetableEditor } from "@/components/timetable-editor";
 
 const weekdays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const softTypes = new Set(["teacher_preferred_time", "teacher_avoided_time", "assignment_preferred_time", "assignment_avoided_time"]);
@@ -187,6 +188,7 @@ export function TimetableWorkspace() {
         <div className="rule-list">{rules.map(rule => <article key={rule.id} className={!rule.enabled ? "disabled-rule" : ""}><div><strong>{rule.label}</strong><span>{rule.severity === "hard" ? "إلزامي" : `تفضيل · وزن ${rule.weight}`} · {rule.enabled ? "مفعلة" : "معطلة"}</span></div><div className="rule-actions"><button onClick={() => setEditingRule(rule)}>تعديل</button><button onClick={() => void refreshRules(() => projectApi.duplicateRule(selected.id, rule.id))}>نسخ</button><button onClick={() => void refreshRules(() => projectApi.updateRule(selected.id, rule.id, { label: rule.label, description: rule.description ?? null, rule_type: rule.rule_type, severity: rule.severity, weight: rule.weight, selector: rule.selector, parameters: rule.parameters, enabled: !rule.enabled }))}>{rule.enabled ? "تعطيل" : "تفعيل"}</button><button className="danger" onClick={() => setDeleteRule(rule)}>حذف</button></div></article>)}</div>
       </section>}
     </div>
+    {selected && candidate && <TimetableEditor projectId={selected.id} candidate={candidate} />}
     {deleteRule && selected && <div className="dialog-backdrop"><section className="edit-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-rule-title"><h2 id="delete-rule-title">حذف القاعدة؟</h2><p>سيتم حذف «{deleteRule.label}» من المشروع.</p><div className="dialog-actions"><button onClick={() => setDeleteRule(null)}>إلغاء</button><button className="danger" onClick={() => void refreshRules(() => projectApi.removeRule(selected.id, deleteRule.id)).then(() => setDeleteRule(null))}>تأكيد الحذف</button></div></section></div>}
   </div>;
 }
