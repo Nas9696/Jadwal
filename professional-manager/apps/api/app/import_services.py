@@ -5,6 +5,7 @@ import re
 import unicodedata
 import uuid
 import zipfile
+import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import PurePath
@@ -196,6 +197,166 @@ def _parse_xlsx(content: bytes) -> list[tuple[str, list[str], list[tuple[int, di
     return result
 
 
+ASC_GRADE_NAMES = {
+    1: ("المرحلة الابتدائية", "الأول"),
+    2: ("المرحلة الابتدائية", "الثاني"),
+    3: ("المرحلة الابتدائية", "الثالث"),
+    4: ("المرحلة الابتدائية", "الرابع"),
+    5: ("المرحلة الابتدائية", "الخامس"),
+    6: ("المرحلة الابتدائية", "السادس"),
+    7: ("المرحلة المتوسطة", "الأول المتوسط"),
+    8: ("المرحلة المتوسطة", "الثاني المتوسط"),
+    9: ("المرحلة المتوسطة", "الثالث المتوسط"),
+    10: ("المرحلة الثانوية", "الأول الثانوي"),
+    11: ("المرحلة الثانوية", "الثاني الثانوي"),
+    12: ("المرحلة الثانوية", "الثالث الثانوي"),
+}
+
+
+def _asc_values(value: str | None) -> list[str]:
+    return [item.strip() for item in re.split(r"[,;]", value or "") if item.strip()]
+
+
+def _asc_class_name(value: str) -> tuple[str, str, str] | None:
+    match = re.match(r"^\s*([0-9٠-٩]+)\s*[/\\-]\s*(.+?)\s*$", value)
+    if not match:
+        return None
+    digits = match.group(1).translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+    stage_grade = ASC_GRADE_NAMES.get(int(digits))
+    if not stage_grade:
+        return None
+    return stage_grade[0], stage_grade[1], match.group(2).strip()
+
+
+def _parse_asctt_xml(
+    content: bytes, shift_name: str
+) -> list[tuple[str, list[str], list[tuple[int, dict[str, Any]]]]]:
+    lowered = content[:16384].lower()
+    if b"<!doctype" in lowered or b"<!entity" in lowered:
+        fail("xml_unsafe_declaration", 415)
+    declaration = re.search(br"<\?xml[^>]*encoding=[\"']([^\"']+)", content[:512], re.I)
+    encoding = declaration.group(1).decode("ascii", "ignore").lower() if declaration else "utf-8"
+    if encoding not in {"utf-8", "utf-8-sig", "windows-1256", "cp1256"}:
+        fail("xml_encoding_not_supported", 415)
+    try:
+        root = ET.fromstring(content.decode(encoding))
+    except (UnicodeDecodeError, ET.ParseError):
+        fail("xml_structure_invalid", 415)
+    if root.tag != "timetable" or not root.get("ascttversion"):
+        fail("xml_not_asctt", 415)
+
+    teachers = {item.get("id", ""): item for item in root.findall("./teachers/teacher")}
+    subjects = {item.get("id", ""): item for item in root.findall("./subjects/subject")}
+    classes = {item.get("id", ""): item for item in root.findall("./classes/class")}
+    parsed_classes: dict[str, tuple[str, str, str]] = {}
+    for class_id, item in classes.items():
+        parsed = _asc_class_name(item.get("name", ""))
+        if parsed:
+            parsed_classes[class_id] = parsed
+
+    teacher_subjects: dict[str, set[str]] = defaultdict(set)
+    for lesson in root.findall("./lessons/lesson"):
+        subject = subjects.get(lesson.get("subjectid", ""))
+        if subject is None:
+            continue
+        for teacher_id in _asc_values(lesson.get("teacherid")):
+            teacher_subjects[teacher_id].add(subject.get("name", "").strip())
+
+    result: list[tuple[str, list[str], list[tuple[int, dict[str, Any]]]]] = []
+    teacher_headers = ["كود المعلم", "اسم المعلم", "التخصص"]
+    teacher_rows = [
+        (
+            index,
+            {
+                "كود المعلم": f"ASC-T-{teacher_id.lstrip('*')}",
+                "اسم المعلم": item.get("name", "").strip(),
+                "التخصص": "، ".join(sorted(teacher_subjects.get(teacher_id, set()))),
+            },
+        )
+        for index, (teacher_id, item) in enumerate(teachers.items(), 1)
+        if teacher_id and item.get("name", "").strip()
+    ]
+    result.append(("المعلمون من Timetables", teacher_headers, teacher_rows))
+
+    subject_headers = ["رمز المادة", "اسم المادة"]
+    subject_rows = [
+        (
+            index,
+            {
+                "رمز المادة": f"ASC-S-{subject_id.lstrip('*')}",
+                "اسم المادة": item.get("name", "").strip(),
+            },
+        )
+        for index, (subject_id, item) in enumerate(subjects.items(), 1)
+        if subject_id and item.get("name", "").strip()
+    ]
+    result.append(("المواد من Timetables", subject_headers, subject_rows))
+
+    structure_headers = ["رمز المرحلة", "المرحلة", "الصف", "الشعبة", "السعة"]
+    structure_rows = [
+        (
+            index,
+            {
+                "رمز المرحلة": "ASC-PRIMARY" if stage == "المرحلة الابتدائية" else "ASC-INTERMEDIATE" if stage == "المرحلة المتوسطة" else "ASC-SECONDARY",
+                "المرحلة": stage,
+                "الصف": grade,
+                "الشعبة": section,
+                "السعة": "30",
+            },
+        )
+        for index, (stage, grade, section) in enumerate(parsed_classes.values(), 1)
+    ]
+    result.append(("الصفوف والفصول من Timetables", structure_headers, structure_rows))
+
+    offering_headers = ["المرحلة", "الصف", "الشعبة", "الفترة"]
+    offering_rows = [
+        (
+            index,
+            {"المرحلة": stage, "الصف": grade, "الشعبة": section, "الفترة": shift_name},
+        )
+        for index, (stage, grade, section) in enumerate(parsed_classes.values(), 1)
+    ]
+    result.append(("الفصول الدراسية من Timetables", offering_headers, offering_rows))
+
+    assignment_headers = [
+        "مفتاح المجموعة", "كود المعلم", "المادة", "المرحلة", "الصف", "الشعبة", "عدد الحصص"
+    ]
+    assignment_rows: list[tuple[int, dict[str, Any]]] = []
+    for lesson_index, lesson in enumerate(root.findall("./lessons/lesson"), 1):
+        lesson_id = lesson.get("id", str(lesson_index))
+        subject = subjects.get(lesson.get("subjectid", ""))
+        teacher_codes = [
+            f"ASC-T-{teacher_id.lstrip('*')}"
+            for teacher_id in _asc_values(lesson.get("teacherid"))
+            if teacher_id in teachers
+        ]
+        try:
+            weekly = int(float(lesson.get("periodsperweek", "0")))
+        except ValueError:
+            weekly = 0
+        if subject is None or not teacher_codes or weekly < 1:
+            continue
+        class_ids = [item for item in _asc_values(lesson.get("classids")) if item in parsed_classes]
+        for class_id in class_ids:
+            stage, grade, section = parsed_classes[class_id]
+            assignment_rows.append(
+                (
+                    len(assignment_rows) + 1,
+                    {
+                        "مفتاح المجموعة": f"ASC-L-{lesson_id.lstrip('*')}",
+                        "كود المعلم": "|".join(teacher_codes),
+                        "المادة": subject.get("name", "").strip(),
+                        "المرحلة": stage,
+                        "الصف": grade,
+                        "الشعبة": section,
+                        "عدد الحصص": str(weekly),
+                    },
+                )
+            )
+    result.append(("الإسنادات من Timetables", assignment_headers, assignment_rows))
+    return result
+
+
 def upload_job(
     db: Session,
     tenant_id: uuid.UUID,
@@ -221,9 +382,25 @@ def upload_job(
         fail("file_size_limit", 413)
     safe_name = _safe_filename(filename)
     extension = PurePath(safe_name).suffix.lower()
-    if extension not in {".csv", ".xlsx"}:
+    if extension not in {".csv", ".xlsx", ".xml"}:
         fail("unsupported_file_type", 415)
-    sheets = _parse_csv(content) if extension == ".csv" else _parse_xlsx(content)
+    if extension == ".csv":
+        sheets = _parse_csv(content)
+    elif extension == ".xlsx":
+        sheets = _parse_xlsx(content)
+    else:
+        shift = db.scalar(
+            select(SchoolShift)
+            .where(
+                SchoolShift.tenant_id == tenant_id,
+                SchoolShift.school_id == school_id,
+                SchoolShift.is_active.is_(True),
+            )
+            .order_by(SchoolShift.order)
+        )
+        if not shift:
+            fail("school_shift_required")
+        sheets = _parse_asctt_xml(content, shift.name_ar)
     total_rows = sum(len(rows) for _, _, rows in sheets)
     if total_rows > settings.import_max_rows:
         fail("row_limit_exceeded", 413)

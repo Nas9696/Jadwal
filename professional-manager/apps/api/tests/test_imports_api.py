@@ -134,6 +134,87 @@ def test_xlsx_multisheet_detection_and_formula_rejection(client: TestClient) -> 
     assert any(item["code"] == "formula_not_allowed" for item in teacher_row["diagnostics"])
 
 
+def test_asctt_xml_imports_arabic_teachers_subjects_structure_offerings_and_assignments(
+    client: TestClient, session: Session
+) -> None:
+    shift = client.post(
+        f"/api/v1/schools/{FIRST_SCHOOL}/setup/shifts",
+        headers=HEADERS,
+        json={"code": "ASC-AM", "name_ar": "الدوام الصباحي", "order": 0, "is_active": True},
+    )
+    assert shift.status_code == 201, shift.text
+    xml = """<?xml version="1.0" encoding="windows-1256"?>
+<timetable ascttversion="2024.24.1">
+  <teachers><teacher id="*1" name="معلم تايم تيبل" short="المعلم"/></teachers>
+  <subjects><subject id="*1" name="مادة تايم تيبل" short="المادة"/></subjects>
+  <classes><class id="*1" name="2/ ج" short="2/ ج"/></classes>
+  <lessons><lesson id="*1" classids="*1" subjectid="*1" periodsperweek="4.0" teacherid="*1"/></lessons>
+  <cards><card lessonid="*1" classids="*1" subjectid="*1" teacherid="*1" day="1" period="1"/></cards>
+</timetable>""".encode("windows-1256")
+    before = {
+        model: session.scalar(select(func.count()).select_from(model))
+        for model in (Stage, Grade, Section, Teacher, Subject, SectionOffering, TeachingAssignment)
+    }
+    uploaded = client.post(
+        base_url("/upload"),
+        headers=HEADERS,
+        data={"term_id": FIRST_TERM},
+        files={"file": ("school.xml", xml, "application/xml")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    job = uploaded.json()
+    assert [item["row_count"] for item in job["detected_sheets"]] == [1, 1, 1, 1, 1]
+    mapping = {
+        item["name"]: {
+            "entity_type": entity,
+            "columns": item["suggested_mapping"],
+        }
+        for item, entity in zip(
+            job["detected_sheets"],
+            ("teachers", "subjects", "structure", "offerings", "assignments"),
+            strict=True,
+        )
+    }
+    assert client.put(
+        base_url(f"/{job['id']}/mapping"), headers=HEADERS, json={"sheets": mapping}
+    ).status_code == 200
+    preview = client.post(base_url(f"/{job['id']}/validate"), headers=HEADERS)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["status"] == "ready", preview.json()["rows"]
+    assert {
+        model: session.scalar(select(func.count()).select_from(model))
+        for model in before
+    } == before
+    committed = client.post(
+        base_url(f"/{job['id']}/commit"), headers=HEADERS, json={"acknowledge_warnings": True}
+    )
+    assert committed.status_code == 200, committed.text
+    assert all(
+        session.scalar(select(func.count()).select_from(model)) > count
+        for model, count in before.items()
+    )
+
+
+def test_asctt_xml_rejects_doctype_and_non_timetables_files(client: TestClient) -> None:
+    shift = client.post(
+        f"/api/v1/schools/{FIRST_SCHOOL}/setup/shifts",
+        headers=HEADERS,
+        json={"code": "ASC-SAFE", "name_ar": "فترة XML", "order": 0, "is_active": True},
+    )
+    assert shift.status_code == 201
+    unsafe = b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY y SYSTEM "file:///x">]><timetable ascttversion="1"/>'
+    response = client.post(
+        base_url("/upload"), headers=HEADERS, files={"file": ("unsafe.xml", unsafe, "application/xml")}
+    )
+    assert response.status_code == 415
+    ordinary = client.post(
+        base_url("/upload"),
+        headers=HEADERS,
+        files={"file": ("ordinary.xml", b'<?xml version="1.0"?><school/>', "application/xml")},
+    )
+    assert ordinary.status_code == 415
+
+
 def test_upload_security_types_and_limits(client: TestClient) -> None:
     for name in ("bad.xls", "bad.xlsm", "bad.zip", "bad.exe"):
         response = client.post(
