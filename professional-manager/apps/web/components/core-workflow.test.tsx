@@ -12,7 +12,7 @@ const snapshot = {
   readiness:{basic_data:true,assignments:false,constraints:true,preflight:false},
 };
 
-vi.mock("@/lib/core-api", () => ({ coreApi: { snapshot:vi.fn(), saveDay:vi.fn(), editPeriod:vi.fn(), saveStructure:vi.fn(), createTeacher:vi.fn(), saveAvailability:vi.fn(), copyAvailability:vi.fn(), createSubject:vi.fn(), createAssignment:vi.fn(), createRule:vi.fn(), generate:vi.fn() } }));
+vi.mock("@/lib/core-api", () => ({ coreApi: { snapshot:vi.fn(), saveDay:vi.fn(), editPeriod:vi.fn(), saveStructure:vi.fn(), createTeacher:vi.fn(), createTeachers:vi.fn(), uploadTeachers:vi.fn(), saveAvailability:vi.fn(), copyAvailability:vi.fn(), createSubject:vi.fn(), createAssignment:vi.fn(), createRule:vi.fn(), generate:vi.fn() } }));
 
 describe("simplified core timetable workflow", () => {
   afterEach(cleanup);
@@ -36,5 +36,14 @@ describe("simplified core timetable workflow", () => {
     await screen.findByDisplayValue("مدرسة النور");
     fireEvent.click(screen.getByRole("button",{name:"إنشاء التوقيت تلقائيًا"}));
     await waitFor(()=>expect(coreApi.saveDay).toHaveBeenCalledWith("school-1",expect.objectContaining({assembly_start:"06:45",assembly_minutes:15,period_minutes:45,weekdays:[0,1,2,3,4]})));
+  });
+  it("adds pasted teacher names in one action", async () => {
+    vi.mocked(coreApi.createTeachers).mockResolvedValue({ created: 2, skipped: 0, names: ["أحمد علي", "سارة محمد"] });
+    render(<CoreWorkflow step={3}/>);
+    const input = await screen.findByRole("textbox", { name: "أسماء المعلمين" });
+    fireEvent.change(input, { target: { value: "أحمد علي\nسارة محمد" } });
+    expect(screen.getByText("2 اسم")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "إضافة جميع الأسماء" }));
+    await waitFor(() => expect(coreApi.createTeachers).toHaveBeenCalledWith("school-1", ["أحمد علي", "سارة محمد"], 24));
   });
 });

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.assignment_services import save_assignment
 from app.core_schemas import (
     AvailabilityCopyInput,
+    BulkTeachersInput,
     DayBuilderInput,
     GenerateInput,
     PeriodEditInput,
@@ -271,6 +272,41 @@ def create_simple_teacher(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUI
     db.add(TeacherSchoolMembership(tenant_id=tenant_id, teacher_id=teacher.id, school_id=school_id, local_employee_code=None, is_home_school=True, is_active=True))
     db.commit()
     return {"id": teacher.id, "name_ar": teacher.name_ar, "workload_limit": teacher.teaching_workload_limit}
+
+
+def create_simple_teachers(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: BulkTeachersInput) -> dict[str, Any]:
+    _school(db, tenant_id, school_id)
+    existing = {
+        name.strip().casefold()
+        for name in db.scalars(
+            select(Teacher.name_ar)
+            .join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id)
+            .where(
+                Teacher.tenant_id == tenant_id,
+                TeacherSchoolMembership.tenant_id == tenant_id,
+                TeacherSchoolMembership.school_id == school_id,
+                TeacherSchoolMembership.is_active.is_(True),
+            )
+        )
+    }
+    created: list[str] = []
+    skipped: list[str] = []
+    seen: set[str] = set()
+    for raw_name in payload.names:
+        name = " ".join(raw_name.split())[:200]
+        normalized = name.casefold()
+        if len(name) < 2 or normalized in existing or normalized in seen:
+            if name:
+                skipped.append(name)
+            continue
+        teacher = Teacher(tenant_id=tenant_id, canonical_code=f"AUTO-{uuid.uuid4().hex[:12].upper()}", name_ar=name, base_workload=payload.workload_limit, teaching_workload_limit=payload.workload_limit, is_active=True)
+        db.add(teacher)
+        db.flush()
+        db.add(TeacherSchoolMembership(tenant_id=tenant_id, teacher_id=teacher.id, school_id=school_id, local_employee_code=None, is_home_school=True, is_active=True))
+        created.append(name)
+        seen.add(normalized)
+    db.commit()
+    return {"created": len(created), "skipped": len(skipped), "names": created}
 
 
 def create_simple_subject(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, payload: SimpleSubjectInput) -> dict[str, Any]:

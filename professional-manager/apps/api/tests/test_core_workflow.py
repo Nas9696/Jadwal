@@ -1,7 +1,9 @@
 import uuid
+from io import BytesIO
 from datetime import time
 
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -64,6 +66,34 @@ def test_entered_teacher_name_is_persisted_and_returned(client: TestClient) -> N
     snapshot = client.get(BASE, headers=HEADERS)
     assert snapshot.status_code == 200
     assert "ناصر آل مستنير" in [teacher["name_ar"] for teacher in snapshot.json()["teachers"]]
+
+
+def test_bulk_teacher_paste_ignores_duplicate_names(client: TestClient) -> None:
+    response = client.post(f"{BASE}/teachers/bulk", headers=HEADERS, json={"names": ["أحمد علي", "سارة محمد", "أحمد علي", "  "], "workload_limit": 22})
+    assert response.status_code == 201, response.text
+    assert response.json()["created"] == 2
+    snapshot = client.get(BASE, headers=HEADERS).json()
+    added = {teacher["name_ar"]: teacher["workload_limit"] for teacher in snapshot["teachers"]}
+    assert added == {"أحمد علي": 22, "سارة محمد": 22}
+
+
+def test_bulk_teacher_excel_uses_the_name_column(client: TestClient) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["اسم المعلم", "ملاحظات"])
+    sheet.append(["خالد حسن", "منتدب"])
+    sheet.append(["نورة سعيد", ""])
+    content = BytesIO()
+    workbook.save(content)
+    response = client.post(
+        f"{BASE}/teachers/bulk-file",
+        headers=HEADERS,
+        files={"file": ("teachers.xlsx", content.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        data={"workload_limit": "24"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["created"] == 2
+    assert response.json()["names"] == ["خالد حسن", "نورة سعيد"]
 
 
 def test_period_edit_recalculates_following_blocks(client: TestClient, session: Session) -> None:

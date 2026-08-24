@@ -90,6 +90,11 @@ class SimpleTeacherInput(BaseModel):
     workload_limit: int = Field(default=24, ge=1, le=60)
 
 
+class BulkTeachersInput(BaseModel):
+    names: list[str] = Field(min_length=1, max_length=1000)
+    workload_limit: int = Field(default=24, ge=1, le=60)
+
+
 class SimpleSubjectInput(BaseModel):
     name_ar: str = Field(min_length=2, max_length=150)
 

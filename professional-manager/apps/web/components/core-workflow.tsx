@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { coreApi, type AvailabilityCell, type CoreSnapshot } from "@/lib/core-api";
+import { coreApi, type AvailabilityCell, type BulkTeacherResult, type CoreSnapshot } from "@/lib/core-api";
 
 const steps = [
   ["/setup", "المدرسة واليوم الدراسي"], ["/academic-structure", "الصفوف والفصول"],
@@ -46,6 +46,12 @@ export function CoreWorkflow({ step }: { step: number }) {
     catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
   }
+  async function addTeachers(action: () => Promise<BulkTeacherResult>) {
+    setBusy(true); setError("");
+    try { const result = await action(); setNotice(`تمت إضافة ${result.created} معلم${result.skipped ? `، وتجاهل ${result.skipped} مكرر` : ""}`); await load(schoolId); }
+    catch (reason) { setError((reason as Error).message); }
+    finally { setBusy(false); }
+  }
   if (loading) return <section className="content"><div className="skeleton" aria-label="جار تحميل المسار الأساسي" /></section>;
   if (!schoolId || !data) return <section className="content"><div className="empty-state"><h2>تعذر فتح المدرسة</h2><p>{error || "اختر مدرسة للبدء."}</p></div></section>;
   return <section className="content core-workflow">
@@ -54,11 +60,26 @@ export function CoreWorkflow({ step }: { step: number }) {
     {notice && <div className="success-banner" role="status">{notice}</div>}{error && <div className="error-banner" role="alert">{error}</div>}
     {step === 1 && <SchoolDayStep data={data} busy={busy} onSave={(payload) => act(async () => { await coreApi.saveDay(schoolId, payload); window.dispatchEvent(new Event("pm-schools-refresh")); }, "تم حفظ اسم المدرسة وإنشاء اليوم الدراسي")} onEdit={(blockId,payload)=>act(()=>coreApi.editPeriod(schoolId,blockId,payload),"تم تعديل الفترة وإعادة احتساب ما يليها")} />}
     {step === 2 && <StructureStep data={data} busy={busy} onSave={(payload) => act(() => coreApi.saveStructure(schoolId, payload), "تم إنشاء الصفوف والفصول تلقائيًا")} />}
-    {step === 3 && <TeachersStep key={data.teachers.map(item=>item.id).join(":")} data={data} busy={busy} onCreate={(payload) => act(() => coreApi.createTeacher(schoolId, payload), "تمت إضافة المعلم")} onAvailability={(teacherId, cells) => act(() => coreApi.saveAvailability(schoolId, teacherId, { cells }), "تم حفظ توفر المعلم")} onCopy={(source, targets) => act(() => coreApi.copyAvailability(schoolId, { source_teacher_id: source, target_teacher_ids: targets }), "تم نسخ التوفر والقيود")} />}
+    {step === 3 && <><BulkTeacherEntry busy={busy} onPaste={(names, limit) => addTeachers(() => coreApi.createTeachers(schoolId, names, limit))} onFile={(file, limit) => addTeachers(() => coreApi.uploadTeachers(schoolId, file, limit))} /><TeachersStep key={data.teachers.map(item=>item.id).join(":")} data={data} busy={busy} onCreate={(payload) => act(() => coreApi.createTeacher(schoolId, payload), "تمت إضافة المعلم")} onAvailability={(teacherId, cells) => act(() => coreApi.saveAvailability(schoolId, teacherId, { cells }), "تم حفظ توفر المعلم")} onCopy={(source, targets) => act(() => coreApi.copyAvailability(schoolId, { source_teacher_id: source, target_teacher_ids: targets }), "تم نسخ التوفر والقيود")} /></>}
     {step === 4 && <AssignmentsStep data={data} busy={busy} onSubject={(name_ar) => act(() => coreApi.createSubject(schoolId, { name_ar }), "تمت إضافة المادة")} onAssign={(payload) => act(() => coreApi.createAssignment(schoolId, payload), "تم حفظ الإسناد وتحديث النصاب")} />}
     {step === 5 && <ConstraintsStep data={data} busy={busy} onRule={(payload) => act(() => coreApi.createRule(schoolId, payload), "تم تطبيق القاعدة")} />}
     {step === 6 && <GenerateStep data={data} busy={busy} onGenerate={async (profile) => { setBusy(true); setError(""); try { const result = await coreApi.generate(schoolId, profile); if (!result.started) { setError(result.preflight.diagnostics.map(item => item.message).join("، ") || "أكمل بيانات الجاهزية أولًا."); } else { setNotice("بدأ إنشاء ثلاثة بدائل للجدول"); } } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); } }} />}
   </section>;
+}
+
+function BulkTeacherEntry({ busy, onPaste, onFile }: { busy: boolean; onPaste: (names: string[], limit: number) => void; onFile: (file: File, limit: number) => void }) {
+  const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [limit, setLimit] = useState(24);
+  const names = text.split(/\r?\n|[,،;]+/).map((line) => line.split("\t")[0].trim()).filter(Boolean);
+  return <article className="core-card bulk-teachers">
+    <div className="card-title"><div><h2>إضافة المعلمين دفعة واحدة</h2><p>الصق الأسماء من Notepad أو من عمود في Excel، اسم واحد في كل سطر.</p></div><span className="bulk-count">{names.length} اسم</span></div>
+    <div className="bulk-teacher-grid">
+      <label className="bulk-paste">لصق الأسماء<textarea aria-label="أسماء المعلمين" value={text} onChange={(event) => setText(event.target.value)} placeholder={"أحمد محمد\nسارة علي\nخالد حسن"} rows={7} /></label>
+      <div className="bulk-file"><label>النصاب الافتراضي<input aria-label="النصاب الافتراضي للقائمة" type="number" min="1" max="60" value={limit} onChange={(event) => setLimit(Number(event.target.value))} /></label><label className="file-choice">ملف Excel أو CSV<input aria-label="ملف أسماء المعلمين" type="file" accept=".xlsx,.csv,.txt" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><strong>{file?.name ?? "اختر ملفًا"}</strong></label><button type="button" disabled={busy || !file} onClick={() => file && onFile(file, limit)}>استيراد الملف</button></div>
+    </div>
+    <button type="button" className="primary core-primary" disabled={busy || !names.length} onClick={() => onPaste(names, limit)}>إضافة جميع الأسماء</button>
+  </article>;
 }
 
 function SchoolDayStep({ data, busy, onSave, onEdit }: { data: CoreSnapshot; busy: boolean; onSave: (payload: object) => void; onEdit: (blockId:string,payload:object)=>void }) {

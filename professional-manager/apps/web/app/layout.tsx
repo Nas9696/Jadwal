@@ -7,6 +7,7 @@ import "./membership-repair.css";
 import "./assignment.css";
 import "./imports.css";
 import "./core-workflow.css";
+import "./bulk-teachers.css";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {

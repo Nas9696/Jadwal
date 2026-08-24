@@ -5,6 +5,7 @@ export type CoreBlock = { id: string; label_ar: string; block_order: number; blo
 export type AvailabilityCell = { weekday_index: number; period_number: number; state: "available" | "unavailable" | "avoid" };
 export type CoreTeacher = CoreItem & { workload_limit: number; assigned: number; remaining: number; shared: boolean; availability: AvailabilityCell[] };
 export type CoreAssignment = { id: string; subject_name: string; teacher_names: string[]; section_names: string[]; weekly_occurrences: number };
+export type BulkTeacherResult = { created: number; skipped: number; names: string[] };
 export type CoreSnapshot = {
   school: { name_ar: string };
   selected_stages: Array<"primary" | "intermediate" | "secondary">;
@@ -48,6 +49,13 @@ export const coreApi = {
   editPeriod: (schoolId: string, blockId: string, payload: object) => request(`${base(schoolId)}/periods/${blockId}`, { method: "PUT", body: JSON.stringify(payload) }),
   saveStructure: (schoolId: string, payload: object) => request(`${base(schoolId)}/structure`, { method: "PUT", body: JSON.stringify(payload) }),
   createTeacher: (schoolId: string, payload: object) => request(`${base(schoolId)}/teachers`, { method: "POST", body: JSON.stringify(payload) }),
+  createTeachers: (schoolId: string, names: string[], workload_limit: number) => request<BulkTeacherResult>(`${base(schoolId)}/teachers/bulk`, { method: "POST", body: JSON.stringify({ names, workload_limit }) }),
+  uploadTeachers: async (schoolId: string, file: File, workloadLimit: number) => {
+    const form = new FormData(); form.append("file", file); form.append("workload_limit", String(workloadLimit));
+    const response = await fetch(`${API_URL}${base(schoolId)}/teachers/bulk-file`, { method: "POST", headers: { "X-Tenant-ID": TENANT_ID }, body: form });
+    if (!response.ok) throw new Error("تعذر قراءة الملف. استخدم ملف XLSX أو CSV واجعل أسماء المعلمين في العمود الأول.");
+    return response.json() as Promise<BulkTeacherResult>;
+  },
   saveAvailability: (schoolId: string, teacherId: string, payload: object) => request(`${base(schoolId)}/teachers/${teacherId}/availability`, { method: "PUT", body: JSON.stringify(payload) }),
   copyAvailability: (schoolId: string, payload: object) => request(`${base(schoolId)}/teachers/availability/copy`, { method: "POST", body: JSON.stringify(payload) }),
   createSubject: (schoolId: string, payload: object) => request(`${base(schoolId)}/subjects`, { method: "POST", body: JSON.stringify(payload) }),

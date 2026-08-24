@@ -1,12 +1,13 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from app.core_schemas import (
     AvailabilityCopyInput,
+    BulkTeachersInput,
     DayBuilderInput,
     GenerateInput,
     PeriodEditInput,
@@ -21,6 +22,7 @@ from app.core_services import (
     copy_availability,
     create_simple_subject,
     create_simple_teacher,
+    create_simple_teachers,
     edit_period,
     generate,
     quick_assignment,
@@ -33,6 +35,7 @@ from app.core_services import (
 from app.db import get_db
 from app.tenant import tenant_context
 from app.solve_services import execute_solve_run
+from app.import_services import _parse_csv, _parse_xlsx, normalize_text
 
 
 router = APIRouter(prefix="/api/v1/schools/{school_id}/core-workflow", tags=["core workflow"])
@@ -66,6 +69,45 @@ def availability(teacher_id: uuid.UUID, payload: TeacherAvailabilityInput, schoo
 @router.post("/teachers", status_code=201)
 def create_teacher(payload: SimpleTeacherInput, school_id: uuid.UUID, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> Any:
     return jsonable_encoder(create_simple_teacher(db, tenant, school_id, payload))
+
+
+@router.post("/teachers/bulk", status_code=201)
+def create_teachers_bulk(payload: BulkTeachersInput, school_id: uuid.UUID, tenant: Annotated[uuid.UUID, Depends(tenant_context)], db: Annotated[Session, Depends(get_db)]) -> Any:
+    return jsonable_encoder(create_simple_teachers(db, tenant, school_id, payload))
+
+
+@router.post("/teachers/bulk-file", status_code=201)
+async def create_teachers_file(
+    school_id: uuid.UUID,
+    file: Annotated[UploadFile, File()],
+    tenant: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+    workload_limit: Annotated[int, Form()] = 24,
+) -> Any:
+    content = await file.read()
+    filename = (file.filename or "").lower()
+    if filename.endswith(".xlsx"):
+        sheets = _parse_xlsx(content)
+    elif filename.endswith((".csv", ".txt")):
+        sheets = _parse_csv(content)
+    else:
+        raise HTTPException(status_code=415, detail={"code": "teacher_file_must_be_xlsx_or_csv"})
+    aliases = {normalize_text(value) for value in ("اسم المعلم", "المعلم", "الاسم", "teacher", "teacher name", "name")}
+    names: list[str] = []
+    for _, headers, rows in sheets:
+        if not headers:
+            continue
+        matched = next((header for header in headers if normalize_text(header) in aliases), None)
+        column = matched or headers[0]
+        if matched is None and column.strip():
+            names.append(column)
+        for _, values in rows:
+            cell = values.get(column, "")
+            if not isinstance(cell, dict):
+                names.append(str(cell).strip())
+    if not any(name.strip() for name in names):
+        raise HTTPException(status_code=422, detail={"code": "teacher_file_has_no_names"})
+    return jsonable_encoder(create_simple_teachers(db, tenant, school_id, BulkTeachersInput(names=names, workload_limit=workload_limit)))
 
 
 @router.post("/subjects", status_code=201)
