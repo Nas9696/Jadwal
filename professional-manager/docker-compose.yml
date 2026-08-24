@@ -20,7 +20,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://professional_manager:professional_manager@postgres:5432/professional_manager}
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:3000}
-    command: sh -c "alembic upgrade head && python -m app.seed && python -m app.demo_seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports: ["8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}

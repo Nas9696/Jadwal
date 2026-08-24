@@ -2,6 +2,7 @@
 param(
     [switch]$Reset,
     [switch]$Stop,
+    [switch]$SampleData,
     [switch]$NoBrowser
 )
 
@@ -53,10 +54,14 @@ if ($Stop) {
 }
 
 if ($Reset) {
-    Write-Host "Resetting only the fixed demo tenant..." -ForegroundColor Cyan
+    Write-Host "Resetting the local school workspace..." -ForegroundColor Cyan
     Invoke-Compose up -d --build postgres api
     Wait-Http -Uri "http://localhost:8000/api/v1/health" -Label "API"
-    Invoke-Compose exec -T api python -m app.demo_seed --reset
+    if ($SampleData) {
+        Invoke-Compose exec -T api python -m app.demo_seed --reset
+    } else {
+        Invoke-Compose exec -T api python -m app.seed --reset
+    }
 }
 
 Invoke-Compose up -d --build
@@ -65,8 +70,9 @@ Wait-Http -Uri "http://localhost:3000" -Label "Web"
 
 $appUrl = "http://localhost:3000"
 Write-Host ""
-Write-Host "Professional Manager demo is ready: $appUrl" -ForegroundColor Green
+Write-Host "Professional Manager is ready: $appUrl" -ForegroundColor Green
 Write-Host "Reset: .\scripts\demo.ps1 -Reset"
+Write-Host "Sample data: .\scripts\demo.ps1 -Reset -SampleData"
 Write-Host "Stop : .\scripts\demo.ps1 -Stop"
 
 if (-not $NoBrowser) {

@@ -58,6 +58,14 @@ def test_simple_school_setup_creates_hidden_defaults_and_days(client: TestClient
     assert [block["starts_at"][:5] for block in data["blocks"][:4]] == ["06:45", "07:00", "07:45", "08:30"]
 
 
+def test_entered_teacher_name_is_persisted_and_returned(client: TestClient) -> None:
+    response = client.post(f"{BASE}/teachers", headers=HEADERS, json={"name_ar": "ناصر آل مستنير", "workload_limit": 24})
+    assert response.status_code == 201, response.text
+    snapshot = client.get(BASE, headers=HEADERS)
+    assert snapshot.status_code == 200
+    assert "ناصر آل مستنير" in [teacher["name_ar"] for teacher in snapshot.json()["teachers"]]
+
+
 def test_period_edit_recalculates_following_blocks(client: TestClient, session: Session) -> None:
     client.put(f"{BASE}/school-day", headers=HEADERS, json=school_day_payload())
     blocks = list(session.scalars(select(PeriodTemplate).where(PeriodTemplate.weekday_index == 0).order_by(PeriodTemplate.block_order)))

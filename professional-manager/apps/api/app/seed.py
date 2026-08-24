@@ -1,7 +1,9 @@
+import argparse
 import uuid
 from datetime import date, time
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models import (
@@ -45,7 +47,7 @@ DEMO_FIRST_TERM_ID = uuid.UUID("00000000-0000-4000-8000-000000000401")
 DEMO_SECOND_TERM_ID = uuid.UUID("00000000-0000-4000-8000-000000000402")
 
 
-def seed() -> None:
+def seed_legacy_demo() -> None:
     with SessionLocal() as db:
         if db.scalar(select(Tenant).where(Tenant.id == DEMO_TENANT_ID)):
             return
@@ -343,5 +345,44 @@ def seed() -> None:
         db.commit()
 
 
+WORKSPACE_EMAIL = "manager@example.test"
+
+
+def _reset_workspace(db: Session) -> None:
+    db.execute(delete(Tenant).where(Tenant.id == DEMO_TENANT_ID))
+    db.execute(delete(User).where((User.id == DEMO_USER_ID) | (User.email == WORKSPACE_EMAIL)))
+    db.commit()
+
+
+def seed(*, reset: bool = False) -> dict[str, str]:
+    with SessionLocal() as db:
+        if reset:
+            _reset_workspace(db)
+        if db.scalar(select(Tenant).where(Tenant.id == DEMO_TENANT_ID)) is not None:
+            return {"status": "already_ready", "school_id": str(DEMO_SCHOOL_ID)}
+
+        db.add(Tenant(id=DEMO_TENANT_ID, name_ar="مساحة المدرسة", slug="school-workspace"))
+        db.add(User(id=DEMO_USER_ID, email=WORKSPACE_EMAIL, display_name_ar="مدير المدرسة"))
+        db.flush()
+        db.add(TenantMembership(
+            tenant_id=DEMO_TENANT_ID,
+            user_id=DEMO_USER_ID,
+            role="manager",
+            permissions=["school:read", "timetable:manage"],
+        ))
+        db.add(School(
+            id=DEMO_SCHOOL_ID,
+            tenant_id=DEMO_TENANT_ID,
+            name_ar="مدرستي",
+            code="SCHOOL-01",
+            school_type="school",
+        ))
+        db.commit()
+        return {"status": "created", "school_id": str(DEMO_SCHOOL_ID)}
+
+
 if __name__ == "__main__":
-    seed()
+    parser = argparse.ArgumentParser(description="Prepare an empty school workspace")
+    parser.add_argument("--reset", action="store_true", help="Replace the local workspace with an empty one")
+    arguments = parser.parse_args()
+    print(seed(reset=arguments.reset))
