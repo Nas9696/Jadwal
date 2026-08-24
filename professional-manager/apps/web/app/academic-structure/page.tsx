@@ -1,2 +1,2 @@
-import { SetupWorkspace } from "@/components/setup-workspace";
-export default function StructurePage() { return <SetupWorkspace initialTab="structure" />; }
+import { CoreWorkflow } from "@/components/core-workflow";
+export default function StructurePage() { return <CoreWorkflow step={2} />; }

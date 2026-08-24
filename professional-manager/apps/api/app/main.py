@@ -37,6 +37,7 @@ from app.project_router import router as project_router
 from app.editor_router import router as editor_router
 from app.assistant_router import router as assistant_router
 from app.substitution_router import router as substitution_router
+from app.core_router import router as core_router
 from app.report_router import router as report_router
 
 app = FastAPI(
@@ -60,6 +61,7 @@ app.include_router(project_router)
 app.include_router(editor_router)
 app.include_router(assistant_router)
 app.include_router(substitution_router)
+app.include_router(core_router)
 app.include_router(report_router)
 
 

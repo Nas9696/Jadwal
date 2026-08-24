@@ -9,11 +9,14 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
 
+# Keep the demo self-contained even when the host has a stale or malformed value.
+$env:API_CORS_ORIGINS = "http://localhost:3000"
+
 function Invoke-Compose {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-    & docker compose @Arguments
+    $composeArguments = $args
+    & docker compose @composeArguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Docker Compose failed: docker compose $($Arguments -join ' ')"
+        throw "Docker Compose failed: docker compose $($ComposeArguments -join ' ')"
     }
 }
 

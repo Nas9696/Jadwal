@@ -1,2 +1,2 @@
-import { SetupWorkspace } from "@/components/setup-workspace";
-export default function SetupPage() { return <SetupWorkspace />; }
+import { CoreWorkflow } from "@/components/core-workflow";
+export default function SetupPage() { return <CoreWorkflow step={1} />; }

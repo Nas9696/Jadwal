@@ -56,6 +56,15 @@ def test_realistic_demo_seed_is_idempotent_and_ready(session: Session) -> None:
         .select_from(PeriodTemplate)
         .where(PeriodTemplate.tenant_id == DEMO_TENANT_ID)
     ) == 90
+    first_blocks = list(
+        session.scalars(
+            select(PeriodTemplate)
+            .where(PeriodTemplate.tenant_id == DEMO_TENANT_ID, PeriodTemplate.weekday_index == 0)
+            .order_by(PeriodTemplate.school_id, PeriodTemplate.block_order)
+        )
+    )[:9]
+    assert first_blocks[0].starts_at.isoformat(timespec="minutes") == "06:45"
+    assert all(left.ends_at == right.starts_at for left, right in zip(first_blocks, first_blocks[1:], strict=False))
     assert session.scalar(
         select(func.count())
         .select_from(Resource)

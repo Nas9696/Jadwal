@@ -73,15 +73,15 @@ def _calendar(
     db: Session, school_id: uuid.UUID, shift: SchoolShift, pattern: WeekPattern
 ) -> None:
     blocks = (
-        ("الطابور الصباحي", time(7, 15), time(7, 30), "assembly", None, False),
-        ("الحصة الأولى", time(7, 30), time(8, 15), "lesson", 1, True),
-        ("الحصة الثانية", time(8, 15), time(9, 0), "lesson", 2, True),
-        ("الفسحة", time(9, 0), time(9, 20), "break", None, False),
-        ("الحصة الثالثة", time(9, 20), time(10, 5), "lesson", 3, True),
-        ("الحصة الرابعة", time(10, 5), time(10, 50), "lesson", 4, True),
-        ("الصلاة", time(10, 50), time(11, 10), "prayer", None, False),
-        ("الحصة الخامسة", time(11, 10), time(11, 55), "lesson", 5, True),
-        ("الحصة السادسة", time(11, 55), time(12, 40), "lesson", 6, True),
+        ("الطابور الصباحي", time(6, 45), time(7, 0), "assembly", None, False),
+        ("الحصة الأولى", time(7, 0), time(7, 45), "lesson", 1, True),
+        ("الحصة الثانية", time(7, 45), time(8, 30), "lesson", 2, True),
+        ("الفسحة", time(8, 30), time(8, 50), "break", None, False),
+        ("الحصة الثالثة", time(8, 50), time(9, 35), "lesson", 3, True),
+        ("الحصة الرابعة", time(9, 35), time(10, 20), "lesson", 4, True),
+        ("الصلاة", time(10, 20), time(10, 40), "prayer", None, False),
+        ("الحصة الخامسة", time(10, 40), time(11, 25), "lesson", 5, True),
+        ("الحصة السادسة", time(11, 25), time(12, 10), "lesson", 6, True),
     )
     for weekday_index, weekday in enumerate(WEEKDAYS):
         day = SchoolDay(

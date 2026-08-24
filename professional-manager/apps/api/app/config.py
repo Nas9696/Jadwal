@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     import_max_sheets: int = 30
     import_max_zip_entries: int = 2_000
     import_max_expanded_bytes: int = 100 * 1024 * 1024
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", enable_decoding=False)
 
     @field_validator("api_cors_origins", mode="before")
     @classmethod
