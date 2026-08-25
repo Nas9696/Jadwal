@@ -1,0 +1,5 @@
+:root{--navy:#0d203b;--ink:#14243a;--muted:#46566d;--line:#d8e0ea;--primary:#3157d5;--primary-soft:#e8edff;--green:#147a50}
+body{color:var(--ink)}
+p,label,legend,small,caption{color:#3f5066}
+input::placeholder,textarea::placeholder{color:#596a80;opacity:1}
+button:disabled,input:disabled,select:disabled{opacity:.7}

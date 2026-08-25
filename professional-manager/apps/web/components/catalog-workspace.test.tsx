@@ -1,0 +1,12 @@
+import { cleanup,fireEvent,render,screen,waitFor } from "@testing-library/react";
+import { afterEach,beforeEach,describe,expect,it,vi } from "vitest";
+import { masterApi } from "@/lib/master-api";
+import { CatalogWorkspace } from "./catalog-workspace";
+
+const snapshot={school:{id:"s1",name_ar:"مدرسة النور",code:"S1"},subjects:[{id:"sub1",code:"MATH",name_ar:"الرياضيات",is_active:true}],resources:[{id:"r1",code:"LAB",name_ar:"مختبر العلوم",resource_type:"science_lab",capacity:30,exclusive:true,is_active:true}],stages:[{id:"st1",name_ar:"متوسط"}],grades:[{id:"g1",stage_id:"st1",name_ar:"الأول"}],requirements:[{id:"cr1",grade_id:"g1",subject_id:"sub1",weekly_occurrences:6,notes:null}]};
+vi.mock("@/lib/master-api",()=>({masterApi:{catalog:vi.fn(),createCatalog:vi.fn(),updateCatalog:vi.fn(),deleteCatalog:vi.fn()}}));
+describe("subjects curriculum and resources workspace",()=>{beforeEach(()=>{Object.defineProperty(window,"localStorage",{configurable:true,value:{getItem:()=>"s1"}});vi.mocked(masterApi.catalog).mockResolvedValue(snapshot);vi.mocked(masterApi.updateCatalog).mockResolvedValue({id:"cr1"})});afterEach(cleanup);
+ it("navigates real subjects curriculum and resources tabs",async()=>{render(<CatalogWorkspace/>);expect(await screen.findByText("مواد المدرسة")).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"الأنصبة الأسبوعية"}));expect(screen.getByText("إجمالي الحصص المطلوبة للصف")).toBeInTheDocument();expect(screen.getByText("6",{selector:".curriculum-summary strong"})).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"الغرف والموارد"}));expect(screen.getByText("مختبر العلوم")).toBeInTheDocument()});
+ it("edits a persisted weekly requirement",async()=>{render(<CatalogWorkspace/>);await screen.findByText("مواد المدرسة");fireEvent.click(screen.getByRole("button",{name:"الأنصبة الأسبوعية"}));fireEvent.click(screen.getByRole("button",{name:"تعديل"}));const count=screen.getByRole("spinbutton",{name:"الحصص الأسبوعية"});fireEvent.change(count,{target:{value:"7"}});fireEvent.click(screen.getByRole("button",{name:"حفظ"}));await waitFor(()=>expect(masterApi.updateCatalog).toHaveBeenCalledWith("s1","requirements","cr1",expect.objectContaining({weekly_occurrences:7})))});
+ it("uses in-app delete confirmation",async()=>{render(<CatalogWorkspace/>);await screen.findByText("مواد المدرسة");fireEvent.click(screen.getByRole("button",{name:"حذف"}));expect(screen.getByRole("alertdialog")).toHaveTextContent("لن تُحذف أي بيانات مرتبطة بصمت")});
+});

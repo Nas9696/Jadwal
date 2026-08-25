@@ -1,0 +1,13 @@
+{
+  "name": "professional-manager",
+  "private": true,
+  "scripts": {
+    "dev": "npm --workspace apps/web run dev",
+    "build": "npm --workspace apps/web run build",
+    "lint": "npm --workspace apps/web run lint",
+    "typecheck": "npm --workspace apps/web run typecheck",
+    "test:web": "npm --workspace apps/web run test"
+  },
+  "workspaces": ["apps/web", "packages/*"]
+}
+

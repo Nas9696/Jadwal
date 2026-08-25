@@ -1,0 +1,235 @@
+# المدير المحترف | Professional Manager
+
+منصة عربية لإدارة المدرسة. تتضمن الآن مساحات قابلة للاستخدام لإعداد المدرسة والهيكل الدراسي والمعلمين والمواد والأنصبة الأسبوعية والموارد، مع إبقاء أدوات المستودع القديمة كما هي.
+
+## مشاريع الجداول والقواعد والفحص المسبق — PM-003A
+
+يتيح `/timetables` إنشاء مشروع لمدرسة أو عدة مدارس مع فصل دراسي صريح و`cycle_phase_offset` لكل مدرسة. يبني الخادم SchedulingProblem حتميًا من التقويم والإسنادات relational، ويوسع الحصص لكل أسبوع عالمي ويشتق أوقاتًا مرشحة من lesson blocks فقط. تدعم القواعد typed عدم توفر المعلم/الشعبة/المورد، وأوقات الإسناد المطلوبة والممنوعة والمفضلة والمتجنبة. يعرض Preflight أخطاء الجاهزية والسعة والتناقضات دون إنشاء جدول؛ يبدأ التوليد الفعلي في PM-003B فقط.
+
+## الاستيراد الذكي Excel وCSV — PM-002D
+
+يتيح مسار `/imports` رفع ملفات `.csv` بترميز UTF-8 أو UTF-8 BOM وفواصل comma/semicolon/tab، وملفات `.xlsx` الآمنة. ينشئ الخادم `ImportJob` وصفوف staging مع كشف الأوراق والرؤوس العربية والإنجليزية واقتراح المطابقة، ثم يسمح بتعديل المطابقة واستبعاد صفوف وعرض تشخيصات وأفعال `create/link/update/skip/conflict` قبل الحفظ. المعاينة لا تكتب في جداول البيانات التشغيلية، بينما ينفذ التأكيد كل المهمة داخل transaction واحدة ويحفظ ملخصًا دائمًا ويمنع التأكيد المكرر.
+
+تُبنى أثناء التحقق خطة مرحلية deterministic تغطي كل أوراق المهمة؛ لذلك تستطيع متطلبات المنهج وشعب الفصل والإسنادات الرجوع إلى مرحلة أو صف أو شعبة أو معلم أو مادة أو مورد مقترح إنشاؤه في الورقة نفسها أو ورقة أخرى، دون flush إلى الجداول التشغيلية. المراجع المرحلية المكررة أو الملتبسة تصبح conflicts. كما تُفحص صفوف `group_key` كوحدة واحدة: يجب أن تتفق قيم المادة والعدد والفصل، ثم تُجمع المعلمون والشعب والموارد وتُمرر معاينتها إلى قواعد PM-002C بنفس شكل المجموعة التي ستُحفظ.
+
+يدعم وضع التحديث الصريح الحقول الوصفية الآمنة للمعلم عبر canonical code، والمادة والمورد عبر code، و`CurriculumRequirement`. في الوضع الآمن تظهر الفروق كتحذير مع before/after ولا تُكتب؛ وفي وضع التحديث تظهر `update` وتُحفظ عبر الخدمات authoritative دون تغيير مفاتيح الهوية أو إعادة تفعيل المؤرشفين. وتشغّل GitHub Actions سلسلة Alembic كاملة والـseed على PostgreSQL 16 فارغ مع integrity assertions بعد البذر.
+
+تضيف مساحة `/substitutions` سير عمل يوميًا للغياب والانتظار: يسجل المدير الغياب الكامل أو الجزئي على نسخة جدول العمل الحالية، فتُستخرج مواضع المعلم المتأثرة دون تحريك الجدول. يرتب الخادم البدلاء وفق الأهلية الصلبة والحمولة والعدالة والتفضيلات مع تفصيل قابل للتفسير، ثم يعيد فحص التصادمات والحدود والنسخة داخل معاملة التعيين. تُحسب السعة المجمعة من التدريس الفعلي وعمليات الانتظار، وتبقى المطابقة التخصصية تفضيلًا اختياريًا فقط.
+
+يدعم الاستيراد المعلمين canonical وربطهم بالمدرسة دون تكرار الهوية، والمواد، والهيكل، والأنصبة الأسبوعية، والموارد، وشعب الفصل، والإسنادات المرتبطة بفصل صالح للمدرسة. لا يجمع المستورد إسنادات متعددة تلقائيًا؛ لا تتكون مجموعة تدريس مشترك أو شعب مدمجة إلا عند وجود `group_key` صريح. تتوفر قوالب CSV عربية من الشاشة نفسها.
+
+تطبق الـ API حدودًا افتراضية قدرها 10 MB و20,000 صف و30 ورقة، وتفحص بنية ZIP الموسعة وتوقيع XLSX وترفض الماكرو والصيغ والخلايا التنفيذية والملفات الثنائية المقنّعة. كما تتحقق جميع المراجع من المستأجر والمدرسة والفصل الدراسي، وتحذر من إعادة ملف committed له نفس SHA-256.
+
+واجهات API الرئيسية:
+
+- `POST /api/v1/schools/{school_id}/imports/upload`: رفع ملف وإنشاء staging فقط.
+- `PUT .../imports/{job_id}/mapping` ثم `POST .../validate`: تثبيت المطابقة وبناء المعاينة والتشخيصات.
+- `PUT .../imports/{job_id}/exclude`: استبعاد صفوف محددة مع رفض المعرفات المكررة.
+- `POST .../imports/{job_id}/commit`: تأكيد ذري لمرة واحدة.
+- `GET .../imports/templates/{kind}.csv`: قوالب عربية آمنة.
+
+## المعلمون والمواد والموارد PM-002B
+
+يتيح مسار **المعلمون** البحث في معلمي المدرسة المختارة، وإنشاء هوية معلم واحدة داخل المستأجر أو ربط هوية موجودة بمدرسة إضافية. تظهر علامة المعلم المشترك ومدارسه الأخرى، ويمكن تعديل بياناته العامة وبيانات عضويته المحلية وتعيين مدرسة أساسية واحدة أو فك الارتباط دون حذف هويته من المدارس الأخرى. التخصص مرجع وصفي فقط، أما «المسند حاليًا» فيُحسب من إسنادات محفوظة إن وجدت ولا يفترض بيانات PM-002C.
+
+تبقى العضوية غير النشطة ظاهرة في مدرستها بحالة «غير نشط في هذه المدرسة»، وتعيد الواجهة تفعيل سجل العضوية نفسه بدل إنشاء سجل آخر. تعرض كل مدرسة مرتبطة بيانات عضويتها، لذلك تظهر المدرسة الأساسية الحقيقية حتى عند فتح المعلم من مدرسة أخرى. لا يسمح الخادم بتفعيل عضوية لهوية معلم مؤرشفة؛ يجب إعادة تفعيل الهوية صراحة أولًا، كما يمنع أرشفة الهوية ما دامت لها عضوية نشطة.
+
+يتيح مسار **المواد والموارد** إدارة المواد، وتحديد عدد الحصص الأسبوعية لكل صف ومادة مع إجمالي الصف، وإدارة الفصول والمعامل والمكتبة والصالة والملعب والموارد الأخرى. تتحقق الـ API من نطاق المستأجر والمدرسة لكل مرجع، وتعيد تعارض تبعية واضحًا بدل حذف مادة أو مورد مرتبط بصمت.
+
+المسارات المضافة:
+
+- `/teachers`: المعلمون والعضويات المدرسية.
+- `/subjects-resources`: المواد والأنصبة الأسبوعية والغرف والموارد.
+- `GET|POST|PUT|DELETE /api/v1/schools/{school_id}/teachers...`: إدارة الهوية canonical والعضوية المدرسية.
+- `GET|POST|PUT|DELETE /api/v1/schools/{school_id}/catalog...`: المواد ومتطلبات المنهج والموارد.
+
+## مساحة إعداد المدرسة PM-002A
+
+بعد اختيار المدرسة من أعلى التطبيق يمكن للمدير إدارة الأعوام والفصول الدراسية، الشفتات، أنماط الأسابيع A/B/C، وأيام الدوام لكل شفت ونمط. شاشة بناء اليوم تحفظ حصصًا أو طابورًا أو فسحة أو صلاة أو نشاطًا أو فترة مخصصة مع الوقت ونمط الحضور، ويرفض الخادم التداخل. ويتيح مسار **الهيكل الدراسي** إنشاء مراحل وصفوف وشُعب بمسميات مرنة.
+
+كل مورد من هذه الموارد يدعم الإنشاء والتعديل من نافذة حوار عربية والحذف بتأكيد داخل التطبيق. يعرض مخطط اليوم فترات `SchoolDay` واحد محدد فقط، ويُحسب ترتيب الكتلة داخل ذلك اليوم. وعند تعيين عام دراسي حالي يلغي الخادم العام الحالي السابق ذريًا، مع فهرس قاعدة بيانات جزئي يمنع وجود عامين حاليين للمدرسة نفسها.
+
+المسارات الرئيسية:
+
+- `/setup`: التقويم واليوم الدراسي.
+- `/academic-structure`: المراحل والصفوف والشُعب.
+- `GET /api/v1/schools/{school_id}/setup`: لقطة الإعداد المحفوظة.
+- `POST|PUT|DELETE /api/v1/schools/{school_id}/setup/{resource}`: عمليات الإعداد، بعزل المستأجر والمدرسة والتحقق من العلاقات على الخادم.
+
+## مصفوفة الإسناد PM-002C
+
+يتيح مسار `/assignments` اختيار العام والفصل الدراسي صراحة، وتفعيل شعب الفصل وربط كل شعبة بشفت محدد، ثم العمل على مصفوفة الشعب × المواد. تعرض كل خلية المطلوب من `CurriculumRequirement` والمسند الفعلي وحالة عربية واضحة، ويفتح النقر محررًا لاختيار معلم أو عدة معلمين، شعبة أو عدة شعب مدمجة، وعدد الحصص والموارد. كما تتوفر إجراءات جماعية آمنة لخلايا المادة نفسها وقائمة متقدمة لمراجعة التدريس المشترك والشعب المدمجة.
+
+تعرض الواجهة الآن معاينة خادمية قبل حفظ الإسناد الفردي أو الجماعي: المطلوب والحالي والإضافة والمتوقع وحالة التغطية، إلى جانب نصاب كل معلم الحالي والمتوقع وحده التخطيطي. تعبئة المنهج تضيف المتبقي فقط؛ فالخلية `4/6` تضيف حصتين، بينما تُتخطى الخلية المكتملة أو الزائدة دون إنشاء إسناد جديد. يمنع الخادم أيضًا تعطيل مورد مرتبط بإسناد حتى يُفك ارتباطه، فلا يختفي مورد محفوظ من دورة التحرير.
+
+كل `TeachingAssignment` مرتبط بـ `term_id`. ترتبط الشعب عبر `SectionOffering` الذي يحدد الفصل والشفت، وتُحفظ علاقات الشعب والموارد والمعلمين في `TeachingAssignmentSection` و`TeachingAssignmentResource` و`TeachingAssignmentTeacher`. لم تعد حقول JSON القديمة مرجعًا authoritative وقد أزالتها migration PM-002C بعد backfill البيانات الصالحة.
+
+يحسب الخادم تغطية كل شعبة مرة لكل إسناد مدمج، بينما يحسب نصاب كل معلم مرة واحدة للإسناد بصرف النظر عن عدد الشعب. التدريس المشترك يضيف العدد نفسه لكل معلم، وتجاوز المنهج أو حد المعلم يرجع تحذيرًا تخطيطيًا ولا يمنع الحفظ.
+
+واجهات API الرئيسية:
+
+- `GET /api/v1/schools/{school_id}/assignments?term_id=...`: لقطة المصفوفة والتغطية والأنصبة.
+- `PUT /api/v1/schools/{school_id}/assignments/section-offerings`: تفعيل الشعب والشفتات للفصل.
+- `POST|PUT|DELETE /api/v1/schools/{school_id}/assignments...`: إدارة مجموعات التدريس relational.
+- `POST /api/v1/schools/{school_id}/assignments/preview`: معاينة typed للإسناد الفردي أو تعديله دون حفظ.
+- `POST /api/v1/schools/{school_id}/assignments/bulk/preview`: معاينة typed للتعبئة الجماعية وحالات التطبيق والتخطي.
+- `POST /api/v1/schools/{school_id}/assignments/bulk/apply`: إسناد جماعي لخلايا المادة نفسها.
+
+## ما يتضمنه الأساس
+
+- `apps/web`: Next.js وTypeScript، واجهة عربية RTL افتراضية، مبدّل لغة أولي، حالات تحميل/خطأ، واتصال بـ API health.
+- `apps/api`: FastAPI وPydantic v2 وSQLAlchemy 2، API بإصدار `/api/v1`، إعدادات بيئة وعزل أولي للمستأجر عبر `X-Tenant-ID`.
+- `scheduler`: عقود typed مستقلة ومحرك Google OR-Tools CP-SAT فعلي للتوليد، مع قيود التصادم والقواعد الزمنية والبدائل والجزاءات.
+- PostgreSQL وAlembic ومهاجرة تأسيسية وبيانات عرض عربية آمنة لإعادة التشغيل.
+- اختبارات API وعزل مستأجر، اختبارات عقود Scheduler، واختبار RTL للواجهة.
+
+## التشغيل السريع عبر Docker
+
+على Windows، مسار UAT الموصى به هو أمر واحد (يشغّل PostgreSQL 16 والمهاجرات وDemo Seed وAPI وWeb ويفتح المتصفح):
+
+```powershell
+cd D:\myapp\jadwal\professional-manager
+.\scripts\demo.ps1
+```
+
+راجع `docs/UAT_LOCAL_DEMO.md` لأمري reset والإيقاف وترتيب الشاشات المقترح.
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+على PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+ثم افتح:
+
+- Web: http://localhost:3000
+- API docs: http://localhost:8000/api/v1/docs
+- API health: http://localhost:8000/api/v1/health
+
+تطبق خدمة API المهاجرات وتضيف demo تلقائيًا. معرّف مستأجر العرض هو `00000000-0000-4000-8000-000000000001` ويستخدم في طلبات البيانات عبر `X-Tenant-ID`.
+
+## التشغيل المحلي دون Docker
+
+يتطلب Node.js 22+، Python 3.12 أو 3.13، وPostgreSQL 16+.
+
+```powershell
+npm install
+npm run dev
+
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r apps/api/requirements-dev.txt
+$env:PYTHONPATH="apps/api;scheduler"
+alembic -c apps/api/alembic.ini upgrade head
+uvicorn app.main:app --app-dir apps/api --reload
+```
+
+## التحقق والجودة
+
+```powershell
+npm run lint
+npm run typecheck
+npm run test:web
+python -m ruff check apps/api scheduler
+python -m mypy apps/api/app scheduler/pm_scheduler
+python -m pytest
+```
+
+## PM-003B — توليد مرشحات فعلية بـ CP-SAT
+
+المشروع الجاهز يستطيع توليد بديل إلى خمسة بدائل محفوظة (ثلاثة افتراضيًا) عبر:
+
+- `POST /api/v1/timetable-projects/{project_id}/solve`
+- `GET /api/v1/timetable-projects/{project_id}/solve-runs/{run_id}`
+- `GET /api/v1/timetable-projects/{project_id}/candidates/{candidate_id}`
+
+يبني الخادم `SchedulingProblem` authoritative ويحسب بصمة SHA-256 حتمية من JSON canonical. يضع CP-SAT كل occurrence مرة واحدة بالضبط، ويمنع تصادم المعلم والشعبة والمورد الحصري وفق أسبوع المشروع واليوم الموحد والفترة الزمنية الحقيقية نصف المفتوحة. القواعد hard لا تُخرق، والقواعد soft الزمنية تدخل objective بأوزانها وتعود في penalty breakdown قابل للتتبع.
+
+تضيف المهاجرة `0007_pm003b_solve_runs` جداول relational لـ `TimetableSolveRun` و`TimetableCandidate` و`TimetableEntry` وروابط entry بالمعلمين والشعب والموارد. التنفيذ الخلفي الحالي seam داخل التطبيق وقابل للاستبدال لاحقًا بعامل مهام مستقل دون تغيير عقد scheduler. لا تشمل هذه المرحلة التحرير بالسحب أو الإصلاح أو الأقفال أو PM-003C.
+
+## PM-003C — محرر الجدول والإصلاح الأدنى
+
+يمكن اشتقاق `WorkingTimetable` قابلة للتحرير من أي `TimetableCandidate` محفوظة دون تغيير المرشح الأصلي. تعرض `/timetables` الجدول العام وعروض الشعبة والمعلم والمادة والمورد عبر أسابيع دورة المشروع، وتنفذ السحب والإفلات بعد تحليل typed في الخادم لتعارضات المعلم والشعبة والمورد الحصري والقواعد الإلزامية والأقفال، باستخدام الأسبوع العالمي واليوم والفترة نصف المفتوحة.
+
+كل نقل أو تبديل ذري يحمل `revision` ويُعاد التحقق منه عند الحفظ. يحفظ الخادم سجل before/after دائمًا يدعم undo/redo بعد إعادة التحميل، وسجل تدقيق منفصلًا. الأقفال typed وليست JSON اعتباطيًا. يستخدم الإصلاح المحلي محرك CP-SAT نفسه مع ترتيب هدف صارم: القيود والأقفال والطلب، ثم أقل عدد حصص متحركة، ثم أقل إزاحة، ثم الجزاءات المعتادة. المعاينة لا تعدل حصص نسخة العمل، وتطبيقها يتطلب بصمتها ومراجعتها نفسها.
+
+تضيف المهاجرة `0008_pm003c_editor` جداول نسخ العمل ومدخلاتها relational، الأقفال، التغييرات، التدقيق، معاينات الإصلاح واللقطات. استعادة لقطة تنشئ إصدار عمل جديدًا وتحفظ الإصدار السابق تاريخيًا.
+
+## مخطط البيانات في PM-001
+
+المهاجرة الأولى تنشئ: tenant، user، tenant_membership، school_complex، school، academic_year، term، teacher، teacher_school_membership، subject، stage، grade، section، resource (غرفة/معمل/مورد)، week_pattern، period_template، teaching_assignment، teaching_assignment_teacher، rule، timetable_project، timetable_project_school. كل سجل متغير في النطاق يحمل `tenant_id`، وتتحقق استعلامات API منه على الخادم. عضوية المستخدم تفصل الهوية العالمية عن دوره وصلاحياته داخل كل مستأجر.
+
+المعلم هو هوية canonical على مستوى المستأجر، وتربطه عضويات relational بأي عدد من المدارس دون تكرار الشخص. مشروع الجدول يملك نطاق مدارس relational ويمكن أن يغطي مدرسة واحدة أو مجمعًا أو مجموعة مدارس، وتحمل كل علاقة مدرسة داخل المشروع `term_id` صالحًا لتلك المدرسة.
+
+كل `PeriodTemplate` مرتبط صراحة بمدرسة و`WeekPattern` من المدرسة نفسها، ويحمل نمط الأسبوع `cycle_week_index` محليًا للمدرسة. قبل المحرك تُحسب دورة المشروع العالمية بـ LCM لأطوال دورات المدارس (بحد 12 أسبوعًا افتراضيًا)، ثم تتوسع الفترات المحلية إلى `project_cycle_week_index`. تعارض المعلم يعتمد فقط على الأسبوع العالمي و`weekday_index` الموحد وتداخل `[starts_at_minute, ends_at_minute)`، وليس على الفهرس المحلي أو اسم اليوم أو رقم الحصة أو نمط الحضور.
+
+مسارات الكتابة التأسيسية لعضوية المعلم ونطاق مشروع الجدول تتحقق من انتماء جميع المراجع للمستأجر النشط. هيدر `X-Tenant-ID` سياق تطوير فقط وليس مصادقة أو حدًا أمنيًا.
+
+`teacher.specialty_reference` مرجع وصفي فقط، ولا يدخل كقيد إسناد. قواعد الجدولة مخزنة بنموذج عام (`severity`, `rule_type`, selectors, parameters) وليست أعمدة منطقية متفرقة.
+
+## حدود المرحلة الحالية
+
+- المصادقة وRBAC الكاملان ضمن المراحل اللاحقة؛ هيدر المستأجر الحالي أساس واختبار عزل، وليس بديلًا عن هوية موثقة.
+- التنفيذ الخلفي الحالي داخل عملية API ومناسب للمرحلة الأولى؛ يلزم worker queue منفصل قبل التوسع الأفقي للإنتاج.
+- مبدّل اللغة يثبت آلية الاتجاه واللغة؛ استكمال ترجمة كل النصوص يأتي مع نظام localization الأوسع.
+- لا يوجد scraping أو تكامل غير رسمي مع نور أو مدرستي.
+# PM-004A — Advanced rules, quality and explainability
+
+The scheduling service now compiles the typed `SchedulingRule` catalog into
+CP-SAT constraints/objective terms for daily distribution, real-time
+consecutive blocks and gaps, assignment relationships, fixed assignment
+resource requirements/preferences, and server-owned fairness profiles. The
+available profiles are `balanced`, `teacher_comfort`, `student_rhythm`,
+`administration_priorities`, and `custom`; custom weights are explicit in the
+solve contract and all profile data participates in the problem fingerprint.
+
+Quality is reported as facts, never as a synthetic percentage. Candidate and
+working-timetable reports include hard violations, weighted penalty and its
+breakdown, teacher gaps, first/last-period distributions, teaching streaks,
+and distribution violations. Placement explanations enumerate the chosen
+time, applicable hard/soft rules, blocked alternatives with their facts, and
+valid alternatives with penalty deltas. Working-timetable blocking reasons
+reuse the PM-003C move-analysis service.
+
+Relevant versioned endpoints:
+
+- `GET /api/v1/timetable-projects/rule-catalog`
+- `GET /api/v1/timetable-projects/{project}/candidates/{candidate}/quality`
+- `GET /api/v1/timetable-projects/{project}/candidates/{candidate}/explanations?occurrence_id=...`
+- `GET /api/v1/timetable-projects/{project}/working-timetable/quality`
+- `GET /api/v1/timetable-projects/{project}/working-timetable/quality/compare/{candidate}`
+
+## PM-004B — مساعد قواعد الجدولة العربي
+
+تتضمن صفحة `/timetables` محللًا عربيًا حتميًا يعمل دون خدمة خارجية. يحل المراجع داخل نطاق
+المستأجر والمشروع، ويعيد خيارات توضيح عند الغموض بدون تخمين. تخزن المعاينة في `AssistantRuleDraft`
+مؤقت محدود العمر، ولا تنشئ أي `SchedulingRule`. التأكيد الصريح فقط يعيد التحقق من `RULE_REGISTRY` والنطاق،
+ثم يحفظ القواعد المحددة ذريًا لتدخل مباشرة في preflight وCP-SAT والجودة والتفسيرات.
+
+- `POST /api/v1/timetable-projects/{project}/assistant/parse`
+- `POST /api/v1/timetable-projects/{project}/assistant/confirm`
+- `GET /api/v1/timetable-projects/{project}/working-timetable/explanations?occurrence_id=...`
+
+## PM-006A — تقارير الجداول والتصدير
+
+توفّر صفحة `/reports` تقارير الجدول العام والشعبة والمعلم canonical عبر مدارس المشروع،
+والمادة والمورد، إضافة إلى البدلاء اليومي والانتظار والحمولة من حالة PM-005A الفعلية.
+المصدر الافتراضي هو `WorkingTimetable` الحالية، وتحمل كل معاينة metadata للنسخة وrevision؛
+أما المرشح فلا يستخدم إلا بطلب صريح. يتطلب التصدير من نسخة العمل `expected_revision`
+ويرفض الخادم التصدير عند تغيّرها أو عند وجود احتياجات بدلاء stale.
+
+- `GET /api/v1/timetable-projects/{project}/reports/options`
+- `POST /api/v1/timetable-projects/{project}/reports/preview`
+- `POST /api/v1/timetable-projects/{project}/reports/export`
+
+ينتج الخادم PDF حقيقيًا بخط عربي مضمّن ومعالجة RTL، وXLSX OpenXML حقيقيًا مع ورقة
+metadata مخفية، وPNG حقيقيًا. إذا تجاوز PNG صفحة واحدة يعود ملف ZIP مرقّم الصفحات مع
+`manifest.json` بدل قص المحتوى. الشعارات مقيدة بـPNG/JPEG موثّقين وبحدود للحجم والأبعاد،
+وQR يُنشأ من payload الفعلي. التوليد يتم في الذاكرة بأسماء تنزيل عشوائية آمنة، لذلك لا
+تبقى ملفات مؤقتة على الخادم.

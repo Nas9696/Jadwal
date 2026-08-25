@@ -1,0 +1,169 @@
+import uuid
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.db import get_db
+from app.models import (
+    Grade,
+    Resource,
+    School,
+    Section,
+    Stage,
+    Subject,
+    Teacher,
+    TeacherSchoolMembership,
+    TimetableProject,
+    TimetableProjectSchool,
+)
+from app.schemas import (
+    DashboardSummary,
+    HealthResponse,
+    SchoolRead,
+    TeacherSchoolMembershipCreate,
+    TeacherSchoolMembershipRead,
+)
+from app.services import create_teacher_school_membership
+from app.tenant import tenant_context
+from app.setup_router import router as setup_router
+from app.master_router import router as master_router
+from app.assignment_router import router as assignment_router
+from app.import_router import router as import_router
+from app.project_router import router as project_router
+from app.editor_router import router as editor_router
+from app.assistant_router import router as assistant_router
+from app.substitution_router import router as substitution_router
+from app.core_router import router as core_router
+from app.report_router import router as report_router
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.api_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(setup_router)
+app.include_router(master_router)
+app.include_router(assignment_router)
+app.include_router(import_router)
+app.include_router(project_router)
+app.include_router(editor_router)
+app.include_router(assistant_router)
+app.include_router(substitution_router)
+app.include_router(core_router)
+app.include_router(report_router)
+
+
+@app.get("/api/v1/health", response_model=HealthResponse, tags=["system"])
+def health() -> HealthResponse:
+    return HealthResponse(status="ok", service="professional-manager-api", version="0.1.0")
+
+
+@app.get("/api/v1/schools", response_model=list[SchoolRead], tags=["schools"])
+def schools(
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[School]:
+    return list(
+        db.scalars(select(School).where(School.tenant_id == tenant_id).order_by(School.name_ar))
+    )
+
+
+@app.get("/api/v1/dashboard/{school_id}", response_model=DashboardSummary, tags=["dashboard"])
+def dashboard(
+    school_id: uuid.UUID,
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> DashboardSummary:
+    school = db.scalar(select(School).where(School.id == school_id, School.tenant_id == tenant_id))
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found in tenant")
+    teachers = (
+        db.scalar(
+            select(func.count(Teacher.id.distinct()))
+            .join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id)
+            .where(
+                Teacher.tenant_id == tenant_id,
+                TeacherSchoolMembership.tenant_id == tenant_id,
+                TeacherSchoolMembership.school_id == school_id,
+                TeacherSchoolMembership.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+    subjects = (
+        db.scalar(
+            select(func.count())
+            .select_from(Subject)
+            .where(Subject.tenant_id == tenant_id, Subject.school_id == school_id)
+        )
+        or 0
+    )
+    sections = (
+        db.scalar(
+            select(func.count(Section.id))
+            .join(Grade, Grade.id == Section.grade_id)
+            .join(Stage, Stage.id == Grade.stage_id)
+            .where(
+                Section.tenant_id == tenant_id,
+                Grade.tenant_id == tenant_id,
+                Stage.tenant_id == tenant_id,
+                Stage.school_id == school_id,
+            )
+        )
+        or 0
+    )
+    resources = (
+        db.scalar(
+            select(func.count())
+            .select_from(Resource)
+            .where(Resource.tenant_id == tenant_id, Resource.school_id == school_id)
+        )
+        or 0
+    )
+    project = db.scalar(
+        select(TimetableProject)
+        .join(
+            TimetableProjectSchool,
+            TimetableProjectSchool.timetable_project_id == TimetableProject.id,
+        )
+        .where(
+            TimetableProject.tenant_id == tenant_id,
+            TimetableProjectSchool.tenant_id == tenant_id,
+            TimetableProjectSchool.school_id == school_id,
+        )
+        .order_by(TimetableProject.created_at.desc())
+    )
+    return DashboardSummary(
+        school=SchoolRead.model_validate(school),
+        teachers=teachers,
+        subjects=subjects,
+        sections=sections,
+        resources=resources,
+        active_project_name=project.name_ar if project else None,
+    )
+
+
+@app.post(
+    "/api/v1/teacher-school-memberships",
+    response_model=TeacherSchoolMembershipRead,
+    status_code=201,
+    tags=["teachers"],
+)
+def add_teacher_to_school(
+    payload: TeacherSchoolMembershipCreate,
+    tenant_id: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TeacherSchoolMembership:
+    return create_teacher_school_membership(db, tenant_id, payload)

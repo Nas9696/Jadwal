@@ -1,0 +1,54 @@
+.diagnostic-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.diagnostic-list article {
+  display: grid;
+  gap: 4px;
+  border-right: 3px solid #c64b4b;
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 11px;
+}
+
+.diagnostic-list article span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.partial-diagnostic {
+  width: 100%;
+  border: 1px solid #e1b75d;
+  border-radius: 9px;
+  background: #fff8e7;
+  padding: 10px 12px;
+}
+
+.partial-diagnostic p {
+  margin: 5px 0;
+}
+
+.timetable-space button.primary {
+  border: 0;
+  background: linear-gradient(135deg, #3157d5, #263fa8);
+  color: #fff;
+}
+
+.candidate-view {
+  border: 2px solid #8aa0ed;
+  border-radius: 14px;
+  background: #f8faff;
+  padding: 18px;
+}
+
+.candidate-view > h2 {
+  margin: 0 0 4px;
+}
+
+.candidate-hint {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
