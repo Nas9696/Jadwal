@@ -45,6 +45,7 @@ class CpSatBackend(SolverBackend):
         model = cp_model.CpModel()
         slot_by_id = {slot.id: slot for slot in problem.slots}
         decision: dict[tuple[str, str], cp_model.IntVar] = {}
+        unscheduled: dict[str, cp_model.IntVar] = {}
         occurrence_by_id = {item.id: item for item in problem.occurrences}
         for occurrence in problem.occurrences:
             variables = []
@@ -55,6 +56,11 @@ class CpSatBackend(SolverBackend):
                 decision[(occurrence.id, slot_id)] = variable
                 variables.append(variable)
             if not variables:
+                if problem.options.allow_partial:
+                    missing = model.new_bool_var(f"unscheduled::{occurrence.id}")
+                    model.add(missing == 1)
+                    unscheduled[occurrence.id] = missing
+                    continue
                 return SolveResult(
                     status=SolveStatus.INFEASIBLE,
                     feasible=False,
@@ -69,7 +75,12 @@ class CpSatBackend(SolverBackend):
                     solver_name="Google OR-Tools CP-SAT",
                     solver_version=ORTOOLS_VERSION,
                 )
-            model.add_exactly_one(variables)
+            if problem.options.allow_partial:
+                missing = model.new_bool_var(f"unscheduled::{occurrence.id}")
+                unscheduled[occurrence.id] = missing
+                model.add(sum(variables) + missing == 1)
+            else:
+                model.add_exactly_one(variables)
 
         existing_by_occurrence = {
             placement.occurrence_id: placement.slot_id for placement in problem.existing_timetable
@@ -177,6 +188,8 @@ class CpSatBackend(SolverBackend):
             _compile_profile_objectives(model, problem, decision, slot_by_id)
         )
         soft_objective = sum(weight * variable for _, _, weight, variable in soft_terms)
+        placement_weight = 1 + sum(weight * max(1, len(problem.occurrences)) for _, _, weight, _ in soft_terms)
+        partial_objective = soft_objective + placement_weight * sum(unscheduled.values())
         if problem.options.repair and problem.options.minimize_changes:
             changed_terms = []
             displacement_terms = []
@@ -216,10 +229,10 @@ class CpSatBackend(SolverBackend):
             model.minimize(
                 changed_weight * sum(changed_terms)
                 + displacement_weight * sum(displacement_terms)
-                + soft_objective
+                + partial_objective
             )
         else:
-            model.minimize(soft_objective)
+            model.minimize(partial_objective)
 
         candidates: list[CandidateSolution] = []
         best_signature: set[tuple[str, str]] | None = None
@@ -228,7 +241,11 @@ class CpSatBackend(SolverBackend):
         for candidate_index in range(problem.options.candidate_count):
             solver = cp_model.CpSolver()
             remaining = max(0.01, problem.options.time_limit_seconds - (monotonic() - started))
-            solver.parameters.max_time_in_seconds = remaining
+            # Reserve a fair part of the total interactive budget for every
+            # requested alternative. Otherwise the first optimization may
+            # consume the full budget and the UI receives only one candidate.
+            remaining_candidates = problem.options.candidate_count - candidate_index
+            solver.parameters.max_time_in_seconds = max(0.01, remaining / remaining_candidates)
             solver.parameters.random_seed = problem.options.seed
             solver.parameters.num_search_workers = 1
             status = solver.solve(model)
@@ -245,11 +262,14 @@ class CpSatBackend(SolverBackend):
             signature: set[tuple[str, str]] = set()
             for occurrence in problem.occurrences:
                 selected = next(
-                    slot_id
+                    (slot_id
                     for slot_id in occurrence.candidate_slot_ids
                     if (occurrence.id, slot_id) in decision
-                    and solver.value(decision[(occurrence.id, slot_id)])
+                    and solver.value(decision[(occurrence.id, slot_id)])),
+                    None,
                 )
+                if selected is None:
+                    continue
                 signature.add((occurrence.id, selected))
                 placements.append(
                     Placement(
@@ -276,18 +296,24 @@ class CpSatBackend(SolverBackend):
                         if best_signature is None
                         else len(best_signature.symmetric_difference(signature)) // 2
                     ),
+                    unscheduled_occurrence_ids=[occurrence.id for occurrence in problem.occurrences if occurrence.id in unscheduled and solver.value(unscheduled[occurrence.id])],
                 )
             )
             if best_signature is None:
                 best_signature = signature
-            model.add(sum(decision[item] for item in signature) <= len(signature) - 1)
+            # A completely unscheduled candidate has an empty placement
+            # signature. There is no useful diversity cut in that case.
+            if signature:
+                model.add(sum(decision[item] for item in signature) <= len(signature) - 1)
+            else:
+                break
 
         if candidates:
             return SolveResult(
                 status=candidates[0].solver_status,
                 feasible=True,
                 candidates=candidates,
-                diagnostics=[],
+                diagnostics=([Diagnostic(code="partial_schedule", message_key="partial_schedule_has_unscheduled_occurrences", affected_entity_ids=candidates[0].unscheduled_occurrence_ids)] if candidates[0].unscheduled_occurrence_ids else []),
                 solver_name="Google OR-Tools CP-SAT",
                 solver_version=ORTOOLS_VERSION,
             )

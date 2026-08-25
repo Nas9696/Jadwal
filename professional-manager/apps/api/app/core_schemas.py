@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 StageKind = Literal["primary", "intermediate", "secondary"]
+SectionNamingPattern = Literal["grade_letter", "number_slash_number", "number_dash_number", "number_slash_letter"]
 AvailabilityState = Literal["available", "unavailable", "avoid"]
 
 
@@ -73,6 +74,8 @@ class GradeCountInput(BaseModel):
 class StructureInput(BaseModel):
     stage: StageKind
     grades: list[GradeCountInput] = Field(min_length=1)
+    naming_pattern: SectionNamingPattern = "grade_letter"
+    reset_names: bool = False
 
 
 class AvailabilityCellInput(BaseModel):
@@ -88,15 +91,46 @@ class TeacherAvailabilityInput(BaseModel):
 class SimpleTeacherInput(BaseModel):
     name_ar: str = Field(min_length=2, max_length=200)
     workload_limit: int = Field(default=24, ge=1, le=60)
+    allow_similar: bool = False
 
 
 class BulkTeachersInput(BaseModel):
     names: list[str] = Field(min_length=1, max_length=1000)
     workload_limit: int = Field(default=24, ge=1, le=60)
+    allow_similar: bool = False
+
+
+class CurriculumCellInput(BaseModel):
+    grade_id: uuid.UUID
+    subject_id: uuid.UUID
+    weekly_occurrences: int = Field(ge=0, le=60)
+
+
+class CurriculumPlanInput(BaseModel):
+    cells: list[CurriculumCellInput]
 
 
 class SimpleSubjectInput(BaseModel):
     name_ar: str = Field(min_length=2, max_length=150)
+
+
+class SimpleSectionInput(BaseModel):
+    name_ar: str = Field(min_length=2, max_length=100)
+
+
+class OrderedIdsInput(BaseModel):
+    ids: list[uuid.UUID]
+
+
+class TeacherMergeInput(BaseModel):
+    source_teacher_id: uuid.UUID
+    target_teacher_id: uuid.UUID
+
+    @model_validator(mode="after")
+    def different_teachers(self) -> "TeacherMergeInput":
+        if self.source_teacher_id == self.target_teacher_id:
+            raise ValueError("different_target_teacher_required")
+        return self
 
 
 class AvailabilityCopyInput(BaseModel):
@@ -111,6 +145,7 @@ class QuickAssignmentInput(BaseModel):
     subject_id: uuid.UUID
     teacher_id: uuid.UUID
     weekly_occurrences: int = Field(gt=0, le=60)
+    allow_overload: bool = False
 
     @model_validator(mode="after")
     def has_sections(self) -> "QuickAssignmentInput":
@@ -119,6 +154,20 @@ class QuickAssignmentInput(BaseModel):
             raise ValueError("section_required")
         if len(selected) != len(set(selected)):
             raise ValueError("duplicate_section")
+        return self
+
+
+class AssignmentTransferInput(BaseModel):
+    source_teacher_id: uuid.UUID
+    target_teacher_id: uuid.UUID
+    assignment_ids: list[uuid.UUID] = Field(default_factory=list)
+    mode: Literal["move"] = "move"
+    allow_overload: bool = False
+
+    @model_validator(mode="after")
+    def different_teachers(self) -> "AssignmentTransferInput":
+        if self.source_teacher_id == self.target_teacher_id:
+            raise ValueError("different_target_teacher_required")
         return self
 
 

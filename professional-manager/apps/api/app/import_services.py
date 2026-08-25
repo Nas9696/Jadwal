@@ -13,7 +13,7 @@ from typing import Any, NoReturn
 
 from fastapi import HTTPException
 from openpyxl import load_workbook  # type: ignore[import-untyped]
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -34,7 +34,12 @@ from app.models import (
     Subject,
     Teacher,
     TeacherSchoolMembership,
+    TeachingAssignment,
+    TeachingAssignmentSection,
+    TeachingAssignmentTeacher,
     Term,
+    TimetableEntry,
+    WorkingTimetableEntry,
 )
 from app.setup_services import save_resource
 
@@ -211,6 +216,13 @@ ASC_GRADE_NAMES = {
     11: ("المرحلة الثانوية", "الثاني الثانوي"),
     12: ("المرحلة الثانوية", "الثالث الثانوي"),
 }
+ASC_SHEET_ENTITIES = {
+    "المعلمون من Timetables": "teachers",
+    "المواد من Timetables": "subjects",
+    "الصفوف والفصول من Timetables": "structure",
+    "الفصول الدراسية من Timetables": "offerings",
+    "الإسنادات من Timetables": "assignments",
+}
 
 
 def _asc_values(value: str | None) -> list[str]:
@@ -357,6 +369,68 @@ def _parse_asctt_xml(
     return result
 
 
+def _unique_name_map(items: list[Any], attribute: str) -> dict[str, Any]:
+    grouped: dict[str, list[Any]] = defaultdict(list)
+    for item in items:
+        grouped[normalize_text(getattr(item, attribute))].append(item)
+    return {name: matches[0] for name, matches in grouped.items() if len(matches) == 1}
+
+
+def _reconcile_asctt_existing(
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    sheets: list[tuple[str, list[str], list[tuple[int, dict[str, Any]]]]],
+) -> None:
+    teachers = list(
+        db.scalars(
+            select(Teacher)
+            .join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id)
+            .where(
+                Teacher.tenant_id == tenant_id,
+                Teacher.is_active.is_(True),
+                TeacherSchoolMembership.tenant_id == tenant_id,
+                TeacherSchoolMembership.school_id == school_id,
+                TeacherSchoolMembership.is_active.is_(True),
+            )
+        )
+    )
+    subjects = list(
+        db.scalars(
+            select(Subject).where(
+                Subject.tenant_id == tenant_id,
+                Subject.school_id == school_id,
+                Subject.is_active.is_(True),
+            )
+        )
+    )
+    teachers_by_name = _unique_name_map(teachers, "name_ar")
+    subjects_by_name = _unique_name_map(subjects, "name_ar")
+    teacher_codes: dict[str, str] = {}
+    for sheet_name, _, rows in sheets:
+        if ASC_SHEET_ENTITIES.get(sheet_name) == "teachers":
+            for _, values in rows:
+                imported_code = str(values.get("كود المعلم", ""))
+                existing = teachers_by_name.get(normalize_text(values.get("اسم المعلم", "")))
+                if existing:
+                    values["كود المعلم"] = existing.canonical_code
+                    teacher_codes[imported_code] = existing.canonical_code
+        elif ASC_SHEET_ENTITIES.get(sheet_name) == "subjects":
+            for _, values in rows:
+                existing = subjects_by_name.get(normalize_text(values.get("اسم المادة", "")))
+                if existing:
+                    values["رمز المادة"] = existing.code
+    for sheet_name, _, rows in sheets:
+        if ASC_SHEET_ENTITIES.get(sheet_name) != "assignments":
+            continue
+        for _, values in rows:
+            values["كود المعلم"] = "|".join(
+                teacher_codes.get(code, code)
+                for code in str(values.get("كود المعلم", "")).split("|")
+                if code
+            )
+
+
 def upload_job(
     db: Session,
     tenant_id: uuid.UUID,
@@ -401,6 +475,7 @@ def upload_job(
         if not shift:
             fail("school_shift_required")
         sheets = _parse_asctt_xml(content, shift.name_ar)
+        _reconcile_asctt_existing(db, tenant_id, school_id, sheets)
     total_rows = sum(len(rows) for _, _, rows in sheets)
     if total_rows > settings.import_max_rows:
         fail("row_limit_exceeded", 413)
@@ -436,7 +511,11 @@ def upload_job(
     db.flush()
     for sheet_name, headers, rows in sheets:
         mapping = _suggest_mapping(headers)
-        entity, confidence = _detect_entity(mapping)
+        if extension == ".xml":
+            entity = ASC_SHEET_ENTITIES[sheet_name]
+            confidence = 1.0
+        else:
+            entity, confidence = _detect_entity(mapping)
         detection.append(
             {"name": sheet_name, "headers": headers, "entity_type": entity, "confidence": confidence, "suggested_mapping": mapping, "row_count": len(rows)}
         )
@@ -551,6 +630,25 @@ def _resolve_structure(db: Session, job: ImportJob, values: dict[str, Any]) -> t
 
 def _key(*values: object) -> tuple[str, ...]:
     return tuple(normalize_text(_plain(value)) for value in values)
+
+
+def _subject_by_name(
+    db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, name: object
+) -> Subject | None:
+    normalized_name = normalize_text(name)
+    return next(
+        (
+            subject
+            for subject in db.scalars(
+                select(Subject).where(
+                    Subject.tenant_id == tenant_id,
+                    Subject.school_id == school_id,
+                )
+            )
+            if normalize_text(subject.name_ar) == normalized_name
+        ),
+        None,
+    )
 
 
 def _staged_indexes(rows: list[ImportRow]) -> dict[str, dict[tuple[str, ...], list[ImportRow]]]:
@@ -706,7 +804,11 @@ def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id
             action = "skip_unchanged" if section else "create"
         elif row.entity_type in {"curriculum", "offerings", "assignments"}:
             _, grade, section = _resolve_structure(db, job, values)
-            subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower())) if row.entity_type != "offerings" else None
+            subject = (
+                _subject_by_name(db, tenant_id, school_id, values.get("subject_name"))
+                if row.entity_type != "offerings"
+                else None
+            )
             grade_matches = overlay["grade"].get(_key(values.get("stage_name"), values.get("grade_name")), [])
             grade_staged = grade_matches[0] if grade_matches else None
             section_staged = _one_staged(overlay["section"], _key(values.get("stage_name"), values.get("grade_name"), values.get("section_name")))
@@ -762,7 +864,9 @@ def validate_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id
         failed_group = False
         for row in grouped:
             values = row.normalized_values
-            subject_obj = subject_obj or db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower()))
+            subject_obj = subject_obj or _subject_by_name(
+                db, tenant_id, school_id, values.get("subject_name")
+            )
             for code in {item.strip() for item in _plain(values.get("teacher_code")).split("|") if item.strip()}:
                 teacher = db.scalar(select(Teacher).join(TeacherSchoolMembership, TeacherSchoolMembership.teacher_id == Teacher.id).where(Teacher.tenant_id == tenant_id, Teacher.canonical_code == code, Teacher.is_active.is_(True), TeacherSchoolMembership.school_id == school_id, TeacherSchoolMembership.is_active.is_(True)))
                 staged = _one_staged(overlay["teacher"], _key(code))
@@ -848,6 +952,113 @@ def _find_structure(db: Session, job: ImportJob, values: dict[str, Any]) -> tupl
     return stage, grade, section
 
 
+def _matching_current_assignments(
+    db: Session,
+    tenant_id: uuid.UUID,
+    school_id: uuid.UUID,
+    term_id: uuid.UUID,
+    subject_id: uuid.UUID,
+    offering_ids: set[uuid.UUID],
+) -> list[TeachingAssignment]:
+    target_subject_name = db.scalar(
+        select(Subject.name_ar).where(
+            Subject.id == subject_id,
+            Subject.tenant_id == tenant_id,
+            Subject.school_id == school_id,
+        )
+    )
+    target_sections = {
+        _key(stage_name, grade_name, section_name)
+        for stage_name, grade_name, section_name in db.execute(
+            select(Stage.name_ar, Grade.name_ar, Section.name_ar)
+            .join(Grade, Grade.stage_id == Stage.id)
+            .join(Section, Section.grade_id == Grade.id)
+            .join(SectionOffering, SectionOffering.section_id == Section.id)
+            .where(
+                SectionOffering.tenant_id == tenant_id,
+                SectionOffering.id.in_(offering_ids),
+            )
+        )
+    }
+    candidates = list(
+        db.scalars(
+            select(TeachingAssignment)
+            .where(
+                TeachingAssignment.tenant_id == tenant_id,
+                TeachingAssignment.school_id == school_id,
+                TeachingAssignment.term_id == term_id,
+            )
+            .order_by(TeachingAssignment.created_at, TeachingAssignment.id)
+        )
+    )
+    matches: list[TeachingAssignment] = []
+    for assignment in candidates:
+        has_teacher = db.scalar(
+            select(TeachingAssignmentTeacher.id).where(
+                TeachingAssignmentTeacher.tenant_id == tenant_id,
+                TeachingAssignmentTeacher.teaching_assignment_id == assignment.id,
+            )
+        )
+        candidate_subject_name = db.scalar(
+            select(Subject.name_ar).where(
+                Subject.id == assignment.subject_id,
+                Subject.tenant_id == tenant_id,
+            )
+        )
+        current_sections = {
+            _key(stage_name, grade_name, section_name)
+            for stage_name, grade_name, section_name in db.execute(
+                select(Stage.name_ar, Grade.name_ar, Section.name_ar)
+                .join(Grade, Grade.stage_id == Stage.id)
+                .join(Section, Section.grade_id == Grade.id)
+                .join(SectionOffering, SectionOffering.section_id == Section.id)
+                .join(
+                    TeachingAssignmentSection,
+                    TeachingAssignmentSection.section_offering_id == SectionOffering.id,
+                )
+                .where(
+                    TeachingAssignmentSection.tenant_id == tenant_id,
+                    TeachingAssignmentSection.teaching_assignment_id == assignment.id,
+                )
+            )
+        }
+        if (
+            has_teacher
+            and normalize_text(candidate_subject_name) == normalize_text(target_subject_name)
+            and current_sections == target_sections
+        ):
+            matches.append(assignment)
+    return matches
+
+
+def _retire_duplicate_assignment(
+    db: Session, tenant_id: uuid.UUID, assignment: TeachingAssignment
+) -> None:
+    has_history = bool(
+        db.scalar(
+            select(TimetableEntry.id).where(
+                TimetableEntry.tenant_id == tenant_id,
+                TimetableEntry.assignment_id == assignment.id,
+            )
+        )
+        or db.scalar(
+            select(WorkingTimetableEntry.id).where(
+                WorkingTimetableEntry.tenant_id == tenant_id,
+                WorkingTimetableEntry.assignment_id == assignment.id,
+            )
+        )
+    )
+    if has_history:
+        db.execute(
+            delete(TeachingAssignmentTeacher).where(
+                TeachingAssignmentTeacher.tenant_id == tenant_id,
+                TeachingAssignmentTeacher.teaching_assignment_id == assignment.id,
+            )
+        )
+    else:
+        db.delete(assignment)
+
+
 def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: uuid.UUID, acknowledge_warnings: bool) -> ImportJob:
     job = _job(db, tenant_id, school_id, job_id)
     if job.status == "committed" or job.committed_at:
@@ -897,7 +1108,7 @@ def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: 
         for row in [item for item in rows if item.entity_type == "curriculum"]:
             values = row.normalized_values
             _, grade, _ = _resolve_structure(db, job, values)
-            subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower()))
+            subject = _subject_by_name(db, tenant_id, school_id, values.get("subject_name"))
             if not grade or not subject:
                 fail("reference_not_found")
             existing = db.scalar(select(CurriculumRequirement).where(CurriculumRequirement.tenant_id == tenant_id, CurriculumRequirement.school_id == school_id, CurriculumRequirement.grade_id == grade.id, CurriculumRequirement.subject_id == subject.id))
@@ -917,7 +1128,7 @@ def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: 
         for grouped in groups.values():
             first = grouped[0]
             values = first.normalized_values
-            subject = db.scalar(select(Subject).where(Subject.tenant_id == tenant_id, Subject.school_id == school_id, func.lower(Subject.name_ar) == _plain(values.get("subject_name")).lower()))
+            subject = _subject_by_name(db, tenant_id, school_id, values.get("subject_name"))
             teachers: set[uuid.UUID] = set()
             offerings: set[uuid.UUID] = set()
             resources: set[uuid.UUID] = set()
@@ -937,8 +1148,34 @@ def commit_job(db: Session, tenant_id: uuid.UUID, school_id: uuid.UUID, job_id: 
                     resources.add(resource.id)
             if not subject or not job.term_id or not teachers:
                 fail("reference_not_found")
-            save_assignment(db, tenant_id, school_id, {"term_id": job.term_id, "subject_id": subject.id, "weekly_occurrences": int(_plain(values.get("weekly_occurrences"))), "teacher_ids": list(teachers), "section_offering_ids": list(offerings), "resource_ids": list(resources), "notes": f"Import {job.id}"}, commit_changes=False)
-            counts["created"] += 1
+            existing_assignments = _matching_current_assignments(
+                db,
+                tenant_id,
+                school_id,
+                job.term_id,
+                subject.id,
+                offerings,
+            )
+            canonical = existing_assignments[0] if existing_assignments else None
+            save_assignment(
+                db,
+                tenant_id,
+                school_id,
+                {
+                    "term_id": job.term_id,
+                    "subject_id": subject.id,
+                    "weekly_occurrences": int(_plain(values.get("weekly_occurrences"))),
+                    "teacher_ids": list(teachers),
+                    "section_offering_ids": list(offerings),
+                    "resource_ids": list(resources),
+                    "notes": f"Import {job.id}",
+                },
+                assignment_id=canonical.id if canonical else None,
+                commit_changes=False,
+            )
+            for duplicate in existing_assignments[1:]:
+                _retire_duplicate_assignment(db, tenant_id, duplicate)
+            counts["updated" if canonical else "created"] += 1
         job.status = "committed"
         job.committed_at = datetime.now(timezone.utc)
         job.result_summary = dict(counts)

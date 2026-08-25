@@ -42,8 +42,12 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker Desktop is required. Install/start Docker Desktop, then run this command again."
 }
 
+$savedErrorPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 & docker info *> $null
-if ($LASTEXITCODE -ne 0) {
+$dockerReady = $LASTEXITCODE -eq 0
+$ErrorActionPreference = $savedErrorPreference
+if (-not $dockerReady) {
     throw "Docker Desktop is installed but its engine is not running. Start Docker Desktop and retry."
 }
 
@@ -57,22 +61,22 @@ if ($Reset) {
     Write-Host "Resetting the local school workspace..." -ForegroundColor Cyan
     Invoke-Compose up -d --build postgres api
     Wait-Http -Uri "http://localhost:8000/api/v1/health" -Label "API"
-    if ($SampleData) {
-        Invoke-Compose exec -T api python -m app.demo_seed --reset
-    } else {
-        Invoke-Compose exec -T api python -m app.seed --reset
-    }
+    Invoke-Compose exec -T api python -m app.demo_seed --reset
 }
 
 Invoke-Compose up -d --build
 Wait-Http -Uri "http://localhost:8000/api/v1/health" -Label "API"
+# The command is idempotent: first launch creates the realistic trial school,
+# while later launches preserve the user's UAT edits. -Reset recreates it.
+if (-not $Reset) {
+    Invoke-Compose exec -T api python -m app.demo_seed
+}
 Wait-Http -Uri "http://localhost:3000" -Label "Web"
 
 $appUrl = "http://localhost:3000"
 Write-Host ""
 Write-Host "Professional Manager is ready: $appUrl" -ForegroundColor Green
-Write-Host "Reset: .\scripts\demo.ps1 -Reset"
-Write-Host "Sample data: .\scripts\demo.ps1 -Reset -SampleData"
+Write-Host "Reset demo data: .\scripts\demo.ps1 -Reset"
 Write-Host "Stop : .\scripts\demo.ps1 -Stop"
 
 if (-not $NoBrowser) {

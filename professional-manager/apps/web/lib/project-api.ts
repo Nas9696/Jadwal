@@ -3,7 +3,7 @@ import { API_URL, TENANT_ID } from "./setup-api";
 export type ProjectSchool = { school_id: string; term_id: string; cycle_phase_offset: number };
 export type Project = { id: string; name_ar: string; description?: string; status: string; scope_type: string; schools: ProjectSchool[] };
 export type Rule = { id: string; label: string; description?: string; rule_type: string; severity: "hard" | "soft"; weight: number | null; selector: Record<string, unknown>; parameters: Record<string, unknown>; enabled: boolean };
-export type Diagnostic = { code: string; message?: string; message_key?: string };
+export type Diagnostic = { code: string; severity?: "error"|"warning"; message?: string; message_key?: string; required?:number; available?:number; shortage?:number; suggested_remediation?:string; affected_details?:Array<{type:string;id:string;name:string}>; unscheduled_assignments?:Array<{assignment_id:string;subject:string;sections:string[];teachers:string[];unscheduled_count:number}> };
 export type Preflight = { readiness: string; errors: number; warnings: number; diagnostics: Diagnostic[] };
 export type Penalty = { rule_id: string; rule_type: string; violation_count: number; weight: number; weighted_penalty: number; category?:string };
 export type CandidateSummary = { id: string; rank: number; solver_status: string; total_penalty: number; penalty_breakdown: Penalty[]; solve_time_ms: number; diversity_count: number };
@@ -65,6 +65,7 @@ export const projectApi = {
   assistantConfirm: (id:string,payload:{preview_token:string;proposal_ids:string[]}) => req<{created_rules:Rule[];consumed:boolean}>(`/timetable-projects/${id}/assistant/confirm`, {method:"POST",body:JSON.stringify(payload)}),
   preflight: (id: string) => req<Preflight>(`/timetable-projects/${id}/preflight`, { method: "POST" }),
   solve: (id: string, payload: object = { candidate_count: 3, time_limit_seconds: 10, seed: 0, optimization_profile: "balanced" }) => req<SolveRun>(`/timetable-projects/${id}/solve`, { method: "POST", body: JSON.stringify(payload) }),
+  latestSolve: (projectId: string) => req<SolveRun | null>(`/timetable-projects/${projectId}/solve-runs/latest`),
   solveRun: (projectId: string, runId: string) => req<SolveRun>(`/timetable-projects/${projectId}/solve-runs/${runId}`),
   candidate: (projectId: string, candidateId: string) => req<CandidateDetail>(`/timetable-projects/${projectId}/candidates/${candidateId}`),
   candidateQuality: (projectId:string,candidateId:string)=>req<QualityReport>(`/timetable-projects/${projectId}/candidates/${candidateId}/quality`),

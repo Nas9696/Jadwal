@@ -20,6 +20,7 @@ from app.solve_schemas import SolveRequest
 from app.solve_services import (
     create_solve_run,
     execute_solve_run,
+    get_latest_run,
     get_run,
     serialize_candidate,
     serialize_run,
@@ -214,6 +215,16 @@ def start_solve(
     run = create_solve_run(db, tenant, project_id, payload)
     background_tasks.add_task(execute_solve_run, db.get_bind(), run.id)
     return serialize_run(db, run)
+
+
+@router.get("/{project_id}/solve-runs/latest")
+def latest_solve_run(
+    project_id: uuid.UUID,
+    tenant: Annotated[uuid.UUID, Depends(tenant_context)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any] | None:
+    run = get_latest_run(db, tenant, project_id)
+    return serialize_run(db, run) if run is not None else None
 
 
 @router.get("/{project_id}/solve-runs/{run_id}")

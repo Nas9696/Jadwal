@@ -5,7 +5,7 @@ import { projectApi } from "@/lib/project-api";
 import { TimetableWorkspace } from "./timetable-workspace";
 
 vi.mock("@/lib/setup-api", () => ({ setupApi: { schools: vi.fn(), snapshot: vi.fn() } }));
-vi.mock("@/lib/project-api", () => ({ projectApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), rules: vi.fn(), saveRule: vi.fn(), updateRule: vi.fn(), duplicateRule: vi.fn(), removeRule: vi.fn(), assistantParse:vi.fn(), assistantConfirm:vi.fn(), preflight: vi.fn(), solve: vi.fn(), solveRun: vi.fn(), candidate: vi.fn(), candidateQuality:vi.fn(), candidateExplanation:vi.fn() } }));
+vi.mock("@/lib/project-api", () => ({ projectApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), rules: vi.fn(), saveRule: vi.fn(), updateRule: vi.fn(), duplicateRule: vi.fn(), removeRule: vi.fn(), assistantParse:vi.fn(), assistantConfirm:vi.fn(), preflight: vi.fn(), solve: vi.fn(), latestSolve: vi.fn(), solveRun: vi.fn(), candidate: vi.fn(), candidateQuality:vi.fn(), candidateExplanation:vi.fn() } }));
 
 const school = { id: "s1", name_ar: "مدرسة النور", code: "S1" };
 const setup = { school, years: [], terms: [{ id: "t1", name_ar: "الأول" }], shifts: [], patterns: [{ id: "w1", name_ar: "A" }, { id: "w2", name_ar: "B" }], days: [], blocks: [], stages: [], grades: [], sections: [] };
@@ -21,6 +21,7 @@ describe("timetable workspace", () => {
     vi.mocked(projectApi.create).mockResolvedValue(project);
     vi.mocked(projectApi.update).mockResolvedValue(project);
     vi.mocked(projectApi.rules).mockResolvedValue([]);
+    vi.mocked(projectApi.latestSolve).mockResolvedValue(null);
     vi.mocked(projectApi.assistantParse).mockResolvedValue({source_text:"لا تضع",status:"ready",parser_type:"deterministic_ar_v1",preview_token:"secure-preview-token-123456789",expires_at:"2026-08-23T12:00:00Z",clarifications:[],warnings:[],proposals:[{id:"proposal-1",rule_type:"teacher_unavailable",severity:"hard",weight:null,selector:{teacher_id:"t1"},parameters:{weekday_index:0,period_numbers:[1]},resolved_labels:{teacher:"أحمد"},arabic_summary:"لا توضع حصص أحمد في الحصة 1 يوم الأحد.",evidence:["hard:no-placement"]}]});
     vi.mocked(projectApi.assistantConfirm).mockResolvedValue({created_rules:[],consumed:true});
     vi.mocked(projectApi.preflight).mockResolvedValue({ readiness: "توجد أخطاء تمنع التوليد", errors: 1, warnings: 0, diagnostics: [{ code: "no_lesson_slots", message: "لا توجد حصص قابلة للجدولة" }] });
@@ -47,6 +48,28 @@ describe("timetable workspace", () => {
     expect(screen.getByRole("button", { name: "توليد الجدول" })).toBeDisabled();
   });
 
+  it("allows partial generation only for capacity shortages", async () => {
+    vi.mocked(projectApi.preflight).mockResolvedValue({
+      readiness: "السعة لا تكفي للجدول الكامل",
+      errors: 1,
+      warnings: 0,
+      diagnostics: [{
+        severity: "error",
+        code: "section_capacity_shortage",
+        message: "الشعبة الرابع — 4 / 2: مطلوب 33 حصة، والمتاح 30 فقط (عجز 3).",
+        suggested_remediation: "زد الأوقات الأسبوعية بمقدار 3 أو خفّض إسنادات الشعبة بالمقدار نفسه.",
+      }],
+    });
+    render(<TimetableWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /مشروع الفصل/ }));
+    fireEvent.click(screen.getByRole("button", { name: "تشغيل فحص الجاهزية" }));
+    expect(await screen.findByText(/الرابع — 4 \/ 2/)).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "توليد جدول جزئي" });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    await waitFor(() => expect(projectApi.solve).toHaveBeenCalledWith("p1", expect.objectContaining({ allow_partial: true })));
+  });
+
   it("edits the visual school term and cycle phase scope", async () => {
     render(<TimetableWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /مشروع الفصل/ }));
@@ -66,6 +89,15 @@ describe("timetable workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /البديل 2/ }));
     expect(await screen.findByText("العلوم")).toBeInTheDocument();
     expect(projectApi.candidate).toHaveBeenCalledWith("p1", "c2");
+  });
+
+  it("loads the latest persisted result when reopening a project", async () => {
+    vi.mocked(projectApi.latestSolve).mockResolvedValue(completed);
+    render(<TimetableWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /مشروع الفصل/ }));
+    expect(await screen.findByText("الجداول المولّدة")).toBeInTheDocument();
+    expect(await screen.findByText("الرياضيات")).toBeInTheDocument();
+    expect(screen.getByText("تم تحميل آخر جدول مولّد ومحفوظ لهذا المشروع.")).toBeInTheDocument();
   });
 
   it("exposes rule edit copy toggle and delete actions", async () => {

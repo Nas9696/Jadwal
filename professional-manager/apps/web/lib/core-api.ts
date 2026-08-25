@@ -4,8 +4,9 @@ export type CoreItem = { id: string; name_ar: string };
 export type CoreBlock = { id: string; label_ar: string; block_order: number; block_type: string; period_number: number | null; starts_at: string; ends_at: string };
 export type AvailabilityCell = { weekday_index: number; period_number: number; state: "available" | "unavailable" | "avoid" };
 export type CoreTeacher = CoreItem & { workload_limit: number; assigned: number; remaining: number; shared: boolean; availability: AvailabilityCell[] };
-export type CoreAssignment = { id: string; subject_name: string; teacher_names: string[]; section_names: string[]; weekly_occurrences: number };
-export type BulkTeacherResult = { created: number; skipped: number; names: string[] };
+export type CoreAssignment = { id: string; subject_id: string; subject_name: string; teacher_ids: string[]; teacher_names: string[]; section_ids: string[]; section_names: string[]; weekly_occurrences: number };
+export type BulkTeacherResult = { created: number; skipped: number; names: string[]; skipped_names?: string[] };
+export type CurriculumCell = { id: string; grade_id: string; subject_id: string; weekly_occurrences: number };
 export type CoreSnapshot = {
   school: { name_ar: string };
   selected_stages: Array<"primary" | "intermediate" | "secondary">;
@@ -18,6 +19,7 @@ export type CoreSnapshot = {
   sections: Array<CoreItem & { grade_id: string }>;
   teachers: CoreTeacher[];
   subjects: CoreItem[];
+  curriculum?: CurriculumCell[];
   assignments: CoreAssignment[];
   assignments_count: number;
   rules_count: number;
@@ -36,6 +38,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       fixed_prayer_time_breaks_sequence: "وقت الصلاة المختار يقطع حصة قائمة. عدّل الوقت أو اختر الصلاة بعد حصة.",
       preflight_blocked: "أكمل أخطاء الجاهزية قبل إنشاء الجدول.",
       validation_error: "راجع القيم المدخلة ثم حاول مرة أخرى.",
+      teacher_has_assignments_move_or_delete_first: "لا يمكن حذف المعلم قبل نقل إسناداته أو حذفها.",
+      similar_teacher_confirmation_required: "يوجد اسم معلم مطابق أو شديد التشابه. راجع الاسم ووافق صراحة إذا أردت الاحتفاظ به.",
+      subject_has_assignments: "المادة مرتبطة بإسنادات. انقل الإسنادات أو احذفها أولًا ثم احذف المادة.",
+      section_has_assignments: "الفصل مرتبط بإسنادات. انقل الإسنادات أو احذفها أولًا ثم احذف الفصل.",
+      subject_name_exists: "يوجد اسم مادة مطابق بالفعل.",
+      section_name_exists: "يوجد اسم فصل مطابق بالفعل.",
+      section_subject_already_assigned: "هذه المادة مسندة لهذا الفصل بالفعل. استخدم النقل إذا أردت تغيير المعلم.",
+      teacher_workload_limit_exceeded: "سيتجاوز المعلم نصابه المحدد. وافق صراحة على الزيادة الاستثنائية قبل الحفظ.",
+      duplicate_assignments_repair_first: "توجد إسنادات مكررة ضمن المحدد. اضغط «إصلاح التكرار» أولًا ثم نفذ النقل.",
     };
     throw new Error(messages[body?.detail?.code] ?? "تعذر حفظ التغييرات. راجع البيانات وحاول مرة أخرى.");
   }
@@ -49,9 +60,14 @@ export const coreApi = {
   editPeriod: (schoolId: string, blockId: string, payload: object) => request(`${base(schoolId)}/periods/${blockId}`, { method: "PUT", body: JSON.stringify(payload) }),
   saveStructure: (schoolId: string, payload: object) => request(`${base(schoolId)}/structure`, { method: "PUT", body: JSON.stringify(payload) }),
   createTeacher: (schoolId: string, payload: object) => request(`${base(schoolId)}/teachers`, { method: "POST", body: JSON.stringify(payload) }),
-  createTeachers: (schoolId: string, names: string[], workload_limit: number) => request<BulkTeacherResult>(`${base(schoolId)}/teachers/bulk`, { method: "POST", body: JSON.stringify({ names, workload_limit }) }),
-  uploadTeachers: async (schoolId: string, file: File, workloadLimit: number) => {
-    const form = new FormData(); form.append("file", file); form.append("workload_limit", String(workloadLimit));
+  updateTeacher: (schoolId: string, teacherId: string, payload: object) => request(`${base(schoolId)}/teachers/${teacherId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteTeacher: (schoolId: string, teacherId: string, cascade = false) => request(`${base(schoolId)}/teachers/${teacherId}?cascade=${cascade}`, { method: "DELETE" }),
+  deduplicateAssignments: (schoolId: string, teacherId: string) => request<{removed:number}>(`${base(schoolId)}/teachers/${teacherId}/deduplicate-assignments`, { method: "POST" }),
+  mergeTeachers: (schoolId: string, source_teacher_id: string, target_teacher_id: string) => request(`${base(schoolId)}/teachers/merge`, { method: "POST", body: JSON.stringify({ source_teacher_id, target_teacher_id }) }),
+  orderTeachers: (schoolId: string, ids: string[]) => request(`${base(schoolId)}/ordering/teachers`, { method: "PUT", body: JSON.stringify({ ids }) }),
+  createTeachers: (schoolId: string, names: string[], workload_limit: number, allow_similar = false) => request<BulkTeacherResult>(`${base(schoolId)}/teachers/bulk`, { method: "POST", body: JSON.stringify({ names, workload_limit, allow_similar }) }),
+  uploadTeachers: async (schoolId: string, file: File, workloadLimit: number, allowSimilar = false) => {
+    const form = new FormData(); form.append("file", file); form.append("workload_limit", String(workloadLimit)); form.append("allow_similar", String(allowSimilar));
     const response = await fetch(`${API_URL}${base(schoolId)}/teachers/bulk-file`, { method: "POST", headers: { "X-Tenant-ID": TENANT_ID }, body: form });
     if (!response.ok) throw new Error("تعذر قراءة الملف. استخدم ملف XLSX أو CSV واجعل أسماء المعلمين في العمود الأول.");
     return response.json() as Promise<BulkTeacherResult>;
@@ -59,7 +75,17 @@ export const coreApi = {
   saveAvailability: (schoolId: string, teacherId: string, payload: object) => request(`${base(schoolId)}/teachers/${teacherId}/availability`, { method: "PUT", body: JSON.stringify(payload) }),
   copyAvailability: (schoolId: string, payload: object) => request(`${base(schoolId)}/teachers/availability/copy`, { method: "POST", body: JSON.stringify(payload) }),
   createSubject: (schoolId: string, payload: object) => request(`${base(schoolId)}/subjects`, { method: "POST", body: JSON.stringify(payload) }),
+  updateSubject: (schoolId: string, subjectId: string, payload: object) => request(`${base(schoolId)}/subjects/${subjectId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteSubject: (schoolId: string, subjectId: string) => request(`${base(schoolId)}/subjects/${subjectId}`, { method: "DELETE" }),
+  orderSubjects: (schoolId: string, ids: string[]) => request(`${base(schoolId)}/ordering/subjects`, { method: "PUT", body: JSON.stringify({ ids }) }),
+  updateSection: (schoolId: string, sectionId: string, payload: object) => request(`${base(schoolId)}/sections/${sectionId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteSection: (schoolId: string, sectionId: string) => request(`${base(schoolId)}/sections/${sectionId}`, { method: "DELETE" }),
+  orderSections: (schoolId: string, ids: string[]) => request(`${base(schoolId)}/ordering/sections`, { method: "PUT", body: JSON.stringify({ ids }) }),
+  saveCurriculum: (schoolId: string, cells: Array<{ grade_id: string; subject_id: string; weekly_occurrences: number }>) => request(`${base(schoolId)}/curriculum`, { method: "PUT", body: JSON.stringify({ cells }) }),
   createAssignment: (schoolId: string, payload: object) => request(`${base(schoolId)}/assignments`, { method: "POST", body: JSON.stringify(payload) }),
+  updateAssignment: (schoolId: string, assignmentId: string, payload: object) => request(`${base(schoolId)}/assignments/${assignmentId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteAssignment: (schoolId: string, assignmentId: string) => request(`${base(schoolId)}/assignments/${assignmentId}`, { method: "DELETE" }),
+  transferAssignments: (schoolId: string, payload: object) => request(`${base(schoolId)}/assignments/transfer`, { method: "POST", body: JSON.stringify(payload) }),
   createRule: (schoolId: string, payload: object) => request(`${base(schoolId)}/rules`, { method: "POST", body: JSON.stringify(payload) }),
-  generate: (schoolId: string, optimization_profile: string) => request<{ started: boolean; project_id: string; run_id?: string; preflight: { errors: number; warnings: number; diagnostics: Array<{ message: string; suggested_remediation?: string }> } }>(`${base(schoolId)}/generate`, { method: "POST", body: JSON.stringify({ optimization_profile }) }),
+  generate: (schoolId: string, optimization_profile: string) => request<{ started: boolean; partial?: boolean; project_id: string; run_id?: string; preflight: { errors: number; warnings: number; diagnostics: Array<{ message: string; suggested_remediation?: string }> } }>(`${base(schoolId)}/generate`, { method: "POST", body: JSON.stringify({ optimization_profile }) }),
 };

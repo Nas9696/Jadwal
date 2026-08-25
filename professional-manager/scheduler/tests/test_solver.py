@@ -103,6 +103,21 @@ def test_feasible_schedule_places_every_occurrence_exactly_once_and_returns_thre
     assert all(len(candidate.placements) == len(occurrences) for candidate in result.candidates)
 
 
+def test_partial_schedule_maximizes_placements_and_reports_unscheduled_occurrence() -> None:
+    slots = [slot("only-slot", "school-a", 480, 525)]
+    occurrences = [
+        occurrence("o1", "a1", "school-a", ["only-slot"], sections=["section-1"]),
+        occurrence("o2", "a2", "school-a", ["only-slot"], sections=["section-1"]),
+    ]
+    fixture = problem(slots, occurrences)
+    fixture.options = SolveOptions(candidate_count=1, seed=7, time_limit_seconds=1, allow_partial=True)
+    result = Scheduler().solve(fixture)
+    assert result.feasible
+    assert len(result.candidates[0].placements) == 1
+    assert len(result.candidates[0].unscheduled_occurrence_ids) == 1
+    assert result.diagnostics[0].code == "partial_schedule"
+
+
 def test_shared_teacher_cross_school_collision_uses_real_time_and_ignores_attendance() -> None:
     slots = [
         slot("a-period-2", "school-a", 480, 525, period=2),

@@ -10,6 +10,7 @@ class SolveRequest(BaseModel):
     seed: int = 0
     optimization_profile: Literal["balanced", "teacher_comfort", "student_rhythm", "administration_priorities", "custom"] = "balanced"
     optimization_weights: dict[str, int] = {}
+    allow_partial: bool = False
 
 
 class SolveRunRead(BaseModel):

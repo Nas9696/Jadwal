@@ -20,12 +20,17 @@ from app.models import (
     TimetableProject,
     WeekPattern,
 )
-from app.project_services import build_problem
+from app.project_services import build_problem, section_display_name
 from app.solve_schemas import SolveRequest
 from app.solve_services import create_solve_run, problem_fingerprint
 from conftest import FIRST_SCHOOL, FIRST_TERM, OTHER_TENANT, SHARED_TEACHER, TEST_TENANT
 
 HEADERS = {"X-Tenant-ID": TEST_TENANT}
+
+
+def test_section_display_name_does_not_repeat_an_embedded_grade() -> None:
+    assert section_display_name("الأول المتوسط", "الأول المتوسط — أ") == "الأول المتوسط — أ"
+    assert section_display_name("الأول المتوسط", "أ") == "الأول المتوسط — أ"
 
 
 def ready_project(session: Session) -> TimetableProject:
@@ -159,6 +164,11 @@ def test_background_solve_persists_and_reloads_candidates_with_labels(
     body = run.json()
     assert body["status"] == "completed", body
     assert len(body["candidates"]) == 3
+    latest = client.get(
+        f"/api/v1/timetable-projects/{project.id}/solve-runs/latest", headers=HEADERS
+    )
+    assert latest.status_code == 200
+    assert latest.json()["id"] == run_id
     detail = client.get(
         f"/api/v1/timetable-projects/{project.id}/candidates/{body['candidates'][0]['id']}",
         headers=HEADERS,
@@ -167,7 +177,7 @@ def test_background_solve_persists_and_reloads_candidates_with_labels(
     entry = detail.json()["entries"][0]
     assert entry["subject"]["name_ar"] == "رياضيات"
     assert entry["teachers"][0]["name_ar"] == "معلم مشترك"
-    assert entry["sections"][0]["name_ar"] == "أ"
+    assert entry["sections"][0]["name_ar"].endswith("— أ")
     assert session.scalar(select(TimetableEntry)) is not None
     assert (
         client.get(
@@ -228,6 +238,52 @@ def test_preflight_blocks_solve(client: TestClient) -> None:
     )
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "preflight_blocked"
+
+
+def test_capacity_shortage_can_generate_a_named_partial_schedule(
+    client: TestClient, session: Session
+) -> None:
+    project = ready_project(session)
+    problem = build_problem(session, uuid.UUID(TEST_TENANT), project.id)
+    assignment = session.get(TeachingAssignment, uuid.UUID(problem.occurrences[0].assignment_id))
+    # The fixture provides only three real lesson slots.
+    assert assignment is not None
+    assignment.weekly_occurrences = 4
+    session.commit()
+
+    preflight = client.post(
+        f"/api/v1/timetable-projects/{project.id}/preflight", headers=HEADERS
+    ).json()
+    shortage = next(
+        item for item in preflight["diagnostics"]
+        if item["code"] == "section_capacity_shortage"
+    )
+    assert shortage["required"] == 4
+    assert shortage["available"] == 3
+    assert shortage["shortage"] == 1
+    assert "أ" in shortage["message"]
+
+    response = client.post(
+        f"/api/v1/timetable-projects/{project.id}/solve",
+        headers=HEADERS,
+        json={
+            "candidate_count": 1,
+            "time_limit_seconds": 2,
+            "seed": 11,
+            "allow_partial": True,
+        },
+    )
+    assert response.status_code == 202, response.text
+    body = client.get(
+        f"/api/v1/timetable-projects/{project.id}/solve-runs/{response.json()['id']}",
+        headers=HEADERS,
+    ).json()
+    assert body["status"] == "completed", body
+    partial = next(item for item in body["diagnostics"] if item["code"] == "partial_schedule")
+    assert "تم توزيع 3 حصة من أصل 4" in partial["message"]
+    assert partial["unscheduled_assignments"][0]["subject"] == "رياضيات"
+    assert partial["unscheduled_assignments"][0]["teachers"] == ["معلم مشترك"]
+    assert partial["unscheduled_assignments"][0]["unscheduled_count"] == 1
 
 
 def test_solve_request_limits_are_bounded(client: TestClient) -> None:

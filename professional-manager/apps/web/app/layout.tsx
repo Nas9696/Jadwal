@@ -8,7 +8,10 @@ import "./assignment.css";
 import "./imports.css";
 import "./core-workflow.css";
 import "./bulk-teachers.css";
+import "./contrast.css";
+import "./timetable-grid.css";
 import { AppShell } from "@/components/app-shell";
+import { ArabicDigits } from "@/components/arabic-digits";
 
 export const metadata: Metadata = {
   title: "المدير المحترف | الجداول الذكية",
@@ -16,5 +19,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ar" dir="rtl"><body><AppShell>{children}</AppShell></body></html>;
+  return <html lang="ar" dir="rtl"><body><ArabicDigits/><AppShell>{children}</AppShell></body></html>;
 }

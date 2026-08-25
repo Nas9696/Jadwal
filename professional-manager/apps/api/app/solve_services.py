@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import (
+    Grade,
     Resource,
     School,
     Section,
@@ -22,12 +23,40 @@ from app.models import (
     TimetableEntryTeacher,
     TimetableSolveRun,
 )
-from app.project_services import _project, build_problem, preflight
+from app.project_services import _project, build_problem, preflight, section_display_name
 from app.solve_schemas import SolveRequest
 from pm_scheduler.contracts import CandidateSolution, SchedulingProblem, SolveOptions
 from pm_scheduler.solver import Scheduler
 
 ACTIVE_STATUSES = ("queued", "running")
+
+
+def _partial_schedule_diagnostic(db: Session, tenant_id: uuid.UUID, problem: SchedulingProblem, occurrence_ids: list[str]) -> dict[str, Any]:
+    occurrence_map = {item.id: item for item in problem.occurrences}
+    missing = [occurrence_map[item] for item in occurrence_ids if item in occurrence_map]
+    subject_ids = {uuid.UUID(item.subject_id) for item in missing}
+    section_ids = {uuid.UUID(value) for item in missing for value in item.section_ids}
+    teacher_ids = {uuid.UUID(value) for item in missing for value in item.teacher_ids}
+    subjects = {str(item.id): item.name_ar for item in db.scalars(select(Subject).where(Subject.tenant_id == tenant_id, Subject.id.in_(subject_ids)))} if subject_ids else {}
+    sections = (
+        {
+            str(section_id): section_display_name(grade_name, section_name)
+            for section_id, section_name, grade_name in db.execute(
+                select(Section.id, Section.name_ar, Grade.name_ar)
+                .join(Grade, Grade.id == Section.grade_id)
+                .where(Section.tenant_id == tenant_id, Section.id.in_(section_ids))
+            )
+        }
+        if section_ids
+        else {}
+    )
+    teachers = {str(item.id): item.name_ar for item in db.scalars(select(Teacher).where(Teacher.tenant_id == tenant_id, Teacher.id.in_(teacher_ids)))} if teacher_ids else {}
+    grouped: dict[str, dict[str, Any]] = {}
+    for item in missing:
+        row = grouped.setdefault(item.assignment_id, {"assignment_id": item.assignment_id, "subject": subjects.get(item.subject_id, item.subject_id), "sections": [sections.get(value, value) for value in item.section_ids], "teachers": [teachers.get(value, value) for value in item.teacher_ids], "unscheduled_count": 0})
+        row["unscheduled_count"] += 1
+    placed = len(problem.occurrences) - len(missing)
+    return {"severity": "warning", "code": "partial_schedule", "message": f"تم توزيع {placed} حصة من أصل {len(problem.occurrences)}، وبقيت {len(missing)} حصة غير موزعة.", "affected_entities": {"occurrence": occurrence_ids}, "unscheduled_assignments": list(grouped.values()), "suggested_remediation": "زد الأوقات المتاحة أو خفّض النصاب المطلوب، ثم أعد التوليد لإكمال الجدول."}
 
 
 def problem_fingerprint(problem: SchedulingProblem) -> str:
@@ -45,7 +74,9 @@ def create_solve_run(
 ) -> TimetableSolveRun:
     _project(db, tenant, project_id)
     report = preflight(db, tenant, project_id)
-    if report["errors"]:
+    partial_codes = {"section_capacity_shortage", "teacher_capacity_shortage", "resource_structural_shortage", "occurrence_without_candidate_slot"}
+    blocking = [item for item in report["diagnostics"] if item.get("severity") == "error" and (not payload.allow_partial or item.get("code") not in partial_codes)]
+    if blocking:
         raise HTTPException(
             409,
             detail={"code": "preflight_blocked", "diagnostics": report["diagnostics"]},
@@ -67,9 +98,18 @@ def create_solve_run(
                 candidate_count=payload.candidate_count,
                 optimization_profile=payload.optimization_profile,
                 optimization_weights=payload.optimization_weights,
+                allow_partial=payload.allow_partial,
             )
         }
     )
+    run_diagnostics = report["diagnostics"]
+    if payload.allow_partial:
+        run_diagnostics = [
+            {**item, "severity": "warning", "partial_mode": True}
+            if item.get("code") in partial_codes
+            else item
+            for item in run_diagnostics
+        ]
     run = TimetableSolveRun(
         tenant_id=tenant,
         timetable_project_id=project_id,
@@ -79,7 +119,7 @@ def create_solve_run(
         requested_candidates=payload.candidate_count,
         time_limit_seconds=payload.time_limit_seconds,
         seed=payload.seed,
-        diagnostics=report["diagnostics"],
+        diagnostics=run_diagnostics,
     )
     db.add(run)
     try:
@@ -107,9 +147,12 @@ def execute_solve_run(bind: Engine | Connection, run_id: uuid.UUID) -> None:
             run.solver_status = result.status.value
             run.solver_name = result.solver_name
             run.solver_version = result.solver_version
-            run.diagnostics = preflight_diagnostics + [
-                item.model_dump(mode="json") for item in result.diagnostics
-            ]
+            result_diagnostics = [item.model_dump(mode="json") for item in result.diagnostics]
+            partial = next((item for item in result.diagnostics if item.code == "partial_schedule"), None)
+            if partial is not None:
+                result_diagnostics = [item for item in result_diagnostics if item.get("code") != "partial_schedule"]
+                result_diagnostics.append(_partial_schedule_diagnostic(db, run.tenant_id, problem, partial.affected_entity_ids))
+            run.diagnostics = preflight_diagnostics + result_diagnostics
             if result.feasible:
                 _persist_candidates(db, run, problem, result.candidates)
                 run.status = "completed"
@@ -207,6 +250,20 @@ def get_run(
     if run is None:
         raise HTTPException(404, detail={"code": "solve_run_not_found"})
     return run
+
+
+def get_latest_run(
+    db: Session, tenant: uuid.UUID, project_id: uuid.UUID
+) -> TimetableSolveRun | None:
+    return db.scalar(
+        select(TimetableSolveRun)
+        .where(
+            TimetableSolveRun.tenant_id == tenant,
+            TimetableSolveRun.timetable_project_id == project_id,
+        )
+        .order_by(TimetableSolveRun.created_at.desc())
+        .limit(1)
+    )
 
 
 def serialize_run(db: Session, run: TimetableSolveRun) -> dict[str, Any]:
@@ -309,9 +366,19 @@ def _serialize_entry(db: Session, tenant: uuid.UUID, entry: TimetableEntry) -> d
             )
         )
     )
-    teachers = list(db.scalars(select(Teacher).where(Teacher.id.in_(teacher_ids)))) if teacher_ids else []
-    sections = list(db.scalars(select(Section).where(Section.id.in_(section_ids)))) if section_ids else []
-    resources = list(db.scalars(select(Resource).where(Resource.id.in_(resource_ids)))) if resource_ids else []
+    teachers = list(db.scalars(select(Teacher).where(Teacher.tenant_id == tenant, Teacher.id.in_(teacher_ids)))) if teacher_ids else []
+    sections = (
+        list(
+            db.execute(
+                select(Section.id, Section.name_ar, Grade.name_ar)
+                .join(Grade, Grade.id == Section.grade_id)
+                .where(Section.tenant_id == tenant, Section.id.in_(section_ids))
+            )
+        )
+        if section_ids
+        else []
+    )
+    resources = list(db.scalars(select(Resource).where(Resource.tenant_id == tenant, Resource.id.in_(resource_ids)))) if resource_ids else []
     return {
         "id": entry.id,
         "occurrence_id": entry.occurrence_id,
@@ -320,7 +387,10 @@ def _serialize_entry(db: Session, tenant: uuid.UUID, entry: TimetableEntry) -> d
         "school": {"id": entry.school_id, "name_ar": school.name_ar if school else ""},
         "subject": {"id": entry.subject_id, "name_ar": subject.name_ar if subject else ""},
         "teachers": [{"id": item.id, "name_ar": item.name_ar} for item in teachers],
-        "sections": [{"id": item.id, "name_ar": item.name_ar} for item in sections],
+        "sections": [
+            {"id": section_id, "name_ar": section_display_name(grade_name, section_name)}
+            for section_id, section_name, grade_name in sections
+        ],
         "resources": [{"id": item.id, "name_ar": item.name_ar} for item in resources],
         "project_cycle_week_index": entry.project_cycle_week_index,
         "weekday_index": entry.weekday_index,

@@ -15,7 +15,7 @@ export type ReportRequest = {
 
 async function json<T>(path:string, init?:RequestInit):Promise<T>{
   const response=await fetch(`${API_URL}${path}`,{...init,headers:{"Content-Type":"application/json","X-Tenant-ID":TENANT_ID,...init?.headers}});
-  if(!response.ok){const body=await response.json().catch(()=>({})); const code=body?.detail?.code; const messages:Record<string,string>={report_source_revision_conflict:"تغيرت نسخة الجدول. حدّث المعاينة قبل التصدير.",stale_report_source:"بيانات البدلاء مبنية على نسخة أقدم ولا يمكن تصديرها.",unsafe_logo_type:"الشعار يجب أن يكون PNG أو JPEG آمنًا.",unsafe_logo_content:"تعذر التحقق من ملف الشعار.",expected_revision_required_for_export:"حدّث المعاينة قبل التصدير."}; throw new Error(messages[code]??"تعذر إعداد التقرير.");}
+  if(!response.ok){const body=await response.json().catch(()=>({})); const code=body?.detail?.code; const messages:Record<string,string>={working_timetable_not_found:"لم يتم إنشاء جدول نهائي بعد. أكمل «إنشاء الجدول» واعتمد أحد البدائل، ثم ستظهر الطباعة هنا مباشرة.",report_source_revision_conflict:"تغيرت نسخة الجدول. حدّث المعاينة قبل التصدير.",stale_report_source:"بيانات البدلاء مبنية على نسخة أقدم ولا يمكن تصديرها.",unsafe_logo_type:"الشعار يجب أن يكون PNG أو JPEG آمنًا.",unsafe_logo_content:"تعذر التحقق من ملف الشعار.",expected_revision_required_for_export:"حدّث المعاينة قبل التصدير."}; throw new Error(messages[code]??"تعذر إعداد التقرير.");}
   return response.json();
 }
 

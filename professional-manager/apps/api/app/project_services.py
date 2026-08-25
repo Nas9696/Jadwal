@@ -25,7 +25,9 @@ from app.models import (
     Term,
     TimetableProject,
     TimetableProjectSchool,
+    TimetableEntry,
     WeekPattern,
+    WorkingTimetableEntry,
 )
 from app.project_schemas import ProjectInput, RuleInput
 from pm_scheduler.contracts import (
@@ -42,6 +44,15 @@ from pm_scheduler.cycle import expand_project_slots
 from pm_scheduler.rules import RULE_REGISTRY, validate_parameters
 
 MAX_CYCLE = 12
+
+
+def section_display_name(grade_name: str, section_name: str) -> str:
+    """Return a readable section label without repeating an embedded grade name."""
+    return (
+        section_name
+        if grade_name.strip() in section_name.strip()
+        else f"{grade_name} — {section_name}"
+    )
 
 
 def _project(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> TimetableProject:
@@ -370,6 +381,23 @@ def build_problem(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> Sche
                     )
                 )
             )
+            if not teachers:
+                historical_references = bool(
+                    db.scalar(
+                        select(TimetableEntry.id).where(
+                            TimetableEntry.tenant_id == tenant,
+                            TimetableEntry.assignment_id == a.id,
+                        )
+                    )
+                    or db.scalar(
+                        select(WorkingTimetableEntry.id).where(
+                            WorkingTimetableEntry.tenant_id == tenant,
+                            WorkingTimetableEntry.assignment_id == a.id,
+                        )
+                    )
+                )
+                if historical_references:
+                    continue
             links = list(
                 db.scalars(
                     select(TeachingAssignmentSection.section_offering_id).where(
@@ -553,8 +581,23 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
                 "suggested_remediation": "أضف حصصًا تدريسية مفعلة.",
             }
         )
+    section_labels = {
+        str(section_id): section_display_name(grade_name, section_name)
+        for section_id, section_name, grade_name in db.execute(
+            select(Section.id, Section.name_ar, Grade.name_ar)
+            .join(Grade, Grade.id == Section.grade_id)
+            .where(Section.tenant_id == tenant)
+        )
+    }
+    teacher_labels = {str(item.id): item.name_ar for item in db.scalars(select(Teacher).where(Teacher.tenant_id == tenant))}
+    subject_labels = {str(item.id): item.name_ar for item in db.scalars(select(Subject).where(Subject.tenant_id == tenant))}
+    resource_labels = {str(item.id): item.name_ar for item in db.scalars(select(Resource).where(Resource.tenant_id == tenant))}
+    assignments_without_teacher: set[str] = set()
+    assignments_without_section: set[str] = set()
+    assignments_without_slot: set[str] = set()
     for occurrence in problem.occurrences:
-        if not occurrence.teacher_ids:
+        if not occurrence.teacher_ids and occurrence.assignment_id not in assignments_without_teacher:
+            assignments_without_teacher.add(occurrence.assignment_id)
             diagnostics.append(
                 {
                     "severity": "error",
@@ -563,7 +606,8 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
                     "affected_entities": {"assignment": [occurrence.assignment_id]},
                 }
             )
-        if not occurrence.section_ids:
+        if not occurrence.section_ids and occurrence.assignment_id not in assignments_without_section:
+            assignments_without_section.add(occurrence.assignment_id)
             diagnostics.append(
                 {
                     "severity": "error",
@@ -572,13 +616,37 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
                     "affected_entities": {"assignment": [occurrence.assignment_id]},
                 }
             )
-        if not occurrence.candidate_slot_ids:
+        if not occurrence.candidate_slot_ids and occurrence.assignment_id not in assignments_without_slot:
+            assignments_without_slot.add(occurrence.assignment_id)
+            subject_name = subject_labels.get(occurrence.subject_id, occurrence.subject_id)
+            section_names = [section_labels.get(item, item) for item in occurrence.section_ids]
+            teacher_names = [teacher_labels.get(item, item) for item in occurrence.teacher_ids]
+            assignment_name = " — ".join(
+                item
+                for item in (
+                    subject_name,
+                    " + ".join(section_names),
+                    " + ".join(teacher_names),
+                )
+                if item
+            )
             diagnostics.append(
                 {
                     "severity": "error",
                     "code": "occurrence_without_candidate_slot",
-                    "message": "لا يوجد وقت مشترك صالح للحصة",
+                    "message": f"الإسناد {assignment_name}: لا يوجد وقت مشترك صالح للحصة",
                     "affected_entities": {"assignment": [occurrence.assignment_id]},
+                    "affected_details": [
+                        {"type": "subject", "id": occurrence.subject_id, "name": subject_name},
+                        *[
+                            {"type": "section", "id": item, "name": section_labels.get(item, item)}
+                            for item in occurrence.section_ids
+                        ],
+                        *[
+                            {"type": "teacher", "id": item, "name": teacher_labels.get(item, item)}
+                            for item in occurrence.teacher_ids
+                        ],
+                    ],
                     "suggested_remediation": "راجع الشفتات والقواعد الإلزامية.",
                 }
             )
@@ -590,19 +658,21 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
     for teacher, required in demand.items():
         available = len(capacity[teacher])
         if required > available:
+            teacher_name = teacher_labels.get(teacher, teacher)
             diagnostics.append(
                 {
                     "severity": "error",
                     "code": "teacher_capacity_shortage",
-                    "message": "طلب المعلم يتجاوز الأوقات المتاحة",
+                    "message": f"المعلم {teacher_name}: مطلوب {required} حصة، والمتاح {available} فقط (عجز {required - available}).",
                     "affected_entities": {"teacher": [teacher]},
+                    "affected_details": [{"type": "teacher", "id": teacher, "name": teacher_name}],
                     "required": required,
                     "available": available,
                     "shortage": required - available,
                     "suggested_remediation": "وسع توفر المعلم أو خفف الإسناد.",
                 }
             )
-    for entity_type, attribute, code, message in (
+    for entity_type, attribute, code, _message in (
         ("section", "section_ids", "section_capacity_shortage", "طلب الشعبة يتجاوز الأوقات المتاحة"),
         ("resource", "resource_ids", "resource_structural_shortage", "طلب المورد يتجاوز الأوقات المتاحة"),
     ):
@@ -618,16 +688,20 @@ def preflight(db: Session, tenant: uuid.UUID, project_id: uuid.UUID) -> dict[str
         for entity_id, required_count in entity_demand.items():
             available_count = len(entity_capacity[entity_id])
             if required_count > available_count:
+                labels = section_labels if entity_type == "section" else resource_labels
+                entity_name = labels.get(entity_id, entity_id)
+                entity_ar = "الشعبة" if entity_type == "section" else "المورد"
                 diagnostics.append(
                     {
                         "severity": "error",
                         "code": code,
-                        "message": message,
+                        "message": f"{entity_ar} {entity_name}: مطلوب {required_count} حصة، والمتاح {available_count} فقط (عجز {required_count - available_count}).",
                         "affected_entities": {entity_type: [entity_id]},
+                        "affected_details": [{"type": entity_type, "id": entity_id, "name": entity_name}],
                         "required": required_count,
                         "available": available_count,
                         "shortage": required_count - available_count,
-                        "suggested_remediation": "راجع الطلب والقواعد والأوقات المتاحة.",
+                        "suggested_remediation": f"زد الأوقات الأسبوعية بمقدار {required_count - available_count} أو خفّض إسنادات {entity_ar} بالمقدار نفسه.",
                     }
                 )
     rules = [r for r in problem.rules if r.severity == "hard"]

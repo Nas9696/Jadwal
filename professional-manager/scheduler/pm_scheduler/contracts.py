@@ -141,6 +141,7 @@ class SolveOptions(BaseModel):
     requested_occurrence_id: str | None = None
     requested_slot_id: str | None = None
     locked_occurrence_ids: list[str] = []
+    allow_partial: bool = False
 
     @model_validator(mode="after")
     def repair_request_is_complete(self) -> "SolveOptions":
@@ -217,6 +218,7 @@ class CandidateSolution(BaseModel):
     penalty_breakdown: list[PenaltyBreakdown] = []
     solve_time_seconds: float = 0
     diversity_count: int = 0
+    unscheduled_occurrence_ids: list[str] = []
 
 
 class Diagnostic(BaseModel):

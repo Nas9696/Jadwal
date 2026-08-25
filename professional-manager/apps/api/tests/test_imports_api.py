@@ -164,16 +164,15 @@ def test_asctt_xml_imports_arabic_teachers_subjects_structure_offerings_and_assi
     assert uploaded.status_code == 201, uploaded.text
     job = uploaded.json()
     assert [item["row_count"] for item in job["detected_sheets"]] == [1, 1, 1, 1, 1]
+    assert [item["entity_type"] for item in job["detected_sheets"]] == [
+        "teachers", "subjects", "structure", "offerings", "assignments"
+    ]
     mapping = {
         item["name"]: {
-            "entity_type": entity,
+            "entity_type": item["entity_type"],
             "columns": item["suggested_mapping"],
         }
-        for item, entity in zip(
-            job["detected_sheets"],
-            ("teachers", "subjects", "structure", "offerings", "assignments"),
-            strict=True,
-        )
+        for item in job["detected_sheets"]
     }
     assert client.put(
         base_url(f"/{job['id']}/mapping"), headers=HEADERS, json={"sheets": mapping}
@@ -193,6 +192,121 @@ def test_asctt_xml_imports_arabic_teachers_subjects_structure_offerings_and_assi
         session.scalar(select(func.count()).select_from(model)) > count
         for model, count in before.items()
     )
+    after_first_import = {
+        model: session.scalar(select(func.count()).select_from(model))
+        for model in before
+    }
+
+    updated_xml = xml.replace(b'periodsperweek="4.0"', b'periodsperweek="5.0"')
+    repeated_upload = client.post(
+        base_url("/upload"),
+        headers=HEADERS,
+        data={"term_id": FIRST_TERM},
+        files={"file": ("school-updated.xml", updated_xml, "application/xml")},
+    )
+    assert repeated_upload.status_code == 201, repeated_upload.text
+    repeated_job = repeated_upload.json()
+    repeated_mapping = {
+        item["name"]: {
+            "entity_type": item["entity_type"],
+            "columns": item["suggested_mapping"],
+        }
+        for item in repeated_job["detected_sheets"]
+    }
+    assert client.put(
+        base_url(f"/{repeated_job['id']}/mapping"),
+        headers=HEADERS,
+        json={"sheets": repeated_mapping},
+    ).status_code == 200
+    repeated_preview = client.post(
+        base_url(f"/{repeated_job['id']}/validate"), headers=HEADERS
+    )
+    assert repeated_preview.status_code == 200, repeated_preview.text
+    assert repeated_preview.json()["status"] == "ready"
+    repeated_commit = client.post(
+        base_url(f"/{repeated_job['id']}/commit"),
+        headers=HEADERS,
+        json={"acknowledge_warnings": True},
+    )
+    assert repeated_commit.status_code == 200, repeated_commit.text
+    assert {
+        model: session.scalar(select(func.count()).select_from(model))
+        for model in before
+    } == after_first_import
+    session.expire_all()
+    imported_assignment = session.scalar(
+        select(TeachingAssignment).where(
+            TeachingAssignment.subject_id
+            == session.scalar(select(Subject.id).where(Subject.name_ar == "مادة تايم تيبل"))
+        )
+    )
+    assert imported_assignment is not None
+    assert imported_assignment.weekly_occurrences == 5
+
+
+def test_asctt_xml_reuses_existing_teacher_and_subject_names(
+    client: TestClient, session: Session
+) -> None:
+    existing_subject = session.scalar(select(Subject).where(Subject.code == "M1"))
+    assert existing_subject is not None
+    existing_subject.name_ar = "اسلامية"
+    session.commit()
+    assert client.post(
+        f"/api/v1/schools/{FIRST_SCHOOL}/teacher-memberships",
+        headers=HEADERS,
+        json={"teacher_id": SHARED_TEACHER, "is_active": True, "is_home_school": False},
+    ).status_code == 201
+    shift = client.post(
+        f"/api/v1/schools/{FIRST_SCHOOL}/setup/shifts",
+        headers=HEADERS,
+        json={"code": "ASC-REUSE", "name_ar": "دوام الاستيراد", "order": 0, "is_active": True},
+    )
+    assert shift.status_code == 201
+    xml = """<?xml version="1.0" encoding="windows-1256"?>
+<timetable ascttversion="2024.24.1">
+  <teachers><teacher id="*1" name="معلم مشترك"/></teachers>
+  <subjects><subject id="*1" name="إسلامية"/></subjects>
+  <classes><class id="*1" name="2/ ج"/></classes>
+  <lessons><lesson id="*1" classids="*1" subjectid="*1" periodsperweek="4.0" teacherid="*1"/></lessons>
+</timetable>""".encode("windows-1256")
+    uploaded = client.post(
+        base_url("/upload"), headers=HEADERS, data={"term_id": FIRST_TERM},
+        files={"file": ("reuse.xml", xml, "application/xml")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    job = uploaded.json()
+    rows = job["rows"]
+    teacher = next(row for row in rows if row["entity_type"] == "teachers")
+    subject = next(row for row in rows if row["entity_type"] == "subjects")
+    assignment = next(row for row in rows if row["entity_type"] == "assignments")
+    assert teacher["source_values"]["كود المعلم"] == "T1"
+    assert subject["source_values"]["رمز المادة"] == "M1"
+    assert assignment["source_values"]["كود المعلم"] == "T1"
+    mapping = {
+        item["name"]: {
+            "entity_type": item["entity_type"],
+            "columns": item["suggested_mapping"],
+        }
+        for item in job["detected_sheets"]
+    }
+    assert client.put(
+        base_url(f"/{job['id']}/mapping"), headers=HEADERS, json={"sheets": mapping}
+    ).status_code == 200
+    preview = client.post(base_url(f"/{job['id']}/validate"), headers=HEADERS)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["status"] == "ready"
+    teachers_before = session.scalar(select(func.count()).select_from(Teacher))
+    subjects_before = session.scalar(select(func.count()).select_from(Subject))
+    assignments_before = session.scalar(select(func.count()).select_from(TeachingAssignment))
+    committed = client.post(
+        base_url(f"/{job['id']}/commit"),
+        headers=HEADERS,
+        json={"acknowledge_warnings": True},
+    )
+    assert committed.status_code == 200, committed.text
+    assert session.scalar(select(func.count()).select_from(Teacher)) == teachers_before
+    assert session.scalar(select(func.count()).select_from(Subject)) == subjects_before
+    assert session.scalar(select(func.count()).select_from(TeachingAssignment)) == assignments_before + 1
 
 
 def test_asctt_xml_rejects_doctype_and_non_timetables_files(client: TestClient) -> None:
